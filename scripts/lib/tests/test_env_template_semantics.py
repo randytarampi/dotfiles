@@ -6,9 +6,11 @@ from pathlib import Path
 TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.example"
 # Baseline protects ordered environment keys and defaults while retired
 # access gates are checked separately. Refreshed for the single commented,
-# empty DOTFILES_GEMINI_LITELLM_MODEL opt-in on 2026-11-07.
+# empty DOTFILES_GEMINI_LITELLM_MODEL opt-in on 2026-11-07; refreshed again for
+# the 2026-11-09 reorder that returns the stranded global deployment/Phase 4
+# gate lines to the '== Deployment phases and service gates ==' block.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "163effd9fa2bb223343547efc049355ba81fc4232f587c8844b4992207c13138"
+    "b032de372e79566de6cfd8b772aaf6c6497cd44960988206e21b5104175fbf09"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
