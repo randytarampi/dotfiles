@@ -25,31 +25,43 @@ NO_AUTHORITATIVE_PROBE = "no-authoritative-probe-contract"
 
 
 def read_state(path: Path):
-    """Read an embedding ledger state file with strict refusal semantics.
-
-    Absent is a distinct non-error state: current installations normally have
-    no managed ledger. Refuse symlinked, unreadable, unsafe-permission or
-    corrupt JSON state; never follow user content into the report.
-    """
-    if path.is_symlink():
-        raise ValueError("embedding state path is a symlink")
-    if not path.is_file():
-        return {"state": "absent"}
-    info = path.stat()
-    if (
-        info.st_uid != os.getuid()
-        or info.st_nlink != 1
-        or (stat_module.S_IMODE(info.st_mode) & 0o077)
-    ):
-        raise ValueError("embedding state file has unsafe permissions")
+    """Validate private ledger existence without disclosing its contents."""
     try:
-        raw = path.read_text(encoding="utf-8")
-        data = json.loads(raw)
+        info = path.lstat()
+    except FileNotFoundError:
+        return {"state": "absent"}
+    if stat_module.S_ISLNK(info.st_mode):
+        raise ValueError("embedding state path is a symlink")
+    if not stat_module.S_ISREG(info.st_mode):
+        raise ValueError("embedding state file is not a regular file")
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    if nofollow is None:
+        raise ValueError("embedding state no-follow reads unsupported")
+    try:
+        fd = os.open(path, os.O_RDONLY | nofollow | os.O_NONBLOCK)
+    except OSError as error:
+        raise ValueError("embedding state cannot be opened safely") from error
+    try:
+        with os.fdopen(fd, "rb") as source:
+            opened = os.fstat(source.fileno())
+            if (
+                not stat_module.S_ISREG(opened.st_mode)
+                or opened.st_uid != os.getuid()
+                or opened.st_nlink != 1
+                or (stat_module.S_IMODE(opened.st_mode) & 0o077)
+            ):
+                raise ValueError("embedding state file has unsafe permissions")
+            if opened.st_size > 1024 * 1024:
+                raise ValueError("embedding state file exceeds read-only limit")
+            raw = source.read(1024 * 1024 + 1)
+        if len(raw) > 1024 * 1024:
+            raise ValueError("embedding state file exceeds read-only limit")
+        data = json.loads(raw.decode("utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ValueError(f"corrupt embedding state file: {error}") from error
+        raise ValueError("corrupt embedding state file") from error
     if not isinstance(data, dict):
         raise ValueError("corrupt embedding state file: not a JSON object")
-    return {"state": "present", "data": data}
+    return {"state": "present"}
 
 
 def _collection_identity_report():
@@ -65,17 +77,26 @@ def build_inventory(config, *, state: dict | None = None):
 
     ``config`` is the mapping returned by the WebUI embedding-config getter
     (already fetched read-only by the caller). ``state`` is the parsed ledger
-    state from :func:`read_state` when the caller has one to attach. The
+    presence receipt from :func:`read_state` when the caller has one. The
     report contains no vectors, credentials or user content.
     """
+    if not isinstance(config, dict):
+        raise ValueError("embedding configuration must be a mapping")
+    engine = config.get("RAG_EMBEDDING_ENGINE", "")
+    model = config.get("RAG_EMBEDDING_MODEL", "")
+    if not isinstance(engine, str) or not isinstance(model, str):
+        raise ValueError("embedding configuration identifiers must be strings")
+    if state is not None and state.get("state") not in {"absent", "present"}:
+        raise ValueError("unrecognised embedding ledger state")
     return {
         "writes": "none",
-        "state": (state or {"state": "absent"}),
+        "state": {"state": (state or {"state": "absent"})["state"]},
         "webui_config_identity": {
-            "engine": config.get("RAG_EMBEDDING_ENGINE", ""),
-            "model": config.get("RAG_EMBEDDING_MODEL", ""),
+            "engine": engine,
+            "model": model,
         },
         "collections": {
+            "count": "UNKNOWN",
             "identity": _collection_identity_report(),
             "reason": NO_AUTHORITATIVE_INTERFACE,
         },
