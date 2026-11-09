@@ -372,7 +372,8 @@ def test_created_subsection_stays_under_template_parent():
     )
     moved, changes = env_migration.migrate(original, TWO_LEVEL_EXAMPLE)
     assert changes == [
-        ("DOTFILES_RUN_CODEX_SETUP", "Per-client gateway integration gates")
+        ("DOTFILES_RUN_PACKAGES_SETUP", "Deployment phases and service gates"),
+        ("DOTFILES_RUN_CODEX_SETUP", "Per-client gateway integration gates"),
     ]
     text = moved.decode()
     parent = text.index("# --- Dotfiles toggles (0 = skip, 1 = run) ---")
