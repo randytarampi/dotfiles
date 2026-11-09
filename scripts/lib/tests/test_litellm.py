@@ -3217,9 +3217,25 @@ def test_litellm_env_sync_ssl_cert_file_passthrough(tmp_path):
     env_path = root / "service.env"
     env_path.write_text("SSL_CERT_FILE='stale'\n", encoding="utf-8")
     ca_path = tmp_path / "corporate-ca.pem"
-    ca_path.write_text(
-        "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n",
-        encoding="utf-8",
+    subprocess.run(
+        [
+            "openssl",
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-days",
+            "1",
+            "-subj",
+            "/CN=fixture-ca",
+            "-keyout",
+            str(tmp_path / "fixture.key"),
+            "-out",
+            str(ca_path),
+        ],
+        check=True,
+        capture_output=True,
     )
 
     def sync(home_env):
@@ -3249,12 +3265,26 @@ def test_litellm_env_sync_ssl_cert_file_passthrough(tmp_path):
     assert result.returncode == 1
     assert "SSL_CERT_FILE" in result.stderr
     assert "SSL_CERT_FILE" not in env_path.read_text(encoding="utf-8")
+    # A relative path must not depend on the LiteLLM daemon's cwd.
+    result = sync("SSL_CERT_FILE='relative.pem'\n")
+    assert result.returncode == 1
+    assert "absolute" in result.stderr
+    assert "SSL_CERT_FILE" not in env_path.read_text(encoding="utf-8")
     # A non-PEM file is a configuration error, not something to serve.
     junk = tmp_path / "junk.pem"
     junk.write_text("not a certificate\n", encoding="utf-8")
     result = sync(f"SSL_CERT_FILE='{junk}'\n")
     assert result.returncode == 1
     assert "PEM" in result.stderr
+    assert "SSL_CERT_FILE" not in env_path.read_text(encoding="utf-8")
+    # A BEGIN/END marker with invalid DER must not pass as a CA.
+    junk.write_text(
+        "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n",
+        encoding="utf-8",
+    )
+    result = sync(f"SSL_CERT_FILE='{junk}'\n")
+    assert result.returncode == 1
+    assert "X.509" in result.stderr
     assert "SSL_CERT_FILE" not in env_path.read_text(encoding="utf-8")
     assert list(root.glob("service.env.tmp.*")) == []
 
