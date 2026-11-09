@@ -329,7 +329,8 @@ def validate_litellm_service_env(
     prefix shape used by check output); empty list means the artifact set
     is valid. Core entries are required; the per-app virtual keys
     (APP_KEYS) may be absent on fresh installs before the first
-    provisioning run; unexpected extras always fail.
+    provisioning run, optional synced passthroughs (SSL_CERT_FILE) may be
+    absent or present, and unexpected extras always fail.
     """
     problems = []
     try:
@@ -356,7 +357,12 @@ def validate_litellm_service_env(
         "GITHUB_COPILOT_ACCESS_TOKEN_FILE",
         "GITHUB_COPILOT_API_KEY_FILE",
     }
-    expected_env = core_env | set(APP_KEYS.values()) | refs | oauth_cache_env
+    # Optional passthroughs synced from ~/.env by litellm_service_env_sync:
+    # SSL_CERT_FILE carries corporate TLS trust (e.g. Cloudflare WARP).
+    optional_env = {"SSL_CERT_FILE"}
+    expected_env = (
+        core_env | set(APP_KEYS.values()) | refs | oauth_cache_env | optional_env
+    )
     unexpected_env = set(litellm_env_values) - expected_env
     missing_required = ((core_env - {"DEFAULT_MAX_LRU_CACHE_SIZE"}) | refs) - set(
         litellm_env_values

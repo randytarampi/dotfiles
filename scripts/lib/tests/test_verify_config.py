@@ -639,6 +639,15 @@ def test_litellm_service_env_accepts_provisioned_per_app_keys():
     assert problems == []
 
 
+def test_litellm_service_env_accepts_ssl_cert_file_passthrough():
+    """SSL_CERT_FILE is an optional synced passthrough, never an unexpected extra."""
+    problems = VERIFY_CONFIG.validate_litellm_service_env(
+        _litellm_env(SSL_CERT_FILE="/Users/randy.tarampi/bonterra-ca.pem"),
+        _LITELLM_POLICY_CONFIG,
+    )
+    assert problems == []
+
+
 def test_litellm_service_env_accepts_oauth_cache_overrides_and_defaults():
     overrides = {
         "CHATGPT_TOKEN_DIR": "/custom/chatgpt",
