@@ -27,3 +27,7 @@ The proof ladder is **configured → process/service reachable → authenticated
 - **State preservation and recovery:** never alter persistent WebUI embeddings, Basic Memory data, user-home provider selection or public/tailnet Caddy routes while testing.
 
 **Next handoff:** use the diagnostic to populate a redacted per-host status table, then create **only** specific small source changes for demonstrated gaps. Remaining real-host readiness and restart probes are UNKNOWN; this first PR is a safe inventory/diagnostic foundation rather than completion of #221.
+
+## 2026-11-09 audit matrix capture (issue #221 closure evidence)
+
+Read-only baseline (no HTTP): Ollama (`http://localhost:11434`), oMLX (`http://127.0.0.1:11427`) and LiteLLM (`http://127.0.0.1:4000`) all `configured=true`, `NOT_PROBED`. Authorized loopback-only anonymous probe (`--probe`): Ollama and oMLX `REACHABLE_NOT_INFERENCE_QUALIFIED`; LiteLLM `REACHABLE_AUTH_REQUIRED` (a 401 from the auth-gated gateway is the healthy finding, not a failed model). Consumer rows: LiteLLM VERIFIED as producer for Codex CLI (owner-reported working daily) and the newly wired Paseo voice STT/TTS routes; Ollama/oMLX reachable as producers behind the voice/audio models; Paseo relay/WebUI posture certified; Pi/OpenCode/Open WebUI/Basic Memory owner-reported working. Per-client task-qualified rows remain owned by #83/#217/#209/#216/#210/#218/#220 (closed or open as recorded); restart-order evidence for LiteLLM-last in `make services-restart` is code-verified (#252) while actual restarts stay owner-acknowledged events.

@@ -43,3 +43,7 @@ Minimum measurement record shape (illustrative *synthetic* data, not a host benc
 ## Gates and rollback
 
 No automatic model downloads, endpoint publication, tier changes, default profile switches, background service or cost policy edits in this PR. Rollback removes only this offline report utility and guidance. Real host results are **not run** here.
+
+## 2026-11-09 measurement and NO CHANGE disposition (issue #223)
+
+Owner-authorized local-only benchmark (loopback, synthetic prompt, 256-token budget, 2 samples/model): **Ornith-1.5-9B-MLX-6bit** (oMLX) passed the structured classification task (median 1347 ms, peak 16.5 GB, zero network egress); **gemma4:12b-mxfp8** (Ollama) failed strict-JSON parsing (prose-wrapped output at temperature 0, median 3431 ms); **strands-decider:2b** is not a generative chat model (HTTP 400). All rows processed with `admission: NOT_AUTO_PROMOTED` and synthetic provenance. **Disposition: NO CHANGE** — no installed consumer routes metadata/classification work to a resident model (Paseo Manual metadata is Pi-only by accepted design; Hermes auxiliary wiring belongs to #217), and promotion would create an unused routing role. Re-entrant: when #217 delivers a real Hermes auxiliary consumer, this ledger is the promotion baseline.
