@@ -278,3 +278,85 @@ def test_symlinks_wrong_mode_and_existing_backup_refuse_without_writes(tmp_path)
     )
     assert path.read_bytes() == before
     assert path.with_name(".env.i2.bak").read_bytes() == b"previous"
+
+
+TWO_LEVEL_EXAMPLE = (
+    "# --- Dotfiles toggles (0 = skip, 1 = run) ---\n"
+    "# == Deployment phases and service gates ==\n"
+    "# DOTFILES_RUN_PACKAGES_SETUP='0'\n"
+    "# == Per-client gateway integration gates ==\n"
+    "# DOTFILES_RUN_CODEX_SETUP='0'\n"
+    "# --- Tier settings ---\n"
+    "# DOTFILES_OPENCODE_TIER=''\n"
+)
+
+
+def test_owner_subsection_titles_match_documented_nested_sections():
+    original = (
+        "# --- Deployment phases and service gates ---\n"
+        "DOTFILES_RUN_PACKAGES_SETUP='1'\n"
+        "# --- Per-client gateway integration gates ---\n"
+        "DOTFILES_RUN_CODEX_SETUP='1'\n"
+        "# --- Tier settings ---\n"
+        "DOTFILES_OPENCODE_TIER='pro-plus'\n"
+    )
+    moved, changes = env_migration.migrate(original, TWO_LEVEL_EXAMPLE)
+    assert changes == []
+    assert moved == original.encode()
+
+
+def test_keys_in_parent_block_relocate_to_documented_subsection_titles():
+    original = (
+        "# --- Dotfiles toggles (0 = skip, 1 = run) ---\n"
+        "DOTFILES_RUN_PACKAGES_SETUP='1'\n"
+        "DOTFILES_RUN_CODEX_SETUP='1'\n"
+    )
+    moved, changes = env_migration.migrate(original, TWO_LEVEL_EXAMPLE)
+    assert changes == [
+        ("DOTFILES_RUN_PACKAGES_SETUP", "Deployment phases and service gates"),
+        ("DOTFILES_RUN_CODEX_SETUP", "Per-client gateway integration gates"),
+    ]
+    values, positions = env_migration.read_sections(moved.decode())
+    sections = {key: section for _, key, section in positions}
+    assert (
+        sections["DOTFILES_RUN_PACKAGES_SETUP"] == "Deployment phases and service gates"
+    )
+    assert (
+        sections["DOTFILES_RUN_CODEX_SETUP"] == "Per-client gateway integration gates"
+    )
+
+
+def test_destination_append_after_section_heading_is_unambiguous():
+    original = (
+        "# --- Dotfiles toggles (0 = skip, 1 = run) ---\nDOTFILES_RUN_CODEX_SETUP='1'\n"
+    )
+    moved, changes = env_migration.migrate(original, TWO_LEVEL_EXAMPLE)
+    assert changes == [
+        ("DOTFILES_RUN_CODEX_SETUP", "Per-client gateway integration gates")
+    ]
+    text = moved.decode()
+    assert "== Per-client gateway integration gates ==" in text
+    assert "DOTFILES_RUN_CODEX_SETUP='1'" in text
+
+
+def test_existing_subsection_heading_block_accepts_appended_keys():
+    original = (
+        "DOTFILES_RUN_PACKAGES_SETUP='1'\n"
+        "# == Deployment phases and service gates ==\n"
+        "# --- Tier settings ---\n"
+        "DOTFILES_OPENCODE_TIER='pro-plus'\n"
+        "# deployment notes remain in place\n"
+    )
+    moved, changes = env_migration.migrate(original, TWO_LEVEL_EXAMPLE)
+    assert changes == [
+        ("DOTFILES_RUN_PACKAGES_SETUP", "Deployment phases and service gates")
+    ]
+    text = moved.decode()
+    assert "# deployment notes remain in place" in text
+    assert "DOTFILES_RUN_PACKAGES_SETUP='1'" in text
+    values, positions = env_migration.read_sections(moved.decode())
+    sections = {key: section for _, key, section in positions}
+    assert (
+        sections["DOTFILES_RUN_PACKAGES_SETUP"] == "Deployment phases and service gates"
+    )
+    assert sections["DOTFILES_OPENCODE_TIER"] == "Tier settings"

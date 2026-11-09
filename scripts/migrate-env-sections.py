@@ -3,7 +3,9 @@
 
 This is distinct from deprecated-gate renaming. Unknown keys and comments stay
 put; only unambiguous, template-known active assignments are relocated.
-No shell evaluation, credential printing, or default writes.
+Sections are matched by title at either heading level ('# --- X ---' or
+'# == X ==' nested inside an owning section); the finest documented title
+wins. No shell evaluation, credential printing, or default writes.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ import sys
 import tempfile
 
 SECTION = re.compile(r"^# --- (.+?) ---$")
+SUBSECTION = re.compile(r"^# == (.+?) ==$")
 ASSIGN = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 BARE = re.compile(r"^[A-Za-z0-9_./:,+=@%-]*$")
 SINGLE = re.compile(r"^'([^']*)'(?:\s+#.*)?$")
@@ -53,8 +56,9 @@ def read_sections(text):
     values, positions, current, seen_sections = {}, [], "", set()
     for i, raw in enumerate(text.splitlines(keepends=True)):
         line = raw.rstrip("\r\n")
-        if match := SECTION.fullmatch(line):
-            current = match.group(1)
+        heading = SECTION.fullmatch(line) or SUBSECTION.fullmatch(line)
+        if heading:
+            current = heading.group(1)
             if current in seen_sections:
                 raise ValueError("duplicate section header")
             seen_sections.add(current)
@@ -73,10 +77,14 @@ def read_sections(text):
 
 
 def template_sections(text):
-    target, section = {}, ""
+    """Map every documented key to its finest documented section title."""
+    target, top, sub = {}, "", ""
     for line in text.splitlines():
         if match := SECTION.fullmatch(line):
-            section = match.group(1)
+            top, sub = match.group(1), ""
+            continue
+        if match := SUBSECTION.fullmatch(line):
+            sub = match.group(1)
             continue
         active = line.lstrip()
         if active.startswith("# "):
@@ -84,10 +92,22 @@ def template_sections(text):
         match = ASSIGN.fullmatch(active)
         if match:
             key = match.group(1)
+            section = sub or top
             if key in target and target[key] != section:
                 raise ValueError("conflicting canonical section")
             target[key] = section
     return target
+
+
+def template_section_markers(text):
+    """Map section titles to the template's own heading line style."""
+    markers = {}
+    for line in text.splitlines():
+        if match := SECTION.fullmatch(line):
+            markers[match.group(1)] = f"# --- {match.group(1)} ---"
+        elif match := SUBSECTION.fullmatch(line):
+            markers[match.group(1)] = f"# == {match.group(1)} =="
+    return markers
 
 
 def migrate(original, example):
@@ -111,6 +131,7 @@ def migrate(original, example):
     newline = newline_for(raw)
     values, active = read_sections(original)
     targets = template_sections(example)
+    markers = template_section_markers(example)
     source_lines = original.splitlines(keepends=True)
     moved = {}
     for index, key, current in active:
@@ -120,14 +141,18 @@ def migrate(original, example):
         if not wanted:
             raise ValueError("canonical section is missing")
         previous = source_lines[index - 1].rstrip("\r\n") if index else ""
-        if previous.lstrip().startswith("#") and not SECTION.fullmatch(previous):
+        previous_heading = SECTION.fullmatch(previous) or SUBSECTION.fullmatch(previous)
+        if previous.lstrip().startswith("#") and not previous_heading:
             raise ValueError("ambiguous adjacent comment; manual relocation required")
         following = (
             source_lines[index + 1].rstrip("\r\n")
             if index + 1 < len(source_lines)
             else ""
         )
-        if following.lstrip().startswith("#") and not SECTION.fullmatch(following):
+        following_heading = SECTION.fullmatch(following) or SUBSECTION.fullmatch(
+            following
+        )
+        if following.lstrip().startswith("#") and not following_heading:
             raise ValueError("ambiguous following comment; manual relocation required")
         moved[index] = (key, wanted)
     if not moved:
@@ -135,9 +160,11 @@ def migrate(original, example):
 
     blocks, current_name, current_lines = [], "", []
     for index, line in enumerate(source_lines):
-        if match := SECTION.fullmatch(line.rstrip("\r\n")):
+        stripped = line.rstrip("\r\n")
+        heading = SECTION.fullmatch(stripped) or SUBSECTION.fullmatch(stripped)
+        if heading:
             blocks.append([current_name, current_lines])
-            current_name, current_lines = match.group(1), [line]
+            current_name, current_lines = heading.group(1), [line]
         elif index not in moved:
             current_lines.append(line)
     blocks.append([current_name, current_lines])
@@ -145,10 +172,12 @@ def migrate(original, example):
     for index, (key, wanted) in moved.items():
         destination = next((part for part in blocks if part[0] == wanted), None)
         if destination is None:
-            destination = [wanted, [f"# --- {wanted} ---{newline}"]]
+            heading = markers.get(wanted, f"# --- {wanted} ---")
+            destination = [wanted, [f"{heading}{newline}"]]
             blocks.append(destination)
         last = destination[1][-1].rstrip("\r\n")
-        if last.lstrip().startswith("#") and not SECTION.fullmatch(last):
+        heading = SECTION.fullmatch(last) or SUBSECTION.fullmatch(last)
+        if last.lstrip().startswith("#") and not heading:
             raise ValueError("destination ends in an ambiguous comment")
         destination[1].append(source_lines[index])
 
