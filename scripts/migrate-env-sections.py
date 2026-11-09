@@ -204,14 +204,12 @@ def migrate(original, example):
                 # Keep a newly created nested block inside its owner. Append
                 # after existing sibling subsections, before the next top level.
                 siblings = {
-                    title for title, owning_parent in parents.items()
+                    title
+                    for title, owning_parent in parents.items()
                     if owning_parent == parent
                 }
                 insert_at = parent_index + 1
-                while (
-                    insert_at < len(blocks)
-                    and blocks[insert_at][0] in siblings
-                ):
+                while insert_at < len(blocks) and blocks[insert_at][0] in siblings:
                     insert_at += 1
                 blocks.insert(insert_at, destination)
             else:

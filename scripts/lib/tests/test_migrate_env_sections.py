@@ -361,7 +361,8 @@ def test_existing_subsection_heading_block_accepts_appended_keys():
     )
     assert sections["DOTFILES_OPENCODE_TIER"] == "Tier settings"
 
-def test_created_subsection_stays_under_template_parent(tmp_path):
+
+def test_created_subsection_stays_under_template_parent():
     original = (
         "# --- Dotfiles toggles (0 = skip, 1 = run) ---\n"
         "DOTFILES_RUN_PACKAGES_SETUP='1'\n"
@@ -400,8 +401,7 @@ def test_missing_parent_is_created_before_missing_subsection():
 
 def test_real_template_global_deployment_gates_not_project_scoped():
     example = (
-        Path(__file__).resolve().parents[3]
-        / "dot_dotfiles/shell/.env.example"
+        Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.example"
     ).read_text(encoding="utf-8")
     targets = env_migration.template_sections(example)
     for key in (
@@ -412,6 +412,4 @@ def test_real_template_global_deployment_gates_not_project_scoped():
         "DOTFILES_RUN_OPENCODE_WEB_SETUP",
     ):
         assert targets[key] == "Deployment phases and service gates"
-    assert targets["DOTFILES_PROJECT_STEPS"].startswith(
-        "Project-scoped configuration"
-    )
+    assert targets["DOTFILES_PROJECT_STEPS"].startswith("Project-scoped configuration")
