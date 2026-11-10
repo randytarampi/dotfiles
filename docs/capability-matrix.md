@@ -42,6 +42,8 @@ Claude Desktop has a secret-free export scaffold (`scripts/export-claude-desktop
 | Pi | Ollama/oMLX providers and tier selection | sherpa-onnx STT | TTS unsupported |
 | Codex | Ollama/oMLX through generated provider profiles | Unsupported | No voice integration |
 | Open WebUI | Registry-managed local engine connections | Audio settings managed by the reconciler; task configuration is not managed (planned) | — |
+| Paseo | OpenCode/Pi/other agent sessions are separate consumers; no implication that Paseo uses LiteLLM for every modality | Owner-qualified STT/TTS HTTP route and persisted overrides now use **direct loopback oMLX**, not the earlier LiteLLM relay | Actual in-app dictation/voice task and daemon consumption remain **NOT RUN** ([#222](https://github.com/randytarampi/dotfiles/issues/222)) |
+| Hermes | Owner-verified selected LiteLLM chat one-shot task on `ollama-cloud/glm-5.3-flash` | Auxiliary voice/vision/web-summary consumers not independently qualified | #217 closed on bounded chat route proof, not a tool or all-auxiliary guarantee |
 | Other listed agents | No generated local service consumer unless their row explicitly says otherwise | Unsupported | See each tool's local-fallback and voice cells above |
 
 | AMD local service | Disposition |
