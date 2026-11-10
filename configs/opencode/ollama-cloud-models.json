@@ -42,17 +42,8 @@
     "minimax-m3.1-flash": {
       "name": "minimax-m3.1-flash"
     },
-    "mistral-large-3:675b": {
-      "name": "mistral-large-3:675b"
-    },
     "mistral-large-4": {
       "name": "mistral-large-4"
-    },
-    "nemotron-3-nano:30b": {
-      "name": "nemotron-3-nano:30b"
-    },
-    "minimax-m2.7": {
-      "name": "minimax-m2.7"
     },
     "gpt-oss:120b": {
       "name": "gpt-oss:120b"
@@ -65,6 +56,15 @@
     },
     "mimo-v2.6-flash": {
       "name": "mimo-v2.6-flash"
+    },
+    "beam": {
+      "name": "beam"
+    },
+    "clef": {
+      "name": "clef"
+    },
+    "muse-spark-open": {
+      "name": "muse-spark-open"
     }
   }
 }
