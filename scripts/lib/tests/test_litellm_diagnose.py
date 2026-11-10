@@ -24,6 +24,9 @@ def setup_home(tmp_path, monkeypatch, *, with_key=True, subname="litellm"):
     home.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(MODULE.Path, "home", staticmethod(lambda: home))
     monkeypatch.setenv("HOME", str(home))
+    # Hermetic: an ambient LITELLM_MASTER_KEY (e.g. make targets load ~/.env,
+    # where the key is canonical) outranks the synthetic service.env fixture.
+    monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
     root = home / ".local/share/litellm"
     root.mkdir(parents=True, exist_ok=True)
     (root / "config.yaml").write_text("config")
