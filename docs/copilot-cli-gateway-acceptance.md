@@ -29,3 +29,7 @@ No editing `~/.copilot` in CI; no logging keys, public LiteLLM exposure, forcing
 ## Status
 
 **What this PR does:** records the sourced exact-native-vs-legacy decision, verification commands, safety constraints and handoff. **What this PR does not do:** change Copilot CLI provider settings or claim installed routing works. An implemented native configuration requires the verified schema/secret decision first. Keep #218 open.
+
+## 2026-11-09 disposition (issue #218 closure)
+
+**UNSUPPORTED (versioned)**: GitHub Copilot CLI 1.0.105 exposes `--model` selection only — no native `providers.json` BYOK/schema surface and no custom base-URL/provider option on this build; `~/.copilot/providers.json` does not exist. Per the gate contract (plaintext credentials, no `$ENV` expansion) no secret was written to test blindly. The working `scripts/copilot-litellm` launcher + scoped `copilot-cli.key` remain the operational path. Re-entrant: a BYOK-capable CLI release reopens this with the native-key test as the first task.
