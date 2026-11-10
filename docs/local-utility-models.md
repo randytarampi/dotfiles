@@ -43,3 +43,7 @@ Minimum measurement record shape (illustrative *synthetic* data, not a host benc
 ## Gates and rollback
 
 No automatic model downloads, endpoint publication, tier changes, default profile switches, background service or cost policy edits in this PR. Rollback removes only this offline report utility and guidance. Real host results are **not run** here.
+
+## 2026-11-09 measurement and NO CHANGE disposition (issue #223)
+
+**#223 closed with owner-accepted NO CHANGE on 2026-11-09.** The owner-session local-loopback benchmark used synthetic prompts, a 256-token budget and two samples per model. Reported results: **Ornith-1.5-9B-MLX-6bit** (oMLX), structured task passed, median 1347 ms, measured peak 16.5 GB; **gemma4:12b-mxfp8** (Ollama), JSON parse failed despite temperature 0, median 3431 ms; **strands-decider:2b**, HTTP 400 because it is not a generative chat model. The operator recorded zero cloud egress; the summariser labels samples **synthetic provenance** and cannot independently certify network egress, quality or latency. Every candidate stayed `NOT_AUTO_PROMOTED`. No existing installed consumer had a justified new resident utility route: Paseo Manual metadata is Pi-only by owner design, and closing #217 proved a Hermes **primary** model task, not a separately invoked local auxiliary classifier. Revisit only when a concrete auxiliary/metadata consumer exists, with measured source/consumer evidence and an independent rollback decision. Do not re-open #223 solely because a candidate benchmark passed.
