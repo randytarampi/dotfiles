@@ -71,7 +71,10 @@ jobs:
         run: make test
       - name: Shell tests
         run: make test-shell
+      # Coveralls is supplemental: its own installer/network may fail after green tests.
       - name: Upload coverage
+        id: coveralls
+        continue-on-error: true
         uses: coverallsapp/github-action@v2
         with:
           file: coverage.lcov
@@ -81,6 +84,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+      - name: Report Coveralls upload failure
+        if: ${{ steps.coveralls.outcome == 'failure' }}
+        run: echo "::warning::Coveralls upload failed; required test/verify checks still determine CI status. Inspect Coveralls step logs."
       # Supplemental coverage lane isolated from the required gate. The
       # success gate prevents stale coverage uploads; step-level failure
       # tolerance keeps Qlty service/OIDC failures from failing verify.
