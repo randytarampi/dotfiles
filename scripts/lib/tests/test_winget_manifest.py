@@ -10,7 +10,7 @@ LIBRARY = Path(__file__).resolve().parents[1] / "winget_manifest.sh"
 def run_manifest(tmp_path, manifest, *, ignored="", winget_exit=0):
     binary = tmp_path / "winget"
     binary.write_text(
-        '#!/usr/bin/env bash\n'
+        "#!/usr/bin/env bash\n"
         'printf "%s\\n" "$@" >> "$WINGET_TRACE"\n'
         'exit "$WINGET_EXIT"\n',
         encoding="utf-8",
