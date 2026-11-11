@@ -1,0 +1,31 @@
+# Strict-free outbound interception inventory
+
+**Inventory version: 1.0.0 (2026-11-11).** This is a read-only, host-specific snapshot of installed producer/configuration surfaces. It describes hookability, not account eligibility, request-time enforcement or verified no-spend behaviour. Anything without a proven hook at the final send boundary is **NOT ENFORCEABLE** and must not inherit a strict-free badge. Re-run the documented inspection after client/plugin/config upgrades.
+
+The matrix records exact installed paths and relevant keys. Hookability means an installed, synchronous hook immediately before network dispatch that can deny the request; ordinary session, tool or lifecycle hooks do not qualify. A gateway is a centralized chokepoint only for traffic actually routed through it. It does not intercept client-native endpoints or OAuth-backed direct provider routes.
+
+```json
+{
+  "version": "1.0.0",
+  "observed_at": "2026-11-11",
+  "rows": [
+    {"id":"opencode-foreground","surface":"OpenCode v2 TUI/foreground","producer":"~/.config/opencode/opencode.json: providers.litellm; plugin oh-my-opencode-slim; ~/.local/share/litellm/config.yaml:model_list","pre_send_hook_today":false,"bypass":"Yes: configured direct providers/endpoints may be selected instead of LiteLLM; local hooks/plugins shown are not verified request guards.","verdict":"BYPASSABLE"},
+    {"id":"opencode-delegated","surface":"OpenCode delegated/background/child sessions and agents","producer":"~/.config/opencode/opencode.json: agents; plugins[oh-my-opencode-slim]","pre_send_hook_today":false,"bypass":"Yes: each child may resolve its own model/provider and can route direct; no installed per-send guard verified.","verdict":"BYPASSABLE"},
+    {"id":"opencode-council","surface":"OpenCode council","producer":"~/.config/opencode/opencode.json: plugins[oh-my-opencode-slim] and its plan-agent/council configuration","pre_send_hook_today":false,"bypass":"Yes: council constituent agents use their model provider routes; no council-wide send guard verified.","verdict":"BYPASSABLE"},
+    {"id":"opencode-auxiliary","surface":"OpenCode metadata/summary auxiliary calls","producer":"OpenCode v2 client/provider internals; ~/.config/opencode/opencode.json: providers and plugin configuration","pre_send_hook_today":false,"bypass":"Yes: auxiliary model/provider calls may be separate from the visible foreground route; no final dispatch hook verified.","verdict":"BYPASSABLE"},
+    {"id":"codex-panel","surface":"ChatGPT/Codex panel route","producer":"~/.codex/config.toml: openai_base_url and [model_providers.*].base_url/model_provider; installed routes include LiteLLM 127.0.0.1:4000/v1, Meridian 127.0.0.1:3456/v1, Ollama 127.0.0.1:11434/api/codex/v1, Ollama Cloud, oMLX and GitHub Copilot","pre_send_hook_today":false,"bypass":"Yes: native OpenAI/Codex auth and configured non-LiteLLM base URLs can dispatch elsewhere; generic Codex hooks are not demonstrated to guard model sends.","verdict":"BYPASSABLE"},
+    {"id":"junie-claude-cursor","surface":"Junie/Claude/Cursor CLI lanes","producer":"Installed tool binaries and their native user/project configuration; inventory did not establish one shared mandatory gateway route","pre_send_hook_today":false,"bypass":"Yes: native provider credentials/endpoints and tool-specific routing can bypass LiteLLM; exact active models/configs not fully verified.","verdict":"BYPASSABLE"},
+    {"id":"hermes-direct","surface":"Hermes direct vendor/provider routes","producer":"~/.hermes/config.yaml: providers and model.provider; ~/.hermes/auth.json: providers entries (secrets intentionally not read); configured provider entries include ChatGPT Codex, Ollama Cloud, OpenRouter and Qwen, with a local LiteLLM endpoint also present","pre_send_hook_today":false,"bypass":"Yes: native provider tokens (including ChatGPT OAuth) and direct OpenRouter/Google/vendor providers are independent of LiteLLM.","verdict":"BYPASSABLE"},
+    {"id":"litellm-gateway","surface":"LiteLLM gateway requests routed through the service","producer":"~/.local/share/litellm/config.yaml:model_list, litellm_settings, general_settings; client credentials in ~/.local/share/litellm/clients/*.key and service.env (values not read); scripts/lib/litellm_config.py generates configuration","pre_send_hook_today":false,"bypass":"Gateway clients cannot bypass the gateway for a given gateway-bound request, but all clients can select another direct endpoint; configured litellm_settings contains no custom_key or callback hook verified.","verdict":"HOOKABLE-CONSTRAINED"}
+  ]
+}
+```
+
+`HOOKABLE-CONSTRAINED` on the LiteLLM row means only gateway-bound traffic has a centralized potential interception point. This is not a claim that a strict-free pre-send callback exists today: the installed configuration inspection found no `custom_key` or callback declaration, and client keys only authenticate the gateway. The other producer rows are `BYPASSABLE` because their native/direct egress cannot be forced through LiteLLM by this inventory. No row is classified `NOT-INTERCEPTABLE` independent of bypass; where the direct route is selected, its egress is not intercepted and is therefore **NOT ENFORCEABLE** for strict-free.
+
+## Safe, disposable inspection
+
+This inspection is read-only and deliberately avoids credential contents. Do not print `~/.env`, client key files, `service.env`, `~/.hermes/auth.json` values, or auth headers. Check only filenames, config key names and provider/base-URL identifiers. A gateway reachability probe, if separately authorized, must be a loopback `GET http://127.0.0.1:4000/v1/models` using an existing client key loaded in memory, discard the response body, never print the key, and make no inference request. This inventory did not send that probe or any network request. Do not restart any service or write installed profiles.
+
+
+The machine-readable matrix is schema-checked by `scripts/lib/tests/test_strictfree_inventory.py`; it provides no evidence that a provider hook works. Installed versions and upstream internals were not conclusively verified in this read-only pass. Recheck with version/help probes and inspect the exact upstream hook contract before claiming enforceability.
