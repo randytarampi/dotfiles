@@ -21,6 +21,7 @@ def test_registry_pull_set_and_stale_cleanup(tmp_path):
         managed,
     ) == ["retired:cloud"]
 
+
 def test_chat_registry_excludes_system_one_only_decision_models():
     # This registry feeds OpenCode/Pi chat completions; Clef requires /v1/systemone.
     registry = (
