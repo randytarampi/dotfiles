@@ -211,7 +211,7 @@ The companion stamps predate the current shared guidance and still describe stas
 | 05 | setup-bin-symlinks | run_onchange | Symlink scripts to ~/bin | — |
 | 06 | install-junie-cli | run_onchange | Junie CLI + model profiles | `DOTFILES_RUN_JUNIE_CLI_SETUP` |
 | 07 | install-opencode-plugins | run_onchange | OpenCode plugins (oh-my-opencode-slim dedicated installer, DCP, plannotator, vibeguard (pinned git build), tokenscope-v2, voice (cli.json)) + per-spec resolved-version checks; ordinary `make deploy` does not refresh (add/@latest dedupes and run_onchange only re-runs on hash changes); explicit update-workflow refresh with convergence proof | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP`; update refresh opt-in (`DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE`) |
-| 08 | install-ai-cli-tools | run_onchange | Standalone CLIs: codegraph | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
+| 08 | install-ai-cli-tools | run_onchange | Ollama Cloud model stub discovery/cleanup; CodeGraph and macOS LazySkills install through `Brewfile.dev` instead | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
 | 09 | install-plannotator | run_onchange | Plannotator CLI (version-aware via update-plannotator.sh) | `DOTFILES_RUN_PLANNOTATOR_SETUP` |
 | 10 | install-acp-adapters | run_onchange | ACP adapters for supported coding agents | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
 | 11 | install-meridian-launchd | run_onchange | Meridian launchd plist (macOS) | `DOTFILES_RUN_MERIDIAN_SETUP` |
