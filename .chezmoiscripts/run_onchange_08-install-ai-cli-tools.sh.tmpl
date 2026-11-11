@@ -19,22 +19,9 @@ if [[ "${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}" != "1" ]]; then
   exit 0
 fi
 
-info "Installing standalone AI CLI tools..."
-
-if command -v npm >/dev/null 2>&1; then
-  if npm list -g @colbymchenry/codegraph >/dev/null 2>&1; then
-    ok "codegraph CLI already installed globally"
-  else
-    info "Installing @colbymchenry/codegraph globally..."
-    if npm install -g @colbymchenry/codegraph@latest 2>/dev/null; then
-      ok "codegraph CLI installed globally"
-    else
-      warn "codegraph CLI install failed — install manually with: npm i -g @colbymchenry/codegraph"
-    fi
-  fi
-else
-  warn "npm not found; skipping standalone AI CLI installs"
-fi
+# The package lane owns CodeGraph and other standalone CLIs. This gate only
+# reconciles the Ollama Cloud stubs used by OpenCode discovery.
+info "Reconciling Ollama Cloud model metadata..."
 
 # ---------------------------------------------------------------------------
 # Ollama Cloud model metadata (pulled locally for OpenCode discovery)
@@ -71,8 +58,8 @@ info "Installing lazyskills CLI..."
 if command -v lazyskills &>/dev/null; then
   ok "lazyskills CLI already installed"
 elif [[ "$(uname -s)" == "Darwin" ]]; then
-  brew tap alvinunreal/tap 2>/dev/null || true
-  brew install --cask lazyskills || warn "brew install --cask lazyskills failed — see scripts/install-skills.sh"
+  # Brewfile.dev owns the cask; do not install it again through this gate.
+  warn "lazyskills missing — enable the dev package lane to install the Brewfile.dev cask"
 elif command -v curl &>/dev/null; then
   curl -fsSL https://lazyskills.sh/install | sh || warn "lazyskills curl install failed"
 else
