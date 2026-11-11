@@ -37,9 +37,9 @@ wingetfile_install() {
       warn "WinGet installation failed for $package"
       failed=$((failed + 1))
     fi
-  done < "$file"
+  done <"$file"
 
-  if (( failed > 0 )); then
+  if ((failed > 0)); then
     warn "$failed WinGet package(s) could not be installed from $file"
     return 1
   fi
