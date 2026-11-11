@@ -7,7 +7,6 @@ ci/required status, and must not prevent the independent Qlty upload.
 
 from pathlib import Path
 
-
 WORKFLOW = Path(__file__).resolve().parents[3] / ".github/workflows/ci.yml"
 
 
