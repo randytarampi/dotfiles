@@ -4,7 +4,7 @@ import os
 import subprocess
 from pathlib import Path
 
-LIBRARY = Path(__file__).resolve().parents[2] / "winget_manifest.sh"
+LIBRARY = Path(__file__).resolve().parents[1] / "winget_manifest.sh"
 
 
 def run_manifest(tmp_path, manifest, *, ignored="", winget_exit=0):
@@ -74,8 +74,12 @@ def test_ignore_matches_exact_tokens_not_regex(tmp_path):
     )
     assert result.returncode == 0
     assert calls == [
-        "install", "--id", "GitXGit", "--exact",
-        "--accept-package-agreements", "--accept-source-agreements",
+        "install",
+        "--id",
+        "GitXGit",
+        "--exact",
+        "--accept-package-agreements",
+        "--accept-source-agreements",
         "--disable-interactivity",
     ]
 
