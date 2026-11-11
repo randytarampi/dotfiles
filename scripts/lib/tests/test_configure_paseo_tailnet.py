@@ -1,5 +1,4 @@
 import copy
-import subprocess
 import importlib.util
 from pathlib import Path
 from unittest.mock import Mock
@@ -185,13 +184,12 @@ def test_abbreviated_apply_flag_rejected_before_mutation():
     assert caught.value.code == 2
 
 
-def test_paseo_installer_dry_run_reports_candidate_without_install():
-    script = SCRIPT.with_name("install-paseo.sh")
-    run = subprocess.run(
-        ["bash", str(script), "--dry-run"],
-        check=True,
-        capture_output=True,
-        text=True,
+def test_paseo_cli_is_owned_by_package_manifest_not_a_second_installer():
+    root = SCRIPT.parents[1]
+    brewfile = (root / "Brewfile.dev").read_text(encoding="utf-8")
+    reconciler = (root / "scripts/install-npm-brewfile-packages.sh").read_text(
+        encoding="utf-8"
     )
-    assert "@getpaseo/cli@latest" in run.stdout
-    assert "no changes made" in run.stdout
+    assert brewfile.count('npm "@getpaseo/cli"') == 1
+    assert 'npm install -g "$spec"' in reconciler
+    assert not (root / "scripts/install-paseo.sh").exists()

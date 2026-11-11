@@ -497,10 +497,7 @@ tailnet-opencode-check: ## Inspect Tailscale/OpenCode Serve without writes
 tailnet-opencode-apply: ## Explicitly expose authenticated OpenCode to the tailnet (gate required)
 	@$(LOAD_ENV); python3 scripts/configure-tailnet-opencode.py --apply
 
-.PHONY: paseo-install paseo-tailnet-check paseo-tailnet-apply
-paseo-install: ## Install pinned Paseo CLI on explicit opt-in
-	@$(LOAD_ENV); bash scripts/install-paseo.sh
-
+.PHONY: paseo-tailnet-check paseo-tailnet-apply
 paseo-tailnet-check: ## Inspect Paseo tailnet readiness without writes
 	@$(LOAD_ENV); python3 scripts/configure-paseo-tailnet.py
 

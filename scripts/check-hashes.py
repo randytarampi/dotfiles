@@ -66,7 +66,6 @@ NON_TRACKED_SCRIPTS = {
     "scripts/generate-review-bundles.py",  # CI-only generator checked by Makefile
     "scripts/configure-tailnet-opencode.py",  # Owner-only Makefile CLI; never chezmoi-deployed
     "scripts/configure-paseo-tailnet.py",  # Owner-only Makefile CLI; never chezmoi-deployed
-    "scripts/install-paseo.sh",  # Owner-only Makefile CLI; never chezmoi-deployed
     "scripts/configure-paseo-hermes.py",  # Owner-only Makefile CLI; never chezmoi-deployed
     "scripts/migrate-env-sections.py",  # Owner-only I2 CLI; never a chezmoi deploy input
 }
