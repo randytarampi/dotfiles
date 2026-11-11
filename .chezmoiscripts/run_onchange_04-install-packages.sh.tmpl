@@ -47,6 +47,7 @@ fi
 # install-fonts.sh: {{ include "scripts/install-fonts.sh" | sha256sum }}
 # install-npm-brewfile-packages.sh: {{ include "scripts/install-npm-brewfile-packages.sh" | sha256sum }}
 {{- if eq .chezmoi.os "windows" }}
+# scripts/lib/winget_manifest.sh: {{ include "scripts/lib/winget_manifest.sh" | sha256sum }}
 # wingetfile hashes (triggers re-run when any wingetfile changes):
 # base: {{ include "wingetfile" | sha256sum }}
 # dev: {{ include "wingetfile.dev" | sha256sum }}
@@ -257,129 +258,110 @@ bash "{{ .chezmoi.sourceDir }}/scripts/install-fonts.sh" windows || warn "Font i
 
 # --- Winget (Windows) ---
 {{- if eq .chezmoi.os "windows" }}
-WINGET_BUNDLE="{{ .chezmoi.sourceDir }}/wingetfile"
-
 if ! command -v winget &>/dev/null; then
   warn "winget not found; skipping Windows package installs"
 else
-  info "Installing winget packages..."
-
-  # Filter ignored packages from a wingetfile before running winget import.
-  # Controlled by DOTFILES_WINGETFILE_IGNORE (comma-separated Package IDs).
-  winget_import_filtered() {
-    local file="$1"
-    if [[ -n "${DOTFILES_WINGETFILE_IGNORE:-}" ]]; then
-      local tmpfile
-      tmpfile="$(mktemp)"
-      local pattern
-      pattern="$(echo "$DOTFILES_WINGETFILE_IGNORE" | tr ',' '|')"
-      grep -vE "^($pattern)$" "$file" >"$tmpfile"
-      winget import --import-file "$tmpfile"
-      local rc=$?
-      rm -f "$tmpfile"
-      return $rc
-    else
-      winget import --import-file "$file"
-    fi
-  }
+  info "Installing winget packages from plain-ID manifests..."
+  # Reuse the same exact-ID parsing for each selected package category.
+  source "${LIB_DIR}/winget_manifest.sh"
 
   # base — always installed
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile"
 
   {{- if .categories.dev }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.dev"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.dev"
   {{- end }}
 
   {{- if .categories.dev_security }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.dev.security"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.dev.security"
   {{- end }}
 
   {{- if .categories.utilities }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.utilities"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.utilities"
   {{- end }}
 
   {{- if .categories.desktop_dev }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.dev"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.dev"
   {{- end }}
 
   {{- if .categories.desktop_browsers }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.browsers"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.browsers"
   {{- end }}
 
   {{- if .categories.desktop_comms }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.comms"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.comms"
   {{- end }}
 
   {{- if .categories.desktop_security }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.security"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.security"
   {{- end }}
 
   {{- if .categories.desktop_media }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.media"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.media"
   {{- end }}
 
   {{- if .categories.desktop_utilities }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.utilities"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.utilities"
   {{- end }}
 
   {{- if .categories.desktop_devices }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.devices"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.devices"
   {{- end }}
 
   {{- if .categories.desktop_macos }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.macos"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.macos"
   {{- end }}
 
   {{- if and .categories.desktop_gaming }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.gaming"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.gaming"
   {{- end }}
 
   {{- if .categories.desktop_fonts }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.fonts"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.fonts"
   {{- end }}
 
   {{- if .categories.desktop_cloud }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.cloud"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.cloud"
   {{- end }}
 
   {{- if .categories.desktop_productivity }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity"
   {{- end }}
 
   {{- if .categories.dev_ops }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.dev.ops"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.dev.ops"
   {{- end }}
 
   {{- if .categories.legacy }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.legacy"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.legacy"
   {{- end }}
 
   {{- if .categories.legacy_macfuse }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.legacy.macfuse"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.legacy.macfuse"
   {{- end }}
 
   {{- if .categories.legacy_vmware }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.legacy.vmware"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.legacy.vmware"
   {{- end }}
 
   {{- if .categories.desktop_privacy }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.privacy"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.privacy"
   {{- end }}
 
   {{- if .categories.desktop_emulation }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.emulation"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.emulation"
   {{- end }}
 
   {{- if .categories.desktop_gaming_emulation }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.gaming.emulation"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.gaming.emulation"
   {{- end }}
 
   {{- if .categories.desktop_productivity_msoffice }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity.msoffice"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity.msoffice"
   {{- end }}
 
   {{- if .categories.desktop_productivity_adobe }}
-  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity.adobe"
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity.adobe"
   {{- end }}
 fi
 {{- end }}
