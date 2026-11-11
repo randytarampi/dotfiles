@@ -23,5 +23,8 @@ def test_registry_pull_set_and_stale_cleanup(tmp_path):
 
 def test_chat_registry_excludes_system_one_only_decision_models():
     # This registry feeds OpenCode/Pi chat completions; Clef requires /v1/systemone.
-    registry = Path(__file__).resolve().parents[3] / "configs/opencode/ollama-cloud-models.json"
+    registry = (
+        Path(__file__).resolve().parents[3]
+        / "configs/opencode/ollama-cloud-models.json"
+    )
     assert "clef" not in managed_models(registry)
