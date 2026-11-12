@@ -17,7 +17,7 @@ import tempfile
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
-MODEL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:+/-]{0,199}\\Z")
+MODEL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:+/-]{0,199}\Z")
 MANAGED = "dotfiles-litellm-codex-catalogue-v1"
 
 
@@ -61,7 +61,7 @@ def fetch_served(url, token):
     try:
         with urlopen(request, timeout=8) as response:
             data = response.read(1048577)
-    except Exception as exc:
+    except Exception:
         # Never expose an exception containing a request header or credentials.
         raise ValueError("LiteLLM model inventory unavailable or key denied") from None
     if len(data) > 1048576:
@@ -206,7 +206,7 @@ def main(argv=None):
             ):
                 raise ValueError("Codex and LiteLLM setup gates must both be enabled")
             output = Path.home() / ".codex/dotfiles-litellm-models.json"
-            serialized = json.dumps(result, indent=2) + "\\n"
+            serialized = json.dumps(result, indent=2) + "\n"
             changed = save_catalogue(output, serialized, replace=args.replace)
             print("Managed Codex catalogue " + ("updated" if changed else "unchanged"))
         else:
