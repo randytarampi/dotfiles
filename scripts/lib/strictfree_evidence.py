@@ -11,11 +11,13 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
+import hashlib
+import http.client
 import json
-import urllib.error
-import urllib.parse
+import os
+import re
+import stat
 from urllib.parse import urlsplit
-import urllib.request
 
 
 class State(str, Enum):
@@ -265,17 +267,41 @@ def collect_from_litellm(
 
 
 def _http_get(url, master_key):
-    """GET only from loopback http(s) endpoints — bandit B310 guard."""
+    """Authenticated GET to a fixed loopback API path; never follow redirects."""
     parsed = urlsplit(url)
-    loopback = parsed.hostname in ("127.0.0.1", "localhost")
-    if parsed.scheme not in ("http", "https") or not loopback:
-        raise ValueError(
-            f"refusing non-loopback or non-http(s) gateway endpoint: {parsed.hostname!r}"
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname != "127.0.0.1"
+        or not parsed.port
+        or parsed.username
+        or parsed.password
+        or parsed.fragment
+    ):
+        raise ValueError("LiteLLM metadata request must use literal IPv4 loopback")
+    target = parsed.path
+    if target == "/key/info":
+        if not re.fullmatch(r"key=[0-9a-f]{64}", parsed.query):
+            raise ValueError("key metadata lookup requires a SHA-256 key hash")
+        target += "?" + parsed.query
+    elif target != "/v1/models" or parsed.query:
+        raise ValueError("only two read-only LiteLLM metadata routes are allowed")
+    connection = http.client.HTTPConnection("127.0.0.1", parsed.port, timeout=5)
+    try:
+        connection.request(
+            "GET", target, headers={"Authorization": "Bearer " + master_key}
         )
-    request = urllib.request.Request(
-        url, headers={"Authorization": f"Bearer {master_key}"}, method="GET"
-    )
-    # nosec B310 — scheme + loopback validation above pins this to http/https
-    # on 127.0.0.1/localhost before the only open() call in this module.
-    with urllib.request.urlopen(request, timeout=5) as response:
-        return json.loads(response.read().decode("utf-8"))
+        response = connection.getresponse()
+        if response.status != 200:
+            # Redirects and all non-200 statuses are hard refusals.
+            raise ValueError("LiteLLM metadata unavailable")
+        payload = response.read(1048577)
+    except (OSError, http.client.HTTPException):
+        raise ValueError("LiteLLM metadata unavailable") from None
+    finally:
+        connection.close()
+    if len(payload) > 1048576:
+        raise ValueError("LiteLLM metadata exceeds size limit")
+    try:
+        return json.loads(payload)
+    except ValueError:
+        raise ValueError("malformed LiteLLM metadata JSON") from None
