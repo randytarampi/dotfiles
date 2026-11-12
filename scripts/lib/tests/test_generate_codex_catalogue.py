@@ -217,7 +217,9 @@ def test_new_catalogue_write_failure_is_atomic_and_leaves_no_partial_target(
     tmp_path, monkeypatch
 ):
     target = tmp_path / "dotfiles-litellm-models.json"
-    content = json.dumps(catalogue.generate_catalogue(SERVED, ["gemma4:12b-mxfp8"], 65536))
+    content = json.dumps(
+        catalogue.generate_catalogue(SERVED, ["gemma4:12b-mxfp8"], 65536)
+    )
 
     def fail_link(_source, _destination):
         raise OSError("synthetic disk or filesystem failure")
