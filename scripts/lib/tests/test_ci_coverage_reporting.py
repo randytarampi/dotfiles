@@ -58,6 +58,8 @@ def test_final_coveralls_publisher_does_not_gate_required_ci():
     required = workflow.split("  ci-required:", 1)[1]
 
     assert "needs: verify" in finaliser
+    assert "uses: actions/checkout@v7" in finaliser
+    assert "persist-credentials: false" in finaliser
     assert "parallel-finished: true" in finaliser
     assert "continue-on-error: true" in finaliser
     assert "uses: coverallsapp/github-action@v2" in finaliser
