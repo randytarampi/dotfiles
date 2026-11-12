@@ -9,3 +9,23 @@ Owner-only apply: `DOTFILES_RUN_PASEO_VOICE_SETUP=1 python3 scripts/configure-pa
 Do not claim that passing a route probe demonstrates a real iPhone/iPad transcription or voice response. Verify both modes, hot restart, wrong speaker, auth rotation, and no cloud egress on the installed host before promoting any client preference. Never source this file into an unrelated global shell, commit its secret contents or copy the Open WebUI credential.
 
 Owner and host approval: Randy Tarampi. Implementation: ChatGPT (GPT-6). Live audio and effective managed-daemon environment: NOT RUN.
+
+
+## Realtime voice: native local turn detection with direct oMLX STT/TTS (#222)
+
+The reported 2026-11-11 phone banner, `Realtime voice is unavailable: turn-detection service is not ready`, matched a daemon that requested `voiceTurnDetection=openai` but had no matching detector. **A successful local TTS HTTP probe never proves realtime voice.**
+
+Paseo **v0.15.4** upstream source has an independent turn-detection provider resolver (environment `PASEO_VOICE_TURN_DETECTION_PROVIDER`, default `local`) and a bundled worker-backed local Sherpa/Silero ONNX VAD provider. Upstream references: [speech-config-resolver.ts at v0.15.4](https://github.com/getpaseo/paseo/blob/v0.15.4/packages/server/src/server/speech/speech-config-resolver.ts), [local/runtime.ts](https://github.com/getpaseo/paseo/blob/v0.15.4/packages/server/src/server/speech/providers/local/runtime.ts), [Silero provider](https://github.com/getpaseo/paseo/blob/v0.15.4/packages/server/src/server/speech/providers/local/sherpa/silero-vad-provider.ts).
+
+The generated **private** `dotfiles-voice.env` now explicitly requests **`PASEO_VOICE_TURN_DETECTION_PROVIDER=local`**. It continues to request `PASEO_DICTATION_STT_PROVIDER=openai`, `PASEO_VOICE_STT_PROVIDER=openai`, and `PASEO_VOICE_TTS_PROVIDER=openai` because *those* OpenAI-shaped audio endpoints point at the already-qualified **direct loopback oMLX** server. No remote turn-detection API, cloud route or replacement STT/TTS model is introduced. Setting all three providers to `local` would switch transcription and synthesis to Paseo's bundled ONNX models and is **not** this integration.
+
+**Owner-host acceptance and safe cutover (NOT RUN by this source PR):**
+
+1. Perform a read-only inventory of the installed `paseo --version`, daemon executable owner, effective `voiceTurnDetection/voiceStt/voiceTts/dictationStt` reconciliation, local worker health, Silero model availability and the selected private speech adapter's file mode. Do not disclose credentials, copy `config.json` wholesale or dump audio.
+2. A **running daemon does not automatically load this private env file**. If a previous version of `dotfiles-voice.env` exists, `--apply` intentionally refuses to overwrite it. In a quiescent, owner-approved maintenance window, take a private backup and reconcile the single turn-detection selection into the *actual supervised daemon environment* (or native `features.voiceMode.turnDetection.provider` setting), using the native CLI and full-config readback; do not assume a shell export controls a Desktop-managed daemon. Leave STT/TTS endpoint/model/voice values unchanged.
+3. Reload/restart only as requested by the installed daemon's supported lifecycle. Verify `requested/effective voiceTurnDetection=local`, `dictationStt/voiceStt/voiceTts=openai` with the exact direct oMLX base URL. Exercise **one short in-app dictation** and **one realtime voice turn** on an authorized device. Inspect only redacted provider/status/latency/error receipts; never record or upload user audio.
+4. **Negative cases:** disable/unavailable VAD → honest realtime-unavailable indicator without breaking dictation; bad local STT/TTS route → explicit error, no cloud fallback; daemon restart and native persisted-config precedence; request/response boundary and turn-end detection. If local worker or Silero model cannot initialise, report `UNKNOWN/UNAVAILABLE` with installed version and the redacted reason—do not assert realtime voice delivered.
+
+**Rollback:** restore the prior single turn-detection selection and daemon settings from the owner's private backup, restart only the Paseo-owned daemon, and verify that direct oMLX dictation/TTS remain unchanged. No model-store reset, downloads, service migration or new network listener is part of this PR.
+
+**Evidence:** upstream v0.15.4 source inspected; new render/negative regression fixtures provided. Actual daemon worker initialisation, voice turn, transport fallback and device UX: **NOT RUN**. Source implementation and review: ChatGPT (GPT-6); host operations require owner-approved local execution.
