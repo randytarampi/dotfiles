@@ -92,9 +92,18 @@
   "scripts": [
     {
       "path": "scripts/migrate-env-sections.py",
-      "capabilities": ["mutates", "inspect"],
+      "capabilities": [
+        "mutates",
+        "inspect"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run", "--apply", "--env", "--example"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply",
+        "--env",
+        "--example"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
@@ -143,7 +152,8 @@
         "--probe-routes",
         "--stt-model",
         "--tts-model",
-        "--voice"
+        "--voice",
+        "--local-vad-models-dir"
       ],
       "positional_operand": null,
       "child_scripts": []
