@@ -7,6 +7,7 @@
 wingetfile_install() {
   local file="$1"
   local package failed=0
+  local -a packages=()
   local ignored=",${DOTFILES_WINGETFILE_IGNORE:-},"
   ignored="${ignored//[[:space:]]/}"
 
@@ -32,12 +33,22 @@ wingetfile_install() {
     if [[ "$ignored" == *,"$package",* ]]; then
       continue
     fi
+    packages+=("$package")
+  done <"$file"
 
+  # Validate the complete manifest before launching a single installer. A
+  # malformed later line must never leave an earlier package half-applied.
+  if ((failed > 0)); then
+    warn "$failed invalid WinGet package ID(s) in $file; no installations attempted"
+    return 1
+  fi
+
+  for package in "${packages[@]+"${packages[@]}"}"; do
     if ! winget install --id "$package" --exact --accept-package-agreements --accept-source-agreements --disable-interactivity; then
       warn "WinGet installation failed for $package"
       failed=$((failed + 1))
     fi
-  done <"$file"
+  done
 
   if ((failed > 0)); then
     warn "$failed WinGet package(s) could not be installed from $file"
