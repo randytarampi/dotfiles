@@ -140,3 +140,72 @@ def test_symlinked_catalogue_never_writes_outside_its_directory(tmp_path):
             owned / "dotfiles-litellm-models.json", "new", replace=True
         )
     assert target.read_text(encoding="utf-8") == "original"
+
+
+def test_gateway_model_fetch_uses_only_literal_loopback_and_never_follows_redirects(
+    monkeypatch,
+):
+    calls = []
+    status = 200
+
+    class FakeConnection:
+        def __init__(self, host, port, timeout):
+            calls.append(("connect", host, port, timeout))
+
+        def request(self, method, target, headers):
+            calls.append(("request", method, target, headers["Authorization"]))
+
+        def getresponse(self):
+            class Response:
+                def read(self, limit):
+                    assert limit == 1048577
+                    return json.dumps(SERVED).encode("utf-8")
+
+            response = Response()
+            response.status = status
+            return response
+
+        def close(self):
+            calls.append(("close",))
+
+    monkeypatch.setattr(catalogue.http.client, "HTTPConnection", FakeConnection)
+    assert catalogue.fetch_served("http://localhost:4000/v1/models", "dummy-key") == SERVED
+    assert calls == [
+        ("connect", "127.0.0.1", 4000, 8),
+        ("request", "GET", "/v1/models", "Bearer dummy-key"),
+        ("close",),
+    ]
+
+    # A gateway sending Location: https://host.example/ must never cause a
+    # second connection or leak the scoped Authorization value.
+    status = 302
+    calls.clear()
+    with pytest.raises(ValueError, match="unavailable or key denied"):
+        catalogue.fetch_served("http://127.0.0.1:4000/v1/models", "dummy-key")
+    assert calls == [
+        ("connect", "127.0.0.1", 4000, 8),
+        ("request", "GET", "/v1/models", "Bearer dummy-key"),
+        ("close",),
+    ]
+
+
+def test_catalogue_http_failure_closes_connection_and_hides_low_level_details(
+    monkeypatch,
+):
+    closed = []
+
+    class FailingConnection:
+        def __init__(self, _host, _port, timeout):
+            assert timeout == 8
+
+        def request(self, _method, _target, _headers):
+            raise OSError("SYNTHETIC_REQUEST_HEADER_SHOULD_NOT_LEAK")
+
+        def close(self):
+            closed.append(True)
+
+    monkeypatch.setattr(catalogue.http.client, "HTTPConnection", FailingConnection)
+    with pytest.raises(ValueError, match="unavailable or key denied") as error:
+        catalogue.fetch_served("http://127.0.0.1:4000/v1/models", "synthetic-key")
+    assert "SYNTHETIC_REQUEST" not in str(error.value)
+    assert closed == [True]
