@@ -12,6 +12,7 @@ categories:
   dev: true                 # Development tools + dev desktop apps
   dev_cli: true             # Always installed (core CLI tools — not gateable)
   dev_ops: false            # Ops/infrastructure tools (opt-in)
+  local_ai_headless: false  # Headless Ollama formula; no automatic service startup (opt-in)
   dev_security: false       # Security/pentest CLI tools (opt-in)
   desktop_browsers: false   # Web browsers (opt-in, macOS-only)
   desktop_cloud: false      # Cloud/sync apps (opt-in, macOS-only)

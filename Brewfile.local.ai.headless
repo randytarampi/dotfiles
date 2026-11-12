@@ -1,0 +1,4 @@
+# Headless Ollama formula, opt-in via categories.local_ai_headless.
+# This manifest installs the binary only; no service is started by deployment.
+# macOS preflight refuses Ollama.app or the simultaneous desktop_dev category.
+brew "ollama"

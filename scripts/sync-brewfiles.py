@@ -60,6 +60,7 @@ class CategoryFile:
 CATEGORY_SPECS: list[CategorySpec] = [
     CategorySpec("dev_cli", "Brewfile", True),
     CategorySpec("dev", "Brewfile.dev", True),
+    CategorySpec("local_ai_headless", "Brewfile.local.ai.headless", False),
     CategorySpec("desktop_browsers", "Brewfile.desktop.browsers", True),
     CategorySpec("desktop_comms", "Brewfile.desktop.comms", True),
     CategorySpec("desktop_security", "Brewfile.desktop.security", True),
@@ -558,6 +559,8 @@ def classify_entry(entry: BrewEntry) -> str | None:
         return None
 
     if entry.kind == "brew":
+        if name == "ollama":
+            return "local_ai_headless"
         if name in CORE_CLI_FORMULAS:
             return "dev_cli"
         if name in DEV_OPS_FORMULAS:
