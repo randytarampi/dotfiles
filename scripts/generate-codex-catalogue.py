@@ -136,6 +136,23 @@ def generate_catalogue(payload, model_ids, context_window):
     }
 
 
+def _create_catalogue_without_clobber(path, text):
+    """Publish complete bytes atomically and never expose a partial new file."""
+    fd, temporary = tempfile.mkstemp(dir=str(path.parent), prefix=".dotfiles-codex-")
+    try:
+        with os.fdopen(fd, "wb") as output:
+            os.fchmod(output.fileno(), 0o600)
+            output.write(text.encode("utf-8"))
+            output.flush()
+            os.fsync(output.fileno())
+        # Same-directory hard link is atomic and fails if another actor has
+        # created the target. Unlike os.replace, it cannot clobber that actor.
+        os.link(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
 def save_catalogue(path, text, *, replace):
     if path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
         raise ValueError("refusing symlinked Codex catalogue path")
@@ -186,11 +203,7 @@ def save_catalogue(path, text, *, replace):
             if os.path.exists(temporary):
                 os.unlink(temporary)
         return True
-    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as output:
-        output.write(text)
-        output.flush()
-        os.fsync(output.fileno())
+    _create_catalogue_without_clobber(path, text)
     return True
 
 
