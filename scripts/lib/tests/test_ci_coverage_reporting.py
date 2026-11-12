@@ -50,3 +50,22 @@ def test_coverage_tolerance_does_not_hide_real_test_failures():
         assert "continue-on-error" not in _step(name)
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert "ci/required" in workflow
+
+
+def test_final_coveralls_publisher_does_not_gate_required_ci():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    finaliser = workflow.split("  finish:", 1)[1].split("  ci-required:", 1)[0]
+    required = workflow.split("  ci-required:", 1)[1]
+
+    assert "needs: verify" in finaliser
+    assert "parallel-finished: true" in finaliser
+    assert "continue-on-error: true" in finaliser
+    assert "uses: coverallsapp/github-action@v2" in finaliser
+
+    assert "name: ci/required" in required
+    assert "needs: [verify, deploy]" in required
+    assert "needs.verify.result" in required
+    assert "needs.deploy.result" in required
+    assert "needs.finish.result" not in required
+    assert "FINISH_RESULT" not in required
+    assert 'for result in "$VERIFY_RESULT" "$DEPLOY_RESULT"; do' in required
