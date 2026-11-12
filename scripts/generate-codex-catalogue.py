@@ -6,6 +6,7 @@ private API keys. A served model is only a *candidate*, not Responses-qualified.
 """
 
 import argparse
+import http.client
 from datetime import datetime, timezone
 import json
 import os
@@ -15,7 +16,6 @@ import stat
 import sys
 import tempfile
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
 
 MODEL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:+/-]{0,199}\Z")
 MANAGED = "dotfiles-litellm-codex-catalogue-v1"
@@ -57,18 +57,30 @@ def read_key(path):
 
 
 def fetch_served(url, token):
-    request = Request(url, headers={"Authorization": "Bearer " + token})
+    """Connect only to IPv4 loopback and never follow HTTP redirects with a key."""
+    parsed = urlsplit(validate_url(url))
+    # localhost is accepted as a user-facing alias, but the socket always
+    # connects to literal 127.0.0.1 (not DNS or a redirect target).
+    connection = http.client.HTTPConnection("127.0.0.1", parsed.port, timeout=8)
     try:
-        with urlopen(request, timeout=8) as response:
-            data = response.read(1048577)
-    except Exception:
-        # Never expose an exception containing a request header or credentials.
+        connection.request(
+            "GET", "/v1/models", headers={"Authorization": "Bearer " + token}
+        )
+        response = connection.getresponse()
+        if response.status != 200:
+            # 3xx is refused, not followed; never send a scoped key elsewhere.
+            raise ValueError("LiteLLM model inventory unavailable or key denied")
+        data = response.read(1048577)
+    except (OSError, http.client.HTTPException):
+        # Never expose low-level request details or credentials.
         raise ValueError("LiteLLM model inventory unavailable or key denied") from None
+    finally:
+        connection.close()
     if len(data) > 1048576:
         raise ValueError("LiteLLM model inventory exceeds size limit")
     try:
         return json.loads(data)
-    except (ValueError, UnicodeDecodeError):
+    except ValueError:
         raise ValueError("LiteLLM model inventory is not valid JSON") from None
 
 
