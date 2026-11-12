@@ -86,7 +86,7 @@ def test_no_nonlocal_or_wrong_wire_probe(url):
 
 def test_private_scoped_key_only_and_never_printed(tmp_path):
     path = tmp_path / "codex.key"
-    path.write_text("synthetic-only-key\\n", encoding="utf-8")
+    path.write_text("synthetic-only-key\n", encoding="utf-8")
     path.chmod(0o600)
     assert catalogue.read_key(path) == "synthetic-only-key"
     path.chmod(0o644)
