@@ -89,10 +89,10 @@ def collect_snapshot(
     now,
     ttl=timedelta(minutes=5),
 ):
-    """Build one fail-closed snapshot from injected LiteLLM JSON responses.
+    """Observe metadata without claiming free-tier or privacy eligibility.
 
-    ``key_info`` and ``served_models`` are the decoded responses from the
-    read-only admin endpoints. Data defects yield UNKNOWN, never an exception.
+    LiteLLM v1.106.6 returns {"key": <hash>, "info": {<key row>}}.
+    A key's expires/updated_at/created_at fields are NOT observation times.
     """
     base = (provider, credential_identity, endpoint, model_alias)
     unknown_kwargs = {
@@ -101,32 +101,32 @@ def collect_snapshot(
     }
     if not _contract_ok(base, now, ttl, key_info, served_models):
         return _unknown(*base, reason="malformed", **unknown_kwargs)
-    observed = (
-        key_info.get("expires")
-        or key_info.get("updated_at")
-        or key_info.get("created_at")
-    )
-    fresh = _fresh_observed(observed, now, ttl)
-    if not isinstance(fresh, datetime):
-        return _unknown(*base, reason=fresh, **unknown_kwargs)
-    scope_or_reason = _allowed_models(key_info, model_alias)
-    if not isinstance(scope_or_reason, list):
-        return _unknown(*base, reason=scope_or_reason, **unknown_kwargs)
-    backend_or_reason = _backend_identity(served_models, model_alias)
-    if not isinstance(backend_or_reason, str):
-        return _unknown(*base, reason="unresolvable", **unknown_kwargs)
+    info = key_info.get("info")
+    if not isinstance(info, dict):
+        return _unknown(*base, reason="malformed-key-info", **unknown_kwargs)
+    status_reason = _key_status(info, now)
+    if status_reason:
+        return _unknown(*base, reason=status_reason, **unknown_kwargs)
+    allowed = _allowed_models(info, model_alias)
+    if not isinstance(allowed, list):
+        return _unknown(*base, reason=allowed, **unknown_kwargs)
+    backend = _backend_identity(served_models, model_alias)
+    if not backend:
+        # LiteLLM's public /v1/models typically omits backend details:
+        # a served ID is not proof of provider, cost or fallback identity.
+        return _unknown(*base, reason="backend-identity-unknown", **unknown_kwargs)
     return EntitlementSnapshot(
         provider,
         credential_identity,
         endpoint,
         model_alias,
-        fresh,
+        now,
         ttl,
         "unverified",
-        _quota_state(key_info.get("remaining_quota")),
+        _quota_state(info),
         Policy.UNKNOWN,
         State.UNKNOWN,
-        backend_or_reason,
+        backend,
         "",
     )
 
@@ -143,16 +143,35 @@ def _contract_ok(base, now, ttl, key_info, served_models):
     )
 
 
-def _fresh_observed(observed, now, ttl):
-    if not isinstance(observed, str):
-        return "absent"
+def _key_status(info, now):
+    """Distinguish authentication expiry from evidence-collection freshness."""
+    if info.get("status") != "active" or info.get("blocked") is True:
+        return "inactive-or-unknown-status"
+    expiry = info.get("expires")
+    if expiry is None:
+        return ""
+    if not isinstance(expiry, str):
+        return "malformed-expiry"
     try:
-        timestamp = datetime.fromisoformat(observed.replace("Z", "+00:00"))
+        date = datetime.fromisoformat(expiry.replace("Z", "+00:00"))
     except ValueError:
-        return "malformed"
-    if timestamp.tzinfo is None or now - timestamp > ttl or timestamp > now:
-        return "stale"
-    return timestamp
+        return "malformed-expiry"
+    if date.tzinfo is None:
+        return "malformed-expiry"
+    return "expired" if date <= now else ""
+
+
+def snapshot_is_fresh(snapshot, now):
+    """A saved observation expires using its collection timestamp and TTL."""
+    return (
+        isinstance(snapshot, EntitlementSnapshot)
+        and isinstance(now, datetime)
+        and now.tzinfo is not None
+        and snapshot.timestamp.tzinfo is not None
+        and isinstance(snapshot.ttl, timedelta)
+        and snapshot.ttl > timedelta(0)
+        and timedelta(0) <= now - snapshot.timestamp < snapshot.ttl
+    )
 
 
 def _allowed_models(key_info, model_alias):
@@ -181,9 +200,13 @@ def _backend_identity(served_models, model_alias):
     return backend if isinstance(backend, str) and backend.strip() else None
 
 
-def _quota_state(quota):
-    if isinstance(quota, (int, float)) and not isinstance(quota, bool):
-        return State.EXHAUSTED if quota <= 0 else State.KNOWN
+def _quota_state(info):
+    """Only a definite exhausted key budget is conclusive."""
+    limit, spend = info.get("max_budget"), info.get("spend")
+    numeric = lambda x: isinstance(x, (int, float)) and not isinstance(x, bool)
+    if numeric(limit) and numeric(spend) and limit >= 0 and spend >= limit:
+        return State.EXHAUSTED
+    # Key headroom cannot prove overall user/team/provider quota.
     return State.UNKNOWN
 
 
