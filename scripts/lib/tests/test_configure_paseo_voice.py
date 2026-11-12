@@ -60,11 +60,16 @@ def test_native_local_vad_preserves_exact_direct_omlx_stt_tts_routes():
         "tts": {"wire_model": "Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit"},
     }
     rendered = voice.render(
-        selection, "http://127.0.0.1:11427/v1", "omlx-local", "serena"
+        selection,
+        "http://127.0.0.1:11427/v1",
+        "omlx-local",
+        "serena",
+        "/tmp/synthetic-paseo-models",
     )
     fields = dict(line.split("=", 1) for line in rendered.splitlines()[1:])
 
     assert fields["PASEO_VOICE_TURN_DETECTION_PROVIDER"] == "local"
+    assert fields["PASEO_LOCAL_MODELS_DIR"] == "/tmp/synthetic-paseo-models"
     assert fields["PASEO_DICTATION_STT_PROVIDER"] == "openai"
     assert fields["PASEO_VOICE_STT_PROVIDER"] == "openai"
     assert fields["PASEO_VOICE_TTS_PROVIDER"] == "openai"
@@ -91,3 +96,28 @@ def test_existing_private_adapter_is_not_replaced_for_local_vad(tmp_path):
         path.read_text(encoding="utf-8")
         == "# Managed Paseo speech adapter (owner-only)\\n"
     )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [None, "", "relative/path", "https://example.org/models", "/tmp/models\\nBAD=1"],
+)
+def test_local_vad_worker_requires_explicit_safe_absolute_models_dir(value):
+    with pytest.raises(ValueError, match="local VAD models directory"):
+        voice.validate_local_vad_models_dir(value)
+
+
+def test_local_vad_worker_refuses_symlinked_models_path(tmp_path):
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "redirect"
+    link.symlink_to(real, target_is_directory=True)
+    with pytest.raises(ValueError, match="non-symlinked"):
+        voice.validate_local_vad_models_dir(str(link / "models"))
+
+
+def test_local_vad_worker_can_reuse_explicit_private_paseo_models_dir(tmp_path):
+    home = tmp_path / "paseo"
+    models = home / "models" / "local-speech"
+    assert voice.validate_local_vad_models_dir(str(models)) == str(models)
+    assert not models.exists()
