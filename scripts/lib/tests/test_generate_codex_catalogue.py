@@ -102,7 +102,9 @@ def test_private_scoped_key_only_and_never_printed(tmp_path):
 def test_generated_file_is_private_idempotent_and_replacement_requires_intent(tmp_path):
     path = tmp_path / "codex" / "dotfiles-litellm-models.json"
     one = json.dumps(catalogue.generate_catalogue(SERVED, ["gemma4:12b-mxfp8"], 65536))
-    two = json.dumps(catalogue.generate_catalogue(SERVED, ["ollama/kimi-k3:cloud"], 65536))
+    two = json.dumps(
+        catalogue.generate_catalogue(SERVED, ["ollama/kimi-k3:cloud"], 65536)
+    )
     assert catalogue.save_catalogue(path, one, replace=False)
     assert path.stat().st_mode & 0o777 == 0o600
     assert catalogue.save_catalogue(path, one, replace=False) is False
