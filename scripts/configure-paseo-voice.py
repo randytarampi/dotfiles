@@ -79,10 +79,14 @@ def validate_local_vad_models_dir(value):
     if not isinstance(value, str) or not value or any(c in value for c in "\r\n\x00"):
         raise ValueError("local VAD models directory must be explicitly configured")
     path = Path(value).expanduser()
-    if not path.is_absolute() or path.is_symlink() or any(
-        parent.is_symlink() for parent in path.parents
+    if (
+        not path.is_absolute()
+        or path.is_symlink()
+        or any(parent.is_symlink() for parent in path.parents)
     ):
-        raise ValueError("local VAD models directory must be an absolute non-symlinked path")
+        raise ValueError(
+            "local VAD models directory must be an absolute non-symlinked path"
+        )
     if path.exists() and not path.is_dir():
         raise ValueError("local VAD models directory must be a directory")
     return str(path)
