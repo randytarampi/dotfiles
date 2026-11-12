@@ -83,5 +83,11 @@ def test_existing_private_adapter_is_not_replaced_for_local_vad(tmp_path):
     path.write_text("# Managed Paseo speech adapter (owner-only)\\n", encoding="utf-8")
     path.chmod(0o600)
     with pytest.raises(ValueError, match="differs"):
-        voice.write_new(path, "# Managed Paseo speech adapter (owner-only)\\nPASEO_VOICE_TURN_DETECTION_PROVIDER=local\\n")
-    assert path.read_text(encoding="utf-8") == "# Managed Paseo speech adapter (owner-only)\\n"
+        voice.write_new(
+            path,
+            "# Managed Paseo speech adapter (owner-only)\\nPASEO_VOICE_TURN_DETECTION_PROVIDER=local\\n",
+        )
+    assert (
+        path.read_text(encoding="utf-8")
+        == "# Managed Paseo speech adapter (owner-only)\\n"
+    )
