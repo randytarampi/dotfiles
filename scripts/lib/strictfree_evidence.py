@@ -302,7 +302,11 @@ def collect_from_litellm(
             except (OSError, ValueError, KeyError, TypeError):
                 output.append(
                     _unknown(
-                        provider, identity, origin, model_alias, now=now,
+                        provider,
+                        identity,
+                        origin,
+                        model_alias,
+                        now=now,
                         reason="unresolvable",
                     )
                 )
