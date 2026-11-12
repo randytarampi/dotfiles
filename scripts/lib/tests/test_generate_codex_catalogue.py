@@ -169,7 +169,9 @@ def test_gateway_model_fetch_uses_only_literal_loopback_and_never_follows_redire
             calls.append(("close",))
 
     monkeypatch.setattr(catalogue.http.client, "HTTPConnection", FakeConnection)
-    assert catalogue.fetch_served("http://localhost:4000/v1/models", "dummy-key") == SERVED
+    assert (
+        catalogue.fetch_served("http://localhost:4000/v1/models", "dummy-key") == SERVED
+    )
     assert calls == [
         ("connect", "127.0.0.1", 4000, 8),
         ("request", "GET", "/v1/models", "Bearer dummy-key"),
