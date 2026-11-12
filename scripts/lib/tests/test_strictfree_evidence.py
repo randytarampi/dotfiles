@@ -2,8 +2,6 @@
 
 from datetime import datetime, timedelta, timezone
 import hashlib
-import json
-from urllib.parse import urlsplit
 
 import pytest
 
