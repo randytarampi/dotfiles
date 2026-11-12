@@ -1,8 +1,10 @@
-"""Isolate the opt-in Ollama formula package lane from desktop-app ownership."""
+"""Isolate opt-in Ollama formula installation from desktop-app ownership."""
 
 import os
 import subprocess
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 PREFLIGHT = ROOT / "scripts/lib/ollama_brew_preflight.sh"
@@ -10,16 +12,16 @@ PREFLIGHT = ROOT / "scripts/lib/ollama_brew_preflight.sh"
 
 def run_preflight(tmp_path, system="Darwin", desktop_dev="false", cask=""):
     stub = tmp_path / "bin"
-    stub.mkdir()
+    stub.mkdir(exist_ok=True)
     home = tmp_path / "home"
-    home.mkdir()
+    home.mkdir(exist_ok=True)
     for name, body in {
-        "uname": f"#!/bin/sh\\nprintf '%s\\n' {system}\\n",
+        "uname": f"#!/bin/sh\nprintf '%s\\n' {system}\n",
         "brew": (
-            "#!/bin/sh\\n"
+            "#!/bin/sh\n"
             'if [ "$1" = "list" ] && [ "$2" = "--cask" ] '
             '&& [ "$3" = "--versions" ] && [ "$4" = "$CASK_TEST" ]; '
-            "then printf 'installed\\n'; fi\\n"
+            "then printf 'installed\\n'; fi\n"
         ),
     }.items():
         tool = stub / name
@@ -33,7 +35,7 @@ def run_preflight(tmp_path, system="Darwin", desktop_dev="false", cask=""):
         "CASK_TEST": cask,
         "DESKTOP_DEV": desktop_dev,
     }
-    return subprocess.run(
+    result = subprocess.run(
         [
             "bash",
             "-c",
@@ -43,7 +45,8 @@ def run_preflight(tmp_path, system="Darwin", desktop_dev="false", cask=""):
         capture_output=True,
         text=True,
         check=False,
-    ), home
+    )
+    return result, home
 
 
 def test_headless_opt_in_passes_without_desktop_install(tmp_path):
@@ -57,28 +60,28 @@ def test_selected_desktop_category_refuses_formula(tmp_path):
     assert "desktop_dev" in result.stderr
 
 
-def test_installed_homebrew_app_cask_refuses_formula(tmp_path):
-    result, _ = run_preflight(tmp_path, cask="ollama-app")
+@pytest.mark.parametrize("cask", ["ollama-app", "ollama-binary"])
+def test_installed_homebrew_cask_refuses_formula(tmp_path, cask):
+    result, _ = run_preflight(tmp_path, cask=cask)
     assert result.returncode == 1
-    assert "ollama-app" in result.stderr
+    assert cask in result.stderr
 
 
 def test_standalone_app_in_home_refuses_formula(tmp_path):
-    result, home = run_preflight(tmp_path)
-    assert result.returncode == 0
+    first, home = run_preflight(tmp_path)
+    assert first.returncode == 0
     (home / "Applications/Ollama.app").mkdir(parents=True)
-    env = {**os.environ, "HOME": str(home), "PREFLIGHT": str(PREFLIGHT)}
-    # File-level check exercises an actual app directory, not just cask metadata.
-    script = PREFLIGHT.read_text(encoding="utf-8")
-    assert '$HOME/Applications/Ollama.app' in script
+    result, _ = run_preflight(tmp_path)
+    assert result.returncode == 1
+    assert "Ollama.app exists" in result.stderr
 
 
-def test_linux_is_not_blocked_by_macos_desktop_category(tmp_path):
+def test_linux_not_blocked_by_macos_desktop_category(tmp_path):
     result, _ = run_preflight(tmp_path, system="Linux", desktop_dev="true")
     assert result.returncode == 0, result.stderr
 
 
-def test_new_category_never_installs_or_starts_ollama_implicitly():
+def test_new_category_only_installs_and_does_not_start_service():
     template = (
         ROOT / ".chezmoiscripts/run_onchange_04-install-packages.sh.tmpl"
     ).read_text(encoding="utf-8")
