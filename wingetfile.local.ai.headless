@@ -1,0 +1,2 @@
+# Intentionally empty: Windows Ollama.Ollama is already in wingetfile.dev
+# (and wingetfile.desktop.cloud). WinGet does not own daemon supervision.

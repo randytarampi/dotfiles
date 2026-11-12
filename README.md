@@ -67,7 +67,7 @@ AI clients share policy and discovery inputs where supported, but each has its o
 | Understand AI presets and model updates | [Tiers](docs/tiers.md), [model updates](docs/model-updates.md), [capability matrix](docs/capability-matrix.md) |
 | Configure OpenCode, Pi, Junie or other clients | [OpenCode](docs/opencode.md), [Pi](docs/pi.md), [Junie](docs/junie.md), [unmanaged clients](docs/unmanaged-clients.md) |
 | Configure additional inference providers or the gateway | [Optional inference](docs/optional-inference.md), [LiteLLM](docs/litellm.md), [Meridian](docs/meridian.md) |
-| Configure local engines, voice or memory | [oMLX](docs/omlx.md), [voice](docs/voice.md), [Basic Memory](docs/basic-memory.md) |
+| Configure local engines, voice or memory | [Ollama headless package](docs/ollama-service.md), [oMLX](docs/omlx.md), [voice](docs/voice.md), [Basic Memory](docs/basic-memory.md) |
 | Configure remote access and web services | [Remote access](docs/remote-access.md), [Caddy](docs/caddy.md), [Open WebUI](docs/chat-frontend.md) |
 | Configure Paseo | [Paseo remote](docs/paseo-remote.md), [security](docs/paseo-security.md), [ACP](docs/paseo-acp.md), [MCP](docs/paseo-mcp.md) |
 | Work on agentic PR reviews | [GitHub reviews and onboarding](docs/agentic-review.md), [review method](configs/review/code-review-prompt.md) |

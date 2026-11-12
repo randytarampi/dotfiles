@@ -19,6 +19,7 @@ fi
 # Brewfile hashes (triggers re-run when any Brewfile changes):
 # base: {{ include "Brewfile" | sha256sum }}
 # dev: {{ include "Brewfile.dev" | sha256sum }}
+# local.ai.headless: {{ include "Brewfile.local.ai.headless" | sha256sum }}
 {{- if eq .chezmoi.os "darwin" }}
 # desktop.browsers: {{ include "Brewfile.desktop.browsers" | sha256sum }}
 # desktop.comms: {{ include "Brewfile.desktop.comms" | sha256sum }}
@@ -46,11 +47,13 @@ fi
 # utilities: {{ include "Brewfile.utilities" | sha256sum }}
 # install-fonts.sh: {{ include "scripts/install-fonts.sh" | sha256sum }}
 # install-npm-brewfile-packages.sh: {{ include "scripts/install-npm-brewfile-packages.sh" | sha256sum }}
+# scripts/lib/ollama_brew_preflight.sh: {{ include "scripts/lib/ollama_brew_preflight.sh" | sha256sum }}
 {{- if eq .chezmoi.os "windows" }}
 # scripts/lib/winget_manifest.sh: {{ include "scripts/lib/winget_manifest.sh" | sha256sum }}
 # wingetfile hashes (triggers re-run when any wingetfile changes):
 # base: {{ include "wingetfile" | sha256sum }}
 # dev: {{ include "wingetfile.dev" | sha256sum }}
+# local.ai.headless: {{ include "wingetfile.local.ai.headless" | sha256sum }}
 # desktop.browsers: {{ include "wingetfile.desktop.browsers" | sha256sum }}
 # desktop.comms: {{ include "wingetfile.desktop.comms" | sha256sum }}
 # desktop.security: {{ include "wingetfile.desktop.security" | sha256sum }}
@@ -99,6 +102,13 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
   # to avoid interactive prompt hanging brew bundle in non-interactive mode.
   export HOMEBREW_ACCEPT_EULA="${HOMEBREW_ACCEPT_EULA:-Y}"
 
+  {{- if .categories.local_ai_headless }}
+  # Refuse macOS app/formula dual ownership before running any brew bundle.
+  source "${LIB_DIR}/ollama_brew_preflight.sh"
+  ollama_brew_package_preflight "{{ .categories.desktop_dev }}" ||
+    die "Headless Ollama package preflight failed; no bundles run"
+  {{- end }}
+
   # Filter ignored packages from a Brewfile before running brew bundle.
   # Controlled by DOTFILES_BREWFILE_IGNORE (comma-separated brew/cask names).
   brew_bundle_filtered() {
@@ -126,6 +136,11 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
   {{- if .categories.dev }}
   brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.dev
   bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev" || warn "npm package reconciliation failed for Brewfile.dev"
+  {{- end }}
+
+  {{- if .categories.local_ai_headless }}
+  # This category installs the formula only; starting it is an owner action.
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.local.ai.headless
   {{- end }}
 
   {{- if .categories.dev_security }}
@@ -270,6 +285,11 @@ else
 
   {{- if .categories.dev }}
   wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.dev"
+  {{- end }}
+
+  {{- if .categories.local_ai_headless }}
+  # No additional Windows package; Ollama.Ollama is already in wingetfile.dev.
+  wingetfile_install "{{ .chezmoi.sourceDir }}/wingetfile.local.ai.headless"
   {{- end }}
 
   {{- if .categories.dev_security }}

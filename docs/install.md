@@ -35,6 +35,8 @@ The single source of truth for secrets and toggles is `~/.env` (or `$HOME\.env` 
 ### Step 3: Makefile + chezmoi Orchestration
 Initialize chezmoi, then use `make deploy` so `~/.env` is loaded in the same shell process as each chezmoi command:
 
+**Headless Ollama (macOS/Linux):** `local_ai_headless` is a separate default-off Homebrew formula category and does not auto-start a daemon. Before opting in, see [Ollama package ownership and cutover](ollama-service.md); the macOS package lane refuses an installed Ollama.app or a simultaneously selected `desktop_dev` category.
+
 **Windows package manifest contract:** `wingetfile*` files contain one exact WinGet package ID per non-comment line, not WinGet JSON exports. The package setup gate installs them with `winget install --id <ID> --exact` rather than `winget import`. `DOTFILES_WINGETFILE_IGNORE` excludes exact comma-separated IDs. This installs/upgrades packages, not Windows Services or scheduled tasks. Windows-host WinGet behaviour remains a separate acceptance test.
 
 **Windows qualification:** The Makefile invokes Bash and Unix utilities. Winget/PowerShell can bootstrap packages, but Makefile targets require a prepared POSIX-compatible environment (such as Git Bash or WSL with appropriate paths, Make and the required CLI tools). Native PowerShell alone is not a proven deployment or verification path. Validate the installed host rather than assuming cross-shell parity.
