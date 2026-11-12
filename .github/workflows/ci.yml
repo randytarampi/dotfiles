@@ -222,7 +222,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+      # External coverage publication is advisory, including the finaliser.
       - name: Finish coverage upload
+        continue-on-error: true
         uses: coverallsapp/github-action@v2
         with:
           parallel-finished: true
@@ -231,12 +233,11 @@ jobs:
           COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
 
   # Stable aggregate check for future branch rules: this job name must never
-  # change (rulesets reference it by name). It gates on every predecessor's
-  # result — unlike finish, whose if: always() makes its success meaningless
-  # as a required signal.
+  # change (rulesets reference it by name). Only verify/deploy results gate
+  # ci/required; external coverage publication and finalisation are advisory.
   ci-required:
     name: ci/required
-    needs: [verify, deploy, finish]
+    needs: [verify, deploy]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -246,10 +247,9 @@ jobs:
         env:
           VERIFY_RESULT: ${{ needs.verify.result }}
           DEPLOY_RESULT: ${{ needs.deploy.result }}
-          FINISH_RESULT: ${{ needs.finish.result }}
         run: |
-          echo "Needs results: verify=${VERIFY_RESULT:-none} deploy=${DEPLOY_RESULT:-none} finish=${FINISH_RESULT:-none}"
-          for result in "$VERIFY_RESULT" "$DEPLOY_RESULT" "$FINISH_RESULT"; do
+          echo "Needs results: verify=${VERIFY_RESULT:-none} deploy=${DEPLOY_RESULT:-none}"
+          for result in "$VERIFY_RESULT" "$DEPLOY_RESULT"; do
             if [[ "$result" != "success" ]]; then
               echo "ci/required: required job did not succeed (result=${result:-none})" >&2
               exit 1
