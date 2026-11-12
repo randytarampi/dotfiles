@@ -85,22 +85,22 @@ def test_native_local_vad_preserves_exact_direct_omlx_stt_tts_routes():
 
 def test_existing_private_adapter_is_not_replaced_for_local_vad(tmp_path):
     path = tmp_path / "dotfiles-voice.env"
-    path.write_text("# Managed Paseo speech adapter (owner-only)\\n", encoding="utf-8")
+    path.write_text("# Managed Paseo speech adapter (owner-only)\n", encoding="utf-8")
     path.chmod(0o600)
     with pytest.raises(ValueError, match="differs"):
         voice.write_new(
             path,
-            "# Managed Paseo speech adapter (owner-only)\\nPASEO_VOICE_TURN_DETECTION_PROVIDER=local\\n",
+            "# Managed Paseo speech adapter (owner-only)\nPASEO_VOICE_TURN_DETECTION_PROVIDER=local\n",
         )
     assert (
         path.read_text(encoding="utf-8")
-        == "# Managed Paseo speech adapter (owner-only)\\n"
+        == "# Managed Paseo speech adapter (owner-only)\n"
     )
 
 
 @pytest.mark.parametrize(
     "value",
-    [None, "", "relative/path", "https://example.org/models", "/tmp/models\\nBAD=1"],
+    [None, "", "relative/path", "https://example.org/models", "/tmp/models\nBAD=1"],
 )
 def test_local_vad_worker_requires_explicit_safe_absolute_models_dir(value):
     with pytest.raises(ValueError, match="local VAD models directory"):
