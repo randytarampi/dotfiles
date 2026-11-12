@@ -1427,6 +1427,22 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/generate-codex-catalogue.py",
+      "capabilities": ["public", "inspect", "mutates"],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply",
+        "--replace",
+        "--model",
+        "--context-window",
+        "--endpoint"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/gemini-litellm",
       "capabilities": [
         "public",
