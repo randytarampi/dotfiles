@@ -51,6 +51,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/lib/embedding_inventory.py",  # Library of the read-only #85 embedding inventory; not a deployed config input
     "scripts/lib/litellm_cost.py",  # Library of the costs CLI; not deployed config input
     "scripts/lib/strict_free_admission.py",  # Pure E1.0 review policy; not used by deployed generators
+    "scripts/generate-codex-catalogue.py",  # Owner-only manual catalogue generator; never deployed automatically
     "scripts/lib/strict_free_executor.py",  # Synthetic test adapter only; no deployed request consumer
     "scripts/litellm-oauth.py",  # Interactive one-time OAuth bootstrap; mutates ~/.config/litellm caches, not deployed config
     "scripts/litellm-db-prune.py",  # Manual maintenance CLI; targets the live gateway DB tables, not deployed config
