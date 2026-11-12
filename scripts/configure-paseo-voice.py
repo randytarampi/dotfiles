@@ -74,12 +74,29 @@ def previous_models(path):
     return previous
 
 
-def render(selections, route, key, voice):
+def validate_local_vad_models_dir(value):
+    """A local turn detector needs a real local provider worker configuration."""
+    if not isinstance(value, str) or not value or any(c in value for c in "\\r\\n\\x00"):
+        raise ValueError("local VAD models directory must be explicitly configured")
+    path = Path(value).expanduser()
+    if not path.is_absolute() or path.is_symlink() or any(
+        parent.is_symlink() for parent in path.parents
+    ):
+        raise ValueError("local VAD models directory must be an absolute non-symlinked path")
+    if path.exists() and not path.is_dir():
+        raise ValueError("local VAD models directory must be a directory")
+    return str(path)
+
+
+def render(selections, route, key, voice, local_vad_models_dir):
+    local_vad_models_dir = validate_local_vad_models_dir(local_vad_models_dir)
     values = {
         "PASEO_DICTATION_STT_PROVIDER": "openai",
         # Paseo v0.15.4 has a local Sherpa/Silero worker for realtime VAD.
         # STT/TTS remain on the separately qualified direct oMLX route.
         "PASEO_VOICE_TURN_DETECTION_PROVIDER": "local",
+        # Paseo v0.15.4 only creates the local VAD worker when this config is set.
+        "PASEO_LOCAL_MODELS_DIR": local_vad_models_dir,
         "PASEO_VOICE_STT_PROVIDER": "openai",
         "PASEO_VOICE_TTS_PROVIDER": "openai",
         "OPENAI_STT_API_KEY": key,
@@ -156,6 +173,9 @@ def main(argv=None):
     parser.add_argument("--stt-model")
     parser.add_argument("--tts-model")
     parser.add_argument(
+        "--local-vad-models-dir", default=os.environ.get("PASEO_LOCAL_MODELS_DIR")
+    )
+    parser.add_argument(
         "--voice", default=os.environ.get("DOTFILES_VOICE_TTS_VOICE") or "serena"
     )
     args = parser.parse_args(argv)
@@ -167,6 +187,12 @@ def main(argv=None):
             return 0 if not args.apply else 1
         if os.environ.get(GATE) != "1":
             raise ValueError("speech route probes require explicit " + GATE + "=1")
+        if args.apply:
+            local_vad_models_dir = validate_local_vad_models_dir(
+                args.local_vad_models_dir
+            )
+        else:
+            local_vad_models_dir = None
         if not MODEL_ID.fullmatch(args.voice):
             raise ValueError("invalid TTS voice")
         if not is_loopback_audio_endpoint(get_omlx_base_url()):
@@ -221,7 +247,10 @@ def main(argv=None):
         validate_persisted_routes(
             read_proxy_config(), selection, endpoint, key, args.voice
         )
-        write_new(settings_path(), render(selection, endpoint, key, args.voice))
+        write_new(
+            settings_path(),
+            render(selection, endpoint, key, args.voice, local_vad_models_dir),
+        )
         print("Private speech adapter written; inspect daemon env inheritance")
         return 0
     except (OSError, ValueError) as error:
