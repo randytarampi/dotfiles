@@ -54,7 +54,8 @@ def test_loopback_origin_reaches_discovery(monkeypatch, origin):
     assert calls == [{"strict": True}]
 
 
-def test_native_local_vad_preserves_exact_direct_omlx_stt_tts_routes():
+def test_native_local_vad_preserves_exact_direct_omlx_stt_tts_routes(tmp_path):
+    models_dir = tmp_path.resolve() / "models"
     selection = {
         "stt": {"wire_model": "Qwen3-ASR-1.7B-8bit"},
         "tts": {"wire_model": "Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit"},
@@ -64,12 +65,12 @@ def test_native_local_vad_preserves_exact_direct_omlx_stt_tts_routes():
         "http://127.0.0.1:11427/v1",
         "omlx-local",
         "serena",
-        "/tmp/synthetic-paseo-models",
+        str(models_dir),
     )
     fields = dict(line.split("=", 1) for line in rendered.splitlines()[1:])
 
     assert fields["PASEO_VOICE_TURN_DETECTION_PROVIDER"] == "local"
-    assert fields["PASEO_LOCAL_MODELS_DIR"] == "/tmp/synthetic-paseo-models"
+    assert fields["PASEO_LOCAL_MODELS_DIR"] == str(models_dir)
     assert fields["PASEO_DICTATION_STT_PROVIDER"] == "openai"
     assert fields["PASEO_VOICE_STT_PROVIDER"] == "openai"
     assert fields["PASEO_VOICE_TTS_PROVIDER"] == "openai"
@@ -117,7 +118,7 @@ def test_local_vad_worker_refuses_symlinked_models_path(tmp_path):
 
 
 def test_local_vad_worker_can_reuse_explicit_private_paseo_models_dir(tmp_path):
-    home = tmp_path / "paseo"
+    home = tmp_path.resolve() / "paseo"
     models = home / "models" / "local-speech"
     assert voice.validate_local_vad_models_dir(str(models)) == str(models)
     assert not models.exists()
