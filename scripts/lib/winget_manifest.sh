@@ -44,7 +44,7 @@ wingetfile_install() {
   fi
 
   for package in "${packages[@]+"${packages[@]}"}"; do
-    if ! winget install --id "$package" --exact --accept-package-agreements --accept-source-agreements --disable-interactivity; then
+    if ! winget install --id "$package" --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity; then
       warn "WinGet installation failed for $package"
       failed=$((failed + 1))
     fi
