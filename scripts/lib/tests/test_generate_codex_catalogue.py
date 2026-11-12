@@ -211,3 +211,19 @@ def test_catalogue_http_failure_closes_connection_and_hides_low_level_details(
         catalogue.fetch_served("http://127.0.0.1:4000/v1/models", "synthetic-key")
     assert "SYNTHETIC_REQUEST" not in str(error.value)
     assert closed == [True]
+
+
+def test_new_catalogue_write_failure_is_atomic_and_leaves_no_partial_target(
+    tmp_path, monkeypatch
+):
+    target = tmp_path / "dotfiles-litellm-models.json"
+    content = json.dumps(catalogue.generate_catalogue(SERVED, ["gemma4:12b-mxfp8"], 65536))
+
+    def fail_link(_source, _destination):
+        raise OSError("synthetic disk or filesystem failure")
+
+    monkeypatch.setattr(catalogue.os, "link", fail_link)
+    with pytest.raises(OSError, match="synthetic"):
+        catalogue.save_catalogue(target, content, replace=False)
+    assert not target.exists()
+    assert list(tmp_path.glob(".dotfiles-codex-*")) == []
