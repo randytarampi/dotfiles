@@ -52,3 +52,36 @@ def test_loopback_origin_reaches_discovery(monkeypatch, origin):
 
     assert voice.main(["--probe-routes"]) == 1
     assert calls == [{"strict": True}]
+
+
+def test_native_local_vad_preserves_exact_direct_omlx_stt_tts_routes():
+    selection = {
+        "stt": {"wire_model": "Qwen3-ASR-1.7B-8bit"},
+        "tts": {"wire_model": "Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit"},
+    }
+    rendered = voice.render(
+        selection, "http://127.0.0.1:11427/v1", "omlx-local", "serena"
+    )
+    fields = dict(line.split("=", 1) for line in rendered.splitlines()[1:])
+
+    assert fields["PASEO_VOICE_TURN_DETECTION_PROVIDER"] == "local"
+    assert fields["PASEO_DICTATION_STT_PROVIDER"] == "openai"
+    assert fields["PASEO_VOICE_STT_PROVIDER"] == "openai"
+    assert fields["PASEO_VOICE_TTS_PROVIDER"] == "openai"
+    assert fields["OPENAI_STT_BASE_URL"] == "http://127.0.0.1:11427/v1"
+    assert fields["OPENAI_TTS_BASE_URL"] == "http://127.0.0.1:11427/v1"
+    assert fields["STT_MODEL"] == "Qwen3-ASR-1.7B-8bit"
+    assert fields["TTS_MODEL"] == "Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit"
+    assert fields["TTS_VOICE"] == "serena"
+    assert fields["OPENAI_STT_API_KEY"] == "omlx-local"
+    assert fields["OPENAI_TTS_API_KEY"] == "omlx-local"
+    assert "PASEO_VOICE_TURN_DETECTION_PROVIDER='openai'" not in rendered
+
+
+def test_existing_private_adapter_is_not_replaced_for_local_vad(tmp_path):
+    path = tmp_path / "dotfiles-voice.env"
+    path.write_text("# Managed Paseo speech adapter (owner-only)\\n", encoding="utf-8")
+    path.chmod(0o600)
+    with pytest.raises(ValueError, match="differs"):
+        voice.write_new(path, "# Managed Paseo speech adapter (owner-only)\\nPASEO_VOICE_TURN_DETECTION_PROVIDER=local\\n")
+    assert path.read_text(encoding="utf-8") == "# Managed Paseo speech adapter (owner-only)\\n"
