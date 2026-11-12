@@ -80,11 +80,7 @@ def generate_catalogue(payload, model_ids, context_window):
         or not payload["data"]
     ):
         raise ValueError("missing served LiteLLM model inventory")
-    if (
-        not isinstance(model_ids, (list, tuple))
-        or not model_ids
-        or len(model_ids) > 20
-    ):
+    if not isinstance(model_ids, (list, tuple)) or not model_ids or len(model_ids) > 20:
         raise ValueError("specify one to twenty exact model IDs")
     if (
         not isinstance(context_window, int)
@@ -152,7 +148,9 @@ def save_catalogue(path, text, *, replace):
         except (ValueError, AttributeError):
             managed = False
         if not managed or not replace:
-            raise ValueError("existing catalogue differs; explicitly allow managed replacement")
+            raise ValueError(
+                "existing catalogue differs; explicitly allow managed replacement"
+            )
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         backup = path.with_name(path.name + "." + stamp + ".bak")
         fd = os.open(str(backup), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -162,7 +160,9 @@ def save_catalogue(path, text, *, replace):
             os.fsync(output.fileno())
         if path.read_bytes() != old:
             raise ValueError("catalogue changed during backup; refusing replacement")
-        fd, temporary = tempfile.mkstemp(dir=str(path.parent), prefix=".dotfiles-codex-")
+        fd, temporary = tempfile.mkstemp(
+            dir=str(path.parent), prefix=".dotfiles-codex-"
+        )
         try:
             with os.fdopen(fd, "wb") as output:
                 os.fchmod(output.fileno(), 0o600)
