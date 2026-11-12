@@ -200,7 +200,8 @@ def test_catalogue_http_failure_closes_connection_and_hides_low_level_details(
         def __init__(self, _host, _port, timeout):
             assert timeout == 8
 
-        def request(self, _method, _target, _headers):
+        def request(self, _method, _target, headers):
+            assert headers["Authorization"] == "Bearer synthetic-key"
             raise OSError("SYNTHETIC_REQUEST_HEADER_SHOULD_NOT_LEAK")
 
         def close(self):
