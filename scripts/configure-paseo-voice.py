@@ -77,6 +77,9 @@ def previous_models(path):
 def render(selections, route, key, voice):
     values = {
         "PASEO_DICTATION_STT_PROVIDER": "openai",
+        # Paseo v0.15.4 has a local Sherpa/Silero worker for realtime VAD.
+        # STT/TTS remain on the separately qualified direct oMLX route.
+        "PASEO_VOICE_TURN_DETECTION_PROVIDER": "local",
         "PASEO_VOICE_STT_PROVIDER": "openai",
         "PASEO_VOICE_TTS_PROVIDER": "openai",
         "OPENAI_STT_API_KEY": key,
