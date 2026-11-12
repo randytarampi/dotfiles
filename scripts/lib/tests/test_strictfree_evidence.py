@@ -88,7 +88,8 @@ def test_malformed_and_redaction():
     secret = "sk-" + "x" * 40
     message = evidence.redact_error("failed " + secret, secret, "client-a")
     assert secret not in message
-    assert "sk-xxx" in message
+    assert "[redacted-key]" in message
+    assert "sk-" not in message
 
 
 def test_collector_hashes_key_in_query_and_reads_only_two_get_routes(tmp_path):
