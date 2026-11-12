@@ -75,7 +75,8 @@ def _unknown(
 def _safe_identity(identity, secret):
     if isinstance(identity, str) and identity:
         return identity
-    return f"{secret[:6]}…" if isinstance(secret, str) else "unknown"
+    # This helper must never echo even a recognizable fragment of a key.
+    return "unknown"
 
 
 def collect_snapshot(
@@ -217,7 +218,7 @@ def redact_error(message, secret, identity="unknown"):
     """Replace credential material in errors with a short identity label."""
     text = str(message)
     if isinstance(secret, str) and len(secret) >= 6:
-        text = text.replace(secret, f"{secret[:6]}…[{identity}]")
+        text = text.replace(secret, "[redacted-key]")
     return text
 
 
