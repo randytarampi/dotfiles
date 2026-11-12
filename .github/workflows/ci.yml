@@ -222,6 +222,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # External coverage publication is advisory, including the finaliser.
       - name: Finish coverage upload
         continue-on-error: true
