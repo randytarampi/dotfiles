@@ -203,7 +203,9 @@ def _backend_identity(served_models, model_alias):
 def _quota_state(info):
     """Only a definite exhausted key budget is conclusive."""
     limit, spend = info.get("max_budget"), info.get("spend")
-    numeric = lambda x: isinstance(x, (int, float)) and not isinstance(x, bool)
+    def numeric(value):
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+
     if numeric(limit) and numeric(spend) and limit >= 0 and spend >= limit:
         return State.EXHAUSTED
     # Key headroom cannot prove overall user/team/provider quota.
