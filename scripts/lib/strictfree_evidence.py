@@ -195,13 +195,45 @@ def redact_error(message, secret, identity="unknown"):
     return text
 
 
+def _gateway_origin(endpoint):
+    parsed = urlsplit(endpoint)
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname not in ("127.0.0.1", "localhost")
+        or not parsed.port
+        or parsed.path not in ("", "/")
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("LiteLLM metadata gateway must be a loopback HTTP origin")
+    return "http://127.0.0.1:" + str(parsed.port)
+
+
+def _read_private_file(path):
+    """Read only regular owner-owned mode 0600 files, without symlinks."""
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("missing or unsafe LiteLLM credential file")
+    info = path.stat()
+    if (
+        info.st_uid != os.getuid()
+        or info.st_nlink != 1
+        or not stat.S_ISREG(info.st_mode)
+        or stat.S_IMODE(info.st_mode) != 0o600
+    ):
+        raise ValueError("LiteLLM credential file must be owner-only mode 0600")
+    return path.read_text(encoding="utf-8")
+
+
 def collect_from_litellm(
     *, provider, model_alias, endpoint, now, root=None, fetch=None
 ):
-    """Load local service credentials and make only GET requests when fetch is injected."""
+    """Observe key scopes via hashed lookups; never attest charging or egress."""
     root = Path(root or Path.home() / ".local/share/litellm")
     try:
-        env = (root / "service.env").read_text(encoding="utf-8")
+        origin = _gateway_origin(endpoint)
+        env = _read_private_file(root / "service.env")
         master = next(
             (
                 line.partition("=")[2].strip().strip("'\"")
@@ -210,51 +242,49 @@ def collect_from_litellm(
             ),
             "",
         )
-        if not master:
-            return [
-                _unknown(
-                    provider=provider,
-                    endpoint=endpoint,
-                    model_alias=model_alias,
-                    now=now,
-                    reason="absent",
-                )
-            ]
+        if not master or any(char.isspace() for char in master):
+            raise ValueError("LiteLLM master credential unavailable")
+        clients = root / "clients"
+        if clients.is_symlink() or not clients.is_dir():
+            raise ValueError("LiteLLM client registry unavailable")
         get = fetch or _http_get
+        catalogue = get(origin + "/v1/models", master)
+        paths = sorted(clients.glob("*.key"))
+        if not paths:
+            raise ValueError("no scoped LiteLLM keys found")
         output = []
-        for path in sorted((root / "clients").glob("*.key")):
-            secret = path.read_text(encoding="utf-8").strip()
+        for path in paths:
             identity = path.stem
-            if not secret:
+            try:
+                secret = _read_private_file(path).strip()
+                if not secret.startswith("sk-") or len(secret) < 6:
+                    raise ValueError("unsupported virtual key format")
+                # LiteLLM v1.106.6 accepts sha256; never put a plaintext
+                # virtual key in the query string or an access log.
+                key_hash = hashlib.sha256(secret.encode("utf-8")).hexdigest()
+                key_info = get(origin + "/key/info?key=" + key_hash, master)
+                if not isinstance(key_info, dict) or key_info.get("key") != key_hash:
+                    raise ValueError("LiteLLM key lookup identity mismatch")
                 output.append(
-                    _unknown(
-                        provider,
-                        identity,
-                        endpoint,
-                        model_alias,
+                    collect_snapshot(
+                        provider=provider,
+                        credential_identity=identity,
+                        key_info=key_info,
+                        served_models=catalogue,
+                        model_alias=model_alias,
+                        endpoint=origin,
                         now=now,
-                        reason="absent",
                     )
                 )
-                continue
-            info = get(
-                endpoint.rstrip("/") + "/key/info?key=" + urllib.parse.quote(secret),
-                master,
-            )
-            catalog = get(endpoint.rstrip("/") + "/v1/models", master)
-            output.append(
-                collect_snapshot(
-                    provider=provider,
-                    credential_identity=identity,
-                    key_info=info,
-                    served_models=catalog,
-                    model_alias=model_alias,
-                    endpoint=endpoint,
-                    now=now,
+            except (OSError, ValueError, KeyError, TypeError):
+                output.append(
+                    _unknown(
+                        provider, identity, origin, model_alias, now=now,
+                        reason="unresolvable",
+                    )
                 )
-            )
         return output
-    except (OSError, ValueError, KeyError):
+    except (OSError, ValueError, KeyError, TypeError):
         return [
             _unknown(
                 provider=provider,
