@@ -76,7 +76,7 @@ def previous_models(path):
 
 def validate_local_vad_models_dir(value):
     """A local turn detector needs a real local provider worker configuration."""
-    if not isinstance(value, str) or not value or any(c in value for c in "\\r\\n\\x00"):
+    if not isinstance(value, str) or not value or any(c in value for c in "\r\n\x00"):
         raise ValueError("local VAD models directory must be explicitly configured")
     path = Path(value).expanduser()
     if not path.is_absolute() or path.is_symlink() or any(
