@@ -90,8 +90,8 @@ def test_invalid_id_fails_closed_but_other_ids_are_attempted(tmp_path):
     )
     assert result.returncode == 1
     assert "Invalid WinGet package ID" in result.stderr
-    assert calls.count("install") == 2
-    assert "--source" not in calls
+    assert "no installations attempted" in result.stderr
+    assert calls == []
 
 
 def test_package_failure_propagates(tmp_path):
@@ -99,3 +99,17 @@ def test_package_failure_propagates(tmp_path):
     assert result.returncode == 1
     assert calls.count("install") == 2
     assert "2 WinGet package(s)" in result.stderr
+
+
+def test_comment_only_and_fully_ignored_manifests_are_noops(tmp_path):
+    result, calls = run_manifest(
+        tmp_path, b"# only comments\nGit.Git\n", ignored="Git.Git"
+    )
+    assert result.returncode == 0
+    assert calls == []
+
+
+def test_malformed_last_line_without_newline_cannot_install_prior_ids(tmp_path):
+    result, calls = run_manifest(tmp_path, b"Git.Git\nnot a package")
+    assert result.returncode == 1
+    assert calls == []
