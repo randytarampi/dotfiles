@@ -139,9 +139,7 @@ def _strictfree_wire_key_matches(key_value, *, scoped_path=None):
 
     if not isinstance(key_value, str) or not key_value:
         return False
-    path = scoped_path or (
-        Path.home() / ".local/share/litellm/clients/opencode.key"
-    )
+    path = scoped_path or (Path.home() / ".local/share/litellm/clients/opencode.key")
     try:
         return secrets.compare_digest(_read_private_file(path).strip(), key_value)
     except (OSError, ValueError):
