@@ -106,6 +106,14 @@ def test_default_free_pool_registers_both_runtime_provider_schemas(tmp_path):
         "bash": "deny",
         "task": "deny",
     }
+    assert config["default_agent"] == "plan"
+    # Both build and plan inherit V1's global permissions; a fallback to
+    # build must not silently re-enable shell, edit, or subagent tools.
+    assert config["permission"] == {
+        "edit": "deny",
+        "bash": "deny",
+        "task": "deny",
+    }
 
 
 @pytest.mark.parametrize(
