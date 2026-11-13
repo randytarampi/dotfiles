@@ -111,8 +111,18 @@ def test_default_free_pool_registers_both_runtime_provider_schemas(tmp_path):
 @pytest.mark.parametrize(
     ("provider", "credential", "model", "base_url"),
     [
-        ("mistral", "MISTRAL_API_KEY", "mistral-small-latest", "https://api.mistral.ai/v1"),
-        ("groq", "GROQ_API_KEY", "openai/gpt-oss-120b", "https://api.groq.com/openai/v1"),
+        (
+            "mistral",
+            "MISTRAL_API_KEY",
+            "mistral-small-latest",
+            "https://api.mistral.ai/v1",
+        ),
+        (
+            "groq",
+            "GROQ_API_KEY",
+            "openai/gpt-oss-120b",
+            "https://api.groq.com/openai/v1",
+        ),
     ],
 )
 def test_direct_provider_requests_are_v1_compatible(
