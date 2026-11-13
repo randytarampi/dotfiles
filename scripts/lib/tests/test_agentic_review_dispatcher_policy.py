@@ -28,6 +28,14 @@ def _parse(tmp_path, event):
         "INPUT_TOKENS": "",
         "DEFAULT_INFERENCE_PROVIDER": "free",
         "GITHUB_OUTPUT": str(output_file),
+        # Host-controlled context, independent of reusable event_json input.
+        "GITHUB_EVENT_NAME": "pull_request" if "label" in event else "issue_comment",
+        "GITHUB_ACTOR": event["sender"]["login"],
+        "GITHUB_REPOSITORY": "randytarampi/dotfiles",
+        "LABEL_EVENT_ACTION": event.get("action", ""),
+        "LABEL_EVENT_NAME": event.get("label", {}).get("name", ""),
+        "LABEL_EVENT_SENDER": event["sender"]["login"],
+        "LABEL_EVENT_PR": str(event.get("pull_request", {}).get("number", "")),
     }
     result = subprocess.run(
         ["bash", "-c", script],
@@ -56,7 +64,7 @@ def _parse(tmp_path, event):
         ("OWNER", "review-gemini", "gemini"),
         ("OWNER", "review-junie", "junie"),
         ("OWNER", "review-copilot", "copilot"),
-        ("CONTRIBUTOR", "review-all", ""),
+        ("CONTRIBUTOR", "review-all", "junie,copilot"),
         ("OWNER", "review-opencode", ""),
     ],
 )
@@ -64,9 +72,11 @@ def test_actual_label_parser_selects_only_eligible_reviewers(
     tmp_path, association, requested_label, expected
 ):
     event = {
+        "action": "labeled",
         "label": {"name": requested_label},
         "pull_request": {"number": 42, "author_association": association},
-        "sender": {"type": "User"},
+        "repository": {"full_name": "randytarampi/dotfiles"},
+        "sender": {"login": "maintainer", "type": "User"},
     }
     result, outputs = _parse(tmp_path, event)
     assert result.returncode == 0, result.stderr
@@ -76,9 +86,11 @@ def test_actual_label_parser_selects_only_eligible_reviewers(
 
 def test_unauthorised_bot_label_does_not_dispatch_review_all(tmp_path):
     event = {
+        "action": "labeled",
         "label": {"name": "review-all"},
         "pull_request": {"number": 42, "author_association": None},
-        "sender": {"type": "Bot"},
+        "repository": {"full_name": "randytarampi/dotfiles"},
+        "sender": {"login": "test-bot[bot]", "type": "Bot"},
     }
     result, outputs = _parse(tmp_path, event)
     assert result.returncode == 0, result.stderr
