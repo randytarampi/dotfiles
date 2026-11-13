@@ -6,8 +6,9 @@
 #       uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@82d10e4d2b6c495796466a80c04621b9ff3b4433
 #       secrets: inherit
 #
-# Labels: review-opencode, review-junie, review-gemini, review-copilot, and
-# review-all request the corresponding reviewer(s). Mention triggers are parsed
+# Labels: review-junie, review-gemini, review-copilot, and review-all dispatch
+# supported reviewers. review-opencode remains a legacy no-op (issue #289).
+# Mention triggers are parsed
 # by caller dispatch workflows; dispatcher-mode parsing is centralized here.
 # trigger_tokens is comma-separated and aligned with agents for standardized messaging.
 # OpenCode's official GitHub App publishes using OIDC. Junie and Gemini
@@ -117,23 +118,43 @@ jobs:
           INPUT_PR_NUMBER: ${{ inputs.pr_number }}
           INPUT_TOKENS: ${{ inputs.trigger_tokens }}
           DEFAULT_INFERENCE_PROVIDER: ${{ inputs.inference_provider }}
+          LABEL_EVENT_ACTION: ${{ github.event.action }}
+          LABEL_EVENT_NAME: ${{ github.event.label.name }}
+          LABEL_EVENT_SENDER: ${{ github.event.sender.login }}
+          LABEL_EVENT_PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
           if [[ -n "${EVENT_JSON}" ]]; then
             if jq -e '.label != null' >/dev/null <<<"${EVENT_JSON}"; then
-              agents="$(jq -r '
-                if (.pull_request.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) and .label.name == "review-all" then "junie,copilot"
-                elif (.pull_request.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) and .label.name == "review-opencode" then ""
-                elif (.pull_request.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) and .label.name == "review-junie" then "junie"
-                elif (.pull_request.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) and .label.name == "review-gemini" then "gemini"
-                elif (.pull_request.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) and .label.name == "review-copilot" then "copilot"
-                elif .pull_request.author_association == null and (.sender.type != "Bot") and .label.name == "review-all" then "junie,copilot"
-                elif .pull_request.author_association == null and (.sender.type != "Bot") and .label.name == "review-opencode" then ""
-                elif .pull_request.author_association == null and (.sender.type != "Bot") and .label.name == "review-junie" then "junie"
-                elif .pull_request.author_association == null and (.sender.type != "Bot") and .label.name == "review-gemini" then "gemini"
-                elif .pull_request.author_association == null and (.sender.type != "Bot") and .label.name == "review-copilot" then "copilot"
-                else "" end
-              ' <<<"${EVENT_JSON}")"
+              # GitHub requires triage+ to label; trust the original actor/event,
+              # not the PR author association or caller-controlled event_json.
+              agents="$(jq -r \
+                --arg event_name "${GITHUB_EVENT_NAME}" \
+                --arg actor "${GITHUB_ACTOR}" \
+                --arg repo "${GITHUB_REPOSITORY}" \
+                --arg actual_action "${LABEL_EVENT_ACTION}" \
+                --arg actual_label "${LABEL_EVENT_NAME}" \
+                --arg actual_sender "${LABEL_EVENT_SENDER}" \
+                --arg actual_pr "${LABEL_EVENT_PR}" \
+                '
+                  if ($event_name == "pull_request")
+                    and ($actual_action == "labeled")
+                    and (.action == "labeled")
+                    and (.sender.type == "User")
+                    and (.sender.login == $actor)
+                    and (.sender.login == $actual_sender)
+                    and (.repository.full_name == $repo)
+                    and (.label.name == $actual_label)
+                    and ((.pull_request.number | tostring) == $actual_pr)
+                  then
+                    if .label.name == "review-all" then "junie,copilot"
+                    elif .label.name == "review-opencode" then ""
+                    elif .label.name == "review-junie" then "junie"
+                    elif .label.name == "review-gemini" then "gemini"
+                    elif .label.name == "review-copilot" then "copilot"
+                    else "" end
+                  else "" end
+                ' <<<"${EVENT_JSON}")"
               prompt=""
               pr_number="$(jq -r '.pull_request.number' <<<"${EVENT_JSON}")"
               tokens=""
