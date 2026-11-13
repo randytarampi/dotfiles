@@ -95,6 +95,19 @@ def test_publication_credentials_are_checked_before_app_token_creation():
     assert "secrets.APP_ID" not in publish
 
 
+def test_woofbot_publisher_identity_preflight_precedes_branch_writes():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    publish = workflow.split("  publish:\n", 1)[1]
+    guard = "      - name: Verify Woofbot installation identity before publication"
+    publication = "      - name: Publish the bot branch and create or update its draft PR"
+    assert publish.index("      - id: publish_app_token") < publish.index(guard)
+    assert publish.index(guard) < publish.index(publication)
+    assert "PUBLISH_APP_SLUG: ${{ steps.publish_app_token.outputs.app-slug }}" in publish
+    assert "Unexpected GitHub App slug for Woofbot publisher" in publish
+    assert 'bot_id="$(gh api "/users/${PUBLISH_APP_SLUG}[bot]" --jq .id)"' in publish
+    assert '"${bot_id}" != "353209076"' in publish
+
+
 def test_publication_credentials_preflight_fails_closed_without_values():
     import subprocess
 
