@@ -109,7 +109,7 @@ Successful profile generation by `scripts/generate-jetbrains-profiles.py` writes
 
 ## Scheduled free-model candidate review
 
-The weekly `Refresh model catalogues` workflow runs at 06:00 UTC on Monday and also accepts owner-only `workflow_dispatch` with a trusted immutable default-branch SHA. The dispatch preflight queries the live default-branch head and GitHub commit comparison before checkout: the supplied SHA must be identical to or an ancestor of `main`, not merely 40 hex characters. This prevents accidentally checking out unreviewed PR code with `OPENCODE_API_KEY`. An authenticated owner can post the exact comment `/refresh-model-catalogues` on [control issue #197](https://github.com/randytarampi/dotfiles/issues/197). The existing actor, issue-number, default-branch and immutable-SHA checks protect the secret-bearing refresh and the WOOFBOT publishing environment.
+The weekly `Refresh model catalogues` workflow runs at 06:00 UTC on Monday and also accepts owner-only `workflow_dispatch` with a trusted immutable default-branch SHA. The dispatch preflight queries the live default-branch head and GitHub commit comparison before checkout: the supplied SHA must be identical to or an ancestor of `main`, not merely 40 hex characters. This prevents accidentally checking out unreviewed PR code with `OPENCODE_API_KEY`. An authenticated owner can post the exact comment `/refresh-model-catalogues` on [control issue #197](https://github.com/randytarampi/dotfiles/issues/197). The existing actor, issue-number, default-branch and immutable-SHA checks restrict the secret-bearing refresh and the WOOFBOT publishing path; a named GitHub Actions environment only requires approval if its protection rules are actually configured.
 
 The current collector observes the OpenCode Console cross-protocol model list at `https://opencode.ai/inference/v1/models` using `OPENCODE_API_KEY`. It joins exact model IDs against the `opencode` cost records in a fresh [models.dev snapshot](https://models.dev/api.json), requiring valid numeric zero prices for every reported cost tier. Missing/invalid pricing, an empty or malformed response, or HTTP 401/403 is **unavailable** or **incomplete**, never a false zero-model success; only `available` is publishable. The key must be a Console workspace key with read-only or **Models: Read** rights.
 
@@ -124,7 +124,7 @@ Do not interpret `curated_not_listed` as automatic model retirement: a newer pro
 
 The general `free` tier already uses #119's separate dynamic, fresh-evidence resolver across eligible providers and the curated preferences from #139. Optional providers added by #142 (Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM) remain opt-in candidates; enabling a credential does not establish zero-charge entitlement, tool capability, privacy suitability or permitted production use. The `omo-slim-opencode-zen-free` preset remains OpenCode-only. The hosted discovery artifact is **not** consumed by these generators. It does not change model registries, Slim role assignments, Junie groups, Pi models, LiteLLM aliases, rate limits or any request-time admission decision. Request-time strict-free enforcement remains [issue #87](https://github.com/randytarampi/dotfiles/issues/87).
 
-Woofbot publishes at most one **draft** review PR for the `model-catalogue-bot/inventory` branch. The historical #200 PR is already merged; a future successful run can create a new draft if none is open, but must not overwrite an unrecognised existing branch tip. Before either a timestamp-only no-op or a branch push, publication verifies at most one open PR on that branch, with the expected default-branch base, a draft state and `woofbot-randytarampi-ca[bot]` as its author. A ready-for-review PR, unexpected author, changed base or duplicate open PR fails closed rather than being overwritten. Its only changed path relative to `main` is the renamed JSON artifact; the legacy `opencode-zen-free.json` on the old bot branch may be read as prior JSON **data** during the migration but must never be re-published. The generated PR follows `.github/PULL_REQUEST_TEMPLATE.md` and summarises newly discovered, already curated, no-longer-listed, repriced and unassessed-provider candidates. The proposed post-rename Woofbot App identity `woofbot-randytarampi-ca[bot]` is expected to author the Conventional Commit using its GitHub bot noreply identity; the actual login and numeric bot ID require owner verification after renaming. Source-code contributions and reviews remain attributed separately; automation never claims a CI or inference test it did not perform.
+Woofbot publishes at most one **draft** review PR for the `model-catalogue-bot/inventory` branch. The historical #200 PR is already merged; a future successful run can create a new draft if none is open, but must not overwrite an unrecognised existing branch tip. Before either a timestamp-only no-op or a branch push, publication verifies at most one open PR on that branch, with the expected default-branch base, a draft state and `woofbot-randytarampi-ca[bot]` as its author. A ready-for-review PR, unexpected author, changed base or duplicate open PR fails closed rather than being overwritten. Its only changed path relative to `main` is the renamed JSON artifact; the legacy `opencode-zen-free.json` on the old bot branch may be read as prior JSON **data** during the migration but must never be re-published. The generated PR follows `.github/PULL_REQUEST_TEMPLATE.md` and summarises newly discovered, already curated, no-longer-listed, repriced and unassessed-provider candidates. The owner verified the renamed App bot identity `woofbot-randytarampi-ca[bot]` with numeric GitHub ID `353209076` via the GitHub API on 2026-11-13. Each publishing job independently validates the minted token's App slug and that bot ID before any write. The bot authors its Conventional Commit using the matching GitHub bot noreply identity; a verified public account alone is not proof of token authentication. Source-code contributions and reviews remain attributed separately; automation never claims a CI or inference test it did not perform.
 
 The publisher checkout uses `fetch-depth: 0`: its safety preflight compares the existing bot branch with the current default branch via a three-dot Git diff, which needs their common ancestor. A shallow one-commit checkout can fail with `no merge base` when main has advanced since the bot commit. The read-only catalogue refresh checkout remains shallow. This is a publishing correctness requirement, not an expansion of which files or refs may be executed.
 
@@ -144,15 +144,28 @@ The `publish` job authenticates with a GitHub App, not the workflow's read-only 
 2. Under **Settings → Secrets and variables → Actions → Variables**, create the
     repository variable `WOOFBOT_GITHUB_APP_CLIENT_ID` using the App's **Client
     ID** (not its numeric App ID).
-3. Under **Settings → Environments**, set the environment secret
-    `WOOFBOT_GITHUB_APP_PRIVATE_KEY` to the complete PEM private key in **both**
-    `model-catalogue-publish` and `agentic-review-fix`. The two publisher jobs
-    use the same WOOFBOT App but separate protected environments. Do not commit
-    the private key or copy it into ordinary environment variables.
-4. Approve any environment protection rules, then start a new workflow run
-    after configuration. A manual run requires an immutable 40-hex `trusted_ref`
-    from the default branch. Re-running a previous failed attempt does not
-    automatically incorporate subsequent workflow changes.
+3. Under **Settings → Secrets and variables → Actions → Secrets**, create
+    the **repository Actions secret** `WOOFBOT_GITHUB_APP_PRIVATE_KEY` from
+    the complete PEM private key. Both publisher jobs use this repository secret;
+    no per-environment secret copies are required. Do not commit the key or
+    copy it into ordinary Actions variables.
+4. The publisher jobs still name the `model-catalogue-publish` and
+    `agentic-review-fix` environments, respectively. Configure required
+    reviewer/branch protections in **Settings → Environments** if approval is
+    intended: a named environment does **not** itself guarantee approval.
+    Approve any configured environment rules, then start a **new** workflow run.
+    A manual run requires an immutable 40-hex `trusted_ref` from the default
+    branch. Re-running a previous failed attempt does not automatically
+    incorporate subsequent workflow changes.
+
+Repository-scoped secrets can be referenced by **other workflows in the same
+repository**, not only these two publisher jobs. The generator does not pass
+the Woofbot secret to its commands, but this is not an environment-level
+secret-isolation guarantee. Restrict and review workflow changes and keep
+GitHub App installation permissions minimal; the named environments control
+deployment admission only if protection rules are configured. Existing legacy
+`WOOFDY_*` Actions credentials may remain provisioned for a separately
+authorized clean-up, but no active publisher should reference them.
 
 When publishing, both the catalogue and agentic-review fix workflows pass the WOOFBOT installation token to GitHub CLI as `GH_TOKEN` and use the scoped `gh auth git-credential` helper for Git-over-HTTPS pushes. This avoids a raw `Authorization: Bearer` Git header (which previously failed at push time), keeps the token out of Git command arguments and persistent checkout credentials, and disables interactive credential prompts. No additional WOOFBOT permissions or secret copies are required. A successful token mint does not prove the bot branch push or draft PR creation worked; inspect both operations in Actions.
 
