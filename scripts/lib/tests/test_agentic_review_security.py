@@ -293,6 +293,14 @@ def test_manual_fix_uses_woofbot_app_publisher_credentials():
     assert "permission-contents: write" in publish
     assert "permission-pull-requests: write" in publish
     assert "GH_TOKEN: ${{ steps.publish.outputs.token }}" in publish
+    assert "PUBLISH_APP_SLUG: ${{ steps.publish.outputs.app-slug }}" in publish
+    assert "Unexpected GitHub App slug for manual fix publisher" in publish
+    assert 'bot_id="$(gh api "/users/${PUBLISH_APP_SLUG}[bot]" --jq .id)"' in publish
+    assert '"${bot_id}" != "353209076"' in publish
+    assert 'publisher_login="${PUBLISH_APP_SLUG}[bot]"' in publish
+    assert 'git config user.name "${publisher_login}"' in publish
+    assert "353209076+${publisher_login}@users.noreply.github.com" in publish
+    assert "agentic-review-bot[bot]@users.noreply.github.com" not in publish
 
 
 def test_manual_fix_push_uses_scoped_github_cli_app_credentials():
