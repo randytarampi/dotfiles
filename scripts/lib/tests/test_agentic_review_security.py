@@ -157,7 +157,9 @@ def test_ci_opencode_custom_provider_packages_match_v2_contract():
     workflow = read(".github/workflows/agentic-review.yml")
     package = config["providers"]["opencode"]["package"]
     assert package == "aisdk:@ai-sdk/openai-compatible"
-    assert workflow.count('"package": "aisdk:@ai-sdk/openai-compatible"') == 2
+    assert workflow.count('"package": "aisdk:@ai-sdk/openai-compatible"') == 1
+    assert '"npm": "@ai-sdk/openai-compatible"' in workflow
+    assert 'config.setdefault("provider", {})[name]' in workflow
     assert "@opencode/ai/providers/openai-compatible" not in workflow
 
 
