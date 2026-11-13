@@ -224,3 +224,27 @@ def test_skipped_owned_profile_index_is_not_advertised(tmp_path):
     )
     names = [entry["name"] for entry in json.loads(content)["entries"]]
     assert names == ["LiteLLM-cloud", "Unrelated"]
+
+
+def test_regeneration_preserves_app_sealed_key_and_unmanaged_metadata(tmp_path):
+    desired = profiles.build_profiles(registry(), None)["cloud"]
+    target = tmp_path / "managed-profile.json"
+    original = {
+        **desired,
+        "inferenceGatewayApiKey": "synthetic-app-sealed-blob",
+        "appCustomMetadata": {"owner": "preserve"},
+    }
+    target.write_text(json.dumps(original), encoding="utf-8")
+    target.chmod(0o600)
+    restored = profiles._merge_app_owned_fields(target, desired)
+    assert restored["inferenceGatewayApiKey"] == "synthetic-app-sealed-blob"
+    assert restored["appCustomMetadata"] == {"owner": "preserve"}
+    assert restored["inferenceModels"] == desired["inferenceModels"]
+
+    explicitly_rekeyed = {
+        **desired,
+        "inferenceGatewayApiKey": "sk-synthetic-replacement",
+    }
+    replaced = profiles._merge_app_owned_fields(target, explicitly_rekeyed)
+    assert replaced["inferenceGatewayApiKey"] == "sk-synthetic-replacement"
+    assert replaced["appCustomMetadata"] == {"owner": "preserve"}
