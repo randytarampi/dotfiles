@@ -247,6 +247,11 @@ jobs:
           test "$VERSION_ID" = "$EXPECTED_RELEASE"
           test "$(uname -m)" = "$EXPECTED_ARCH"
           echo "ubuntu=$VERSION_ID architecture=$(uname -m)"
+      - name: Read-only host capability inventory
+        shell: bash
+        run: |
+          # Never treats a detected CLI or ARM CPU as operational proof.
+          python3 scripts/report-bootstrap-capabilities.py --json
       - name: Install pinned chezmoi prerequisite
         shell: bash
         run: |

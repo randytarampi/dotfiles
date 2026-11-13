@@ -1,6 +1,6 @@
 # Clean-host bootstrap: acceptance programme
 
-> **Plan baseline:** `main@b6a73760ac4a9c912db69a0c7de7608aeb0bfc6a`, 2026-11-12. **Status:** source implementation in draft PRs; platform-level fresh-host acceptance remains unverified. Tracker: [#270](https://github.com/randytarampi/dotfiles/issues/270). Programme plan and design: ChatGPT (GPT-6); subsequent implementers/reviewers should retain their own attribution.
+> **Plan baseline:** `main@b6a73760ac4a9c912db69a0c7de7608aeb0bfc6a`, 2026-11-12. **Status:** source PRs #277–#279, #282 and Windows interpreter #292 merged; the read-only host inventory is a separate source slice (#293). Fresh-host, physical-board and installed-client acceptance remain unverified. Tracker: [#270](https://github.com/randytarampi/dotfiles/issues/270). Programme plan and design: ChatGPT (GPT-6); subsequent implementers/reviewers should retain their own attribution.
 
 ## Target contract and affected consumers
 
@@ -23,6 +23,10 @@ A disabled optional gate is **skipped**, an enabled missing dependency **fails**
 4. **Native Windows/macOS** [#274](https://github.com/randytarampi/dotfiles/issues/274): reusable Git Bash/PowerShell chezmoi interpreter/path bootstrap, explicit VM receipts and versioned macOS support; WSL2 remains separate. macOS 10.15–14 is legacy core-only/best-effort pending proof.
 5. **Embedded/other CPUs** [#275](https://github.com/randytarampi/dotfiles/issues/275): Raspberry Pi 64-bit, Pine A64+ minimal profile, explicit POWER and 32-bit unsupported/experimental handling; physical devices are owner-only.
 6. **CI/DX decision** [#276](https://github.com/randytarampi/dotfiles/issues/276): measure workflow duration and re-run churn, then consider fast PR versus full merge/nightly. Do **not** weaken `ci/required` or `deploy` under an untested hypothesis. Coordinate #212 and #267.
+
+## Read-only host capability inventory (#275)
+
+Use `python3 scripts/report-bootstrap-capabilities.py --json` to collect a non-mutating, deliberately conservative OS/CPU/memory, binary-presence, package-manager and display-environment report. The machine-readable schema explicitly says `operational_verified: false`; L1 packages, L2 clients and L3 services are always `not_qualified` by this probe. An ARM64 CPU does not identify a particular board, a binary on PATH does not prove an agent functions, and missing DISPLAY does not prove a headless host. The required native Ubuntu smoke lanes now execute the probe for real runner OS/architecture evidence before deploying. See [Host capability report](bootstrap-host-capabilities.md) and [#275](https://github.com/randytarampi/dotfiles/issues/275). Owner-only physical Pi/Pine64 receipts and unsupported architecture decisions remain future work.
 
 ## Acceptance evidence and negative cases
 
