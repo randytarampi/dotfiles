@@ -290,16 +290,33 @@ jobs:
           private-key: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
+      - name: Verify Woofbot installation identity before publication
+        env:
+          GH_TOKEN: ${{ steps.publish.outputs.token }}
+          PUBLISH_APP_SLUG: ${{ steps.publish.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          if [[ "${PUBLISH_APP_SLUG}" != "woofbot-randytarampi-ca" ]]; then
+            echo "::error::Unexpected GitHub App slug for manual fix publisher" >&2
+            exit 1
+          fi
+          bot_id="$(gh api "/users/${PUBLISH_APP_SLUG}[bot]" --jq .id)"
+          if [[ "${bot_id}" != "353209076" ]]; then
+            echo "::error::Unexpected GitHub App bot user ID for manual fix publisher" >&2
+            exit 1
+          fi
       - name: Publish a unique bot branch and create or update its draft PR
         env:
           GH_TOKEN: ${{ steps.publish.outputs.token }}
+          PUBLISH_APP_SLUG: ${{ steps.publish.outputs.app-slug }}
           GIT_TERMINAL_PROMPT: "0"
         run: |
           set -euo pipefail
           publish_branch="agentic-review-bot/${GITHUB_RUN_ID}"
           [[ "${publish_branch}" =~ ^agentic-review-bot/[0-9]+$ ]]
-          git config user.name "agentic-review-bot[bot]"
-          git config user.email "agentic-review-bot[bot]@users.noreply.github.com"
+          publisher_login="${PUBLISH_APP_SLUG}[bot]"
+          git config user.name "${publisher_login}"
+          git config user.email "353209076+${publisher_login}@users.noreply.github.com"
           git commit -m "fix: apply requested agentic review change"
           if [[ "${BOT_BRANCH_EXISTS}" == "true" ]]; then
             [[ "${BOT_BRANCH_EXPECTED_TIP}" =~ ^[0-9a-f]{40}$ ]]
