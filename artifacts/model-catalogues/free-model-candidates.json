@@ -39,7 +39,8 @@
   "review": {
     "new_candidates": [
       "beam-free",
-      "flint-40b-free"
+      "flint-40b-free",
+      "minimax-m3.1-flash-free"
     ],
     "already_curated": [
       "big-pickle",
@@ -60,13 +61,13 @@
   "status": "available",
   "source": "https://opencode.ai/inference/v1/models",
   "pricing_source": "https://models.dev/api.json",
-  "fetched_at": "2026-11-07T09:44:35.918993Z",
-  "pricing_observed_at": "2026-11-07T09:44:36.180124+00:00",
-  "pricing_expires_at": "2026-11-08T09:44:36.180124+00:00",
+  "fetched_at": "2026-11-13T22:04:51.578613Z",
+  "pricing_observed_at": "2026-11-13T22:04:51.884089+00:00",
+  "pricing_expires_at": "2026-11-14T22:04:51.884089+00:00",
   "counts": {
-    "catalogue": 8,
-    "classified": 8,
-    "free": 8,
+    "catalogue": 9,
+    "classified": 9,
+    "free": 9,
     "unclassified": 0
   },
   "models": [
@@ -113,6 +114,14 @@
     },
     {
       "id": "mimo-v2.6-flash-free",
+      "pricing": {
+        "input": 0,
+        "output": 0,
+        "cache_read": 0
+      }
+    },
+    {
+      "id": "minimax-m3.1-flash-free",
       "pricing": {
         "input": 0,
         "output": 0,
