@@ -1511,7 +1511,6 @@
       "accepted_flags": [
         "--allow-partial",
         "--api-key-source",
-        "--codex-catalog",
         "--dry-run",
         "--help",
         "--no-backup",
