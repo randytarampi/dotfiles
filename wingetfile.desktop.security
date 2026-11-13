@@ -7,5 +7,3 @@
 Amazon.AWSVPNClient
 # Cross-ref: cask 'keeper-password-manager'
 KeeperSecurity.KeeperDesktop
-# Cross-ref: cask '1password'
-AgileBits.1Password

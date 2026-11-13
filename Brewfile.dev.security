@@ -4,4 +4,3 @@
 
 brew "clamav"
 brew "ffuf"
-cask "1password-cli"
