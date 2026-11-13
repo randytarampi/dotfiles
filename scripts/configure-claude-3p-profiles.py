@@ -185,6 +185,19 @@ def _validate_owned_profile(path, entry):
 
 
 
+def _merge_app_owned_fields(path, generated):
+    """Preserve an existing applied app-sealed key and app metadata by default."""
+    if not path.exists():
+        return generated
+    _validate_owned_profile(path, generated)
+    existing = json.loads(path.read_text(encoding="utf-8"))
+    merged = dict(existing)
+    merged.update(generated)
+    # The default no-key mode must not silently erase an already working
+    # app-sealed bearer. Explicit --api-key-source key-file is an opt-in change.
+    return merged
+
+
 def _read_served_ids(config_path):
     """Return exact *served* LiteLLM model_name aliases, never backend IDs."""
     if config_path.is_symlink() or not config_path.is_file():
@@ -348,8 +361,8 @@ def main(argv=None):
                 source
                 / f"{uuid.uuid5(uuid.NAMESPACE_URL, 'dotfiles-claude-3p-' + preset)}.json"
             )
+            entry = _merge_app_owned_fields(path, entry)
             content = json.dumps(entry, indent=2, sort_keys=True) + "\n"
-            _validate_owned_profile(path, entry)
             _preflight_write(path, content, backup=not args.no_backup)
             planned.append((preset, path, content))
         # Validate all known conflicts before writing any individual entry.
