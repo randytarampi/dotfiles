@@ -284,6 +284,8 @@ def test_review_free_native_router_has_independent_ordered_deployments(tmp_path)
     assert router_config["general_settings"]["master_key"] == (
         "os.environ/REVIEW_LITELLM_KEY"
     )
+    assert config["default_agent"] == "plan"
+    assert config["permission"] == {"edit": "deny", "bash": "deny", "task": "deny"}
     assert not any("nvidia" in str(row) for row in deployments)
 
 
