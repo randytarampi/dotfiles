@@ -67,13 +67,13 @@ def test_final_coveralls_publisher_does_not_gate_required_ci():
     assert "name: ci/required" in required
     # Source/deployment AND the core smoke matrix all gate the same stable
     # status; advisory coverage finalisation must never affect it.
-    assert "needs: [verify, deploy, bootstrap-smoke]" in required
-    for dependency in ("verify", "deploy", "bootstrap-smoke"):
+    assert "needs: [verify, deploy, bootstrap-smoke, bootstrap-networkless]" in required
+    for dependency in ("verify", "deploy", "bootstrap-smoke", "bootstrap-networkless"):
         assert f"needs.{dependency}.result" in required
     assert "needs.finish.result" not in required
     assert "FINISH_RESULT" not in required
     assert (
-        'for result in "$VERIFY_RESULT" "$DEPLOY_RESULT" "$SMOKE_RESULT"; do'
+        'for result in "$VERIFY_RESULT" "$DEPLOY_RESULT" "$SMOKE_RESULT" "$NETWORK_RESULT"; do'
         in required
     )
     assert '"$result" != "success"' in required

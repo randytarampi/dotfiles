@@ -263,6 +263,35 @@ jobs:
           bash -n tests/bootstrap/smoke.sh
           bash tests/bootstrap/smoke.sh
 
+  # One representative required no-egress path, complementary to the four
+  # native OS/architecture probes. A networkless Docker *runtime* is a real
+  # socket boundary; stubbing curl/wget alone is not.
+  bootstrap-networkless:
+    name: Bootstrap core (networkless container)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build unprivileged Ubuntu core image
+        shell: bash
+        run: |
+          docker build --platform linux/amd64 \
+            --build-arg UBUNTU_VERSION=24.04 \
+            -f tests/bootstrap/Dockerfile \
+            -t dotfiles-bootstrap:networkless .
+      - name: Prove no outbound sockets and deploy twice
+        shell: bash
+        run: |
+          docker run --rm --network none --platform linux/amd64 --pull never \
+            dotfiles-bootstrap:networkless bash -c '
+              set -euo pipefail
+              python3 tests/bootstrap/assert_no_egress.py
+              bash tests/bootstrap/smoke.sh
+            '
+
   finish:
     needs: verify
     if: ${{ always() }}
@@ -284,11 +313,11 @@ jobs:
           COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
 
   # Stable aggregate check for future branch rules: this job name must never
-  # change (rulesets reference it by name). Verify/deploy/bootstrap results gate
+  # change (rulesets reference it by name). Verify/deploy/native-bootstrap/networkless results gate
   # ci/required; external coverage publication and finalisation are advisory.
   ci-required:
     name: ci/required
-    needs: [verify, deploy, bootstrap-smoke]
+    needs: [verify, deploy, bootstrap-smoke, bootstrap-networkless]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -299,9 +328,10 @@ jobs:
           VERIFY_RESULT: ${{ needs.verify.result }}
           DEPLOY_RESULT: ${{ needs.deploy.result }}
           SMOKE_RESULT: ${{ needs.bootstrap-smoke.result }}
+          NETWORK_RESULT: ${{ needs.bootstrap-networkless.result }}
         run: |
-          echo "Needs results: verify=${VERIFY_RESULT:-none} deploy=${DEPLOY_RESULT:-none} smoke=${SMOKE_RESULT:-none}"
-          for result in "$VERIFY_RESULT" "$DEPLOY_RESULT" "$SMOKE_RESULT"; do
+          echo "Needs results: verify=${VERIFY_RESULT:-none} deploy=${DEPLOY_RESULT:-none} smoke=${SMOKE_RESULT:-none} networkless=${NETWORK_RESULT:-none}"
+          for result in "$VERIFY_RESULT" "$DEPLOY_RESULT" "$SMOKE_RESULT" "$NETWORK_RESULT"; do
             if [[ "$result" != "success" ]]; then
               echo "ci/required: required job did not succeed (result=${result:-none})" >&2
               exit 1
