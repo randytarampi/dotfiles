@@ -110,6 +110,10 @@ sequenceDiagram
 
 `configure-all.sh` configures Codex only when `codex` is on PATH, `CODEX_HOME/config.toml` (default `~/.codex/config.toml`) already exists, or `DOTFILES_RUN_CODEX_SETUP=1`. An empty home with no installed Codex skips this generator, avoiding a mandatory Poetry dependency during initial core deployment. Selected clients still require the locked Poetry interpreter and TOML parser, and missing prerequisites fail before the generator touches user-owned configuration. This eligibility check does not replace the separate, narrowly scoped LiteLLM gateway setup gate in `configure-codex.py`.
 
+### Disabled Linux service gates on an empty host
+
+The LiteLLM and Open WebUI `run_onchange` gate-off paths disable/remove an existing Linux systemd user unit **only** when the non-symlink file matches the repository-generated **active** `[Unit] Description` and `[Service] ExecStart` directives, including the expected executable boundary and numeric port. A same-named file, commented-out directive, alternative executable, duplicated directive or suffixed path is not authorization to delete user state. On Linux, `pkill` also requires an identified managed unit; a foreign unit with a coincidentally present venv binary is preserved. Unknown units are left in place with an explicit warning, requiring manual inspection. Existing recognized unit files are disabled/removed while retaining the service's data directory. These safeguards address [#280](https://github.com/randytarampi/dotfiles/issues/280) and CodeRabbit feedback on #279, but the tests are synthetic: real owner-host service teardown remains unverified. macOS launchd semantics were not changed.
+
 ### Executed orchestration checks
 
 For shared-data mutations, record which fields the change owns and which unrelated or native metadata must survive. Validate the result as its actual consumer interprets it, not merely by confirming generated state exists (for example, rates versus protocol mode, or a key file versus successful authentication).

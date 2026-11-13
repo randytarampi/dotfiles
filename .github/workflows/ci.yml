@@ -214,6 +214,55 @@ jobs:
         shell: bash
         run: make doctor
 
+  # Explicit OS/CPU baseline; no Poetry, package installs or private HOME.
+  bootstrap-smoke:
+    name: Bootstrap core (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            release: "24.04"
+            architecture: x86_64
+          - os: ubuntu-24.04-arm
+            release: "24.04"
+            architecture: aarch64
+          - os: ubuntu-26.04
+            release: "26.04"
+            architecture: x86_64
+          - os: ubuntu-26.04-arm
+            release: "26.04"
+            architecture: aarch64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Verify native runner OS and CPU
+        shell: bash
+        env:
+          EXPECTED_RELEASE: ${{ matrix.release }}
+          EXPECTED_ARCH: ${{ matrix.architecture }}
+        run: |
+          . /etc/os-release
+          test "$ID" = ubuntu
+          test "$VERSION_ID" = "$EXPECTED_RELEASE"
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+          echo "ubuntu=$VERSION_ID architecture=$(uname -m)"
+      - name: Install pinned chezmoi prerequisite
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSL https://get.chezmoi.io | sh -s -- -b "$RUNNER_TEMP/bin" -t v2.72.2
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Synthetic HOME core deployment and repeat verification
+        shell: bash
+        run: |
+          bash -n tests/bootstrap/smoke.sh
+          bash tests/bootstrap/smoke.sh
+
   finish:
     needs: verify
     if: ${{ always() }}
@@ -235,11 +284,11 @@ jobs:
           COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
 
   # Stable aggregate check for future branch rules: this job name must never
-  # change (rulesets reference it by name). Only verify/deploy results gate
+  # change (rulesets reference it by name). Verify/deploy/bootstrap results gate
   # ci/required; external coverage publication and finalisation are advisory.
   ci-required:
     name: ci/required
-    needs: [verify, deploy]
+    needs: [verify, deploy, bootstrap-smoke]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -249,9 +298,10 @@ jobs:
         env:
           VERIFY_RESULT: ${{ needs.verify.result }}
           DEPLOY_RESULT: ${{ needs.deploy.result }}
+          SMOKE_RESULT: ${{ needs.bootstrap-smoke.result }}
         run: |
-          echo "Needs results: verify=${VERIFY_RESULT:-none} deploy=${DEPLOY_RESULT:-none}"
-          for result in "$VERIFY_RESULT" "$DEPLOY_RESULT"; do
+          echo "Needs results: verify=${VERIFY_RESULT:-none} deploy=${DEPLOY_RESULT:-none} smoke=${SMOKE_RESULT:-none}"
+          for result in "$VERIFY_RESULT" "$DEPLOY_RESULT" "$SMOKE_RESULT"; do
             if [[ "$result" != "success" ]]; then
               echo "ci/required: required job did not succeed (result=${result:-none})" >&2
               exit 1

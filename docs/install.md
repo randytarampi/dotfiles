@@ -77,6 +77,22 @@ scripts/configure-project.py --steps skills
 
 Project configuration values select the tier, skills, MCPs, ACP agents, CodeGraph, JetBrains, Junie, and project secrets. `.opencode/.env` is the user-authored declaration; generated secrets go to the gitignored `.opencode/.env.local`. CLI arguments take precedence over project and global environment values.
 
+### Core clean-host smoke (Linux, synthetic HOME)
+
+`make bootstrap-smoke` runs the actual deployment twice in a disposable HOME, checks chezmoi drift (including a failed diff command), and stubs known package-manager, download and service-control commands. It does **not** block all outbound network traffic (such as direct Python sockets); see [#281](https://github.com/randytarampi/dotfiles/issues/281) for network-contained acceptance. It requires bash, make, Python 3 and chezmoi **but not Poetry, Codex or credentials**. The required CI matrix uses explicit Ubuntu 24.04 and 26.04 runners on x64 and ARM64.
+
+For optional, committed-tree-only Docker reproduction (avoid adding untracked credentials to the image context):
+
+```bash
+git archive HEAD | docker build --platform linux/amd64 --build-arg UBUNTU_VERSION=24.04 -f tests/bootstrap/Dockerfile -t dotfiles-core:24-amd64 -
+docker run --rm --network none --platform linux/amd64 dotfiles-core:24-amd64
+
+git archive HEAD | docker build --platform linux/arm64 --build-arg UBUNTU_VERSION=26.04 -f tests/bootstrap/Dockerfile -t dotfiles-core:26-arm64 -
+docker run --rm --network none --platform linux/arm64 dotfiles-core:26-arm64
+```
+
+This is **not** proof that the full Homebrew/WinGet category sets install or that Docker emulation reproduces a physical Raspberry Pi/Pine64. The CLI toolchain is installed into the disposable image explicitly; native VM and owner-hardware acceptance remain separate.
+
 ### Step 4: Verification & Local Linting (Optional)
 To verify repository and script health offline:
 - **macOS / Linux:**

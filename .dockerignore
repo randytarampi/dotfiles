@@ -1,0 +1,12 @@
+# Building with git archive HEAD is preferred; this protects directory builds.
+.git
+.venv
+node_modules
+**/.env
+**/.env.local
+**/*.key
+**/service.env
+**/clients
+**/.DS_Store
+.coverage*
+coverage.lcov

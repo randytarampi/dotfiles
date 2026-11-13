@@ -143,7 +143,13 @@ def test_actionlint_woofdy_client_id_compatibility_is_scoped():
         '"actions/create-github-app-token@v3"',
     ]
     assert set(config) == {"paths"}
-    assert set(paths) == allowed
+    # Pinned actionlint 1.7.12 does not know the two current Ubuntu 26.04
+    # hosted runner labels. Keep their exception narrowly scoped to CI:
+    # an arbitrary new label or an expanded ignore is a regression.
+    assert set(paths) == allowed | {".github/workflows/ci.yml"}
+    assert paths[".github/workflows/ci.yml"]["ignore"] == [
+        'label "ubuntu-26\\.04(-arm)?" is unknown'
+    ]
     for path in allowed:
         assert paths[path]["ignore"] == known_false_positives
         workflow = read(path)
