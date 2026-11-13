@@ -158,18 +158,14 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          # Windows cannot exec .sh scripts directly ("not a valid Win32
-          # application"); chezmoi routes scripts through the interpreter
-          # configured for the script extension. Point .sh at Git Bash and hand
-          # the config to chezmoi via the CHEZMOI make-variable override
-          # (Makefile:11 uses ?=, so the environment wins). The config path
-          # must be forward-slashed: a backslashed RUNNER_TEMP path is
-          # unquoted in the make recipe, so bash strips the backslash escapes
-          # and chezmoi silently proceeds without the config (runs 1-4).
-          cat > "$RUNNER_TEMP/chezmoi-interpreters.toml" <<'EOF'
-          [interpreters.sh]
-              command = 'C:\Program Files\Git\bin\bash.exe'
-          EOF
+          # Reuse the preview-first Git Bash helper instead of embedding a
+          # Windows executable path that may differ across installations.
+          # --write refuses overwriting user-owned config; CI uses RUNNER_TEMP.
+          bash scripts/bootstrap/windows-chezmoi-interpreter.sh --write "$RUNNER_TEMP/chezmoi-interpreters.toml"
+          bash scripts/bootstrap/windows-chezmoi-interpreter.sh --check "$RUNNER_TEMP/chezmoi-interpreters.toml"
+          # The Makefile's CHEZMOI command is split by Bash; a forward-slashed
+          # native path keeps Windows escaping intact on this runner. Human
+          # home paths containing spaces still need qualification under #274.
           cz_config="$(cygpath -m "$RUNNER_TEMP")/chezmoi-interpreters.toml"
           echo "CHEZMOI=chezmoi --config $cz_config" >> "$GITHUB_ENV"
       - name: Install locked production Python dependencies
