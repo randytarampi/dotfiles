@@ -362,6 +362,28 @@ jobs:
           if requested not in ("free", "opencode", "groq", "mistral", "cloudflare", "nvidia-nim"):
               raise SystemExit("Unsupported trusted review inference provider")
           selected = "opencode/big-pickle"
+
+          def register_runtime_provider(name, model, base_url, credential, label):
+              # The native GitHub action installs OpenCode v1.19.5, which
+              # consumes provider/npm/options. The trusted CI source is v2,
+              # which consumes providers/package/settings. Emit both at
+              # runtime only, with credentials referenced but never copied.
+              models = {model: {"name": label}}
+              options = {
+                  "baseURL": base_url,
+                  "apiKey": "{env:" + credential + "}",
+              }
+              config.setdefault("provider", {})[name] = {
+                  "npm": "@ai-sdk/openai-compatible",
+                  "options": options,
+                  "models": models,
+              }
+              config.setdefault("providers", {})[name] = {
+                  "env": [credential],
+                  "package": "aisdk:@ai-sdk/openai-compatible",
+                  "settings": options,
+                  "models": models,
+              }
           # Include available provider keys without a separate owner-approval
           # variable. Credential presence is not proof of zero-cost entitlement:
           # provider billing and quota are governed by each account.
@@ -435,25 +457,17 @@ jobs:
                   proxy_path.chmod(0o600)
                   requested = "review-free"
                   selected = "review-free/review-free"
-                  config.setdefault("providers", {})["review-free"] = {
-                      "package": "aisdk:@ai-sdk/openai-compatible",
-                      "settings": {
-                          "baseURL": "http://127.0.0.1:4907/v1",
-                          "apiKey": "{env:REVIEW_LITELLM_KEY}",
-                      },
-                      "models": {"review-free": {"name": "Qualified free review pool"}},
-                  }
+                  register_runtime_provider(
+                      "review-free", "review-free", "http://127.0.0.1:4907/v1",
+                      "REVIEW_LITELLM_KEY", "Qualified free review pool",
+                  )
               else:
                   requested = free_candidates[0]
           if requested in options:
               model, base, key, available = options[requested]
               if os.environ.get(available) == "true":
                   selected = f"{requested}/{model}"
-                  config.setdefault("providers", {})[requested] = {
-                      "package": "aisdk:@ai-sdk/openai-compatible",
-                      "settings": {"baseURL": base, "apiKey": "{env:" + key + "}"},
-                      "models": {model: {"name": model}},
-                  }
+                  register_runtime_provider(requested, model, base, key, model)
               else:
                   print("::notice::Requested provider credential unavailable; using existing Big Pickle model")
           config["model"] = selected
@@ -495,7 +509,8 @@ jobs:
           for _ in $(seq 1 45); do
             if curl --fail --silent --show-error --max-time 2 \
               -H "Authorization: Bearer ${key}" \
-              "http://127.0.0.1:4907/v1/models" >/dev/null 2>&1; then
+              "http://127.0.0.1:4907/v1/models" 2>/dev/null |
+              jq -e 'any(.data[]?; .id == "review-free")' >/dev/null 2>&1; then
               healthy=true
               break
             fi
