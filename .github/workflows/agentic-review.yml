@@ -415,7 +415,7 @@ jobs:
                   requested = "review-free"
                   selected = "review-free/review-free"
                   config.setdefault("providers", {})["review-free"] = {
-                      "package": "@opencode/ai/providers/openai-compatible",
+                      "package": "aisdk:@ai-sdk/openai-compatible",
                       "settings": {
                           "baseURL": "http://127.0.0.1:4907/v1",
                           "apiKey": "{env:REVIEW_LITELLM_KEY}",
@@ -429,7 +429,7 @@ jobs:
               if os.environ.get(available) == "true":
                   selected = f"{requested}/{model}"
                   config.setdefault("providers", {})[requested] = {
-                      "package": "@opencode/ai/providers/openai-compatible",
+                      "package": "aisdk:@ai-sdk/openai-compatible",
                       "settings": {"baseURL": base, "apiKey": "{env:" + key + "}"},
                       "models": {model: {"name": model}},
                   }

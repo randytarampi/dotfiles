@@ -151,6 +151,15 @@ def test_native_opencode_uses_oidc_and_hardened_plan_agent():
     assert 'escaped_version="${OPENCODE_VERSION//./\\\\.}"' in fix
 
 
+def test_ci_opencode_custom_provider_packages_match_v2_contract():
+    """V2 accepts aisdk: AI SDK locators; the legacy internal path hides models."""
+    config = json.loads(read("configs/opencode/ci/opencode.json"))
+    workflow = read(".github/workflows/agentic-review.yml")
+    assert config["providers"]["opencode"]["package"] == "aisdk:@ai-sdk/openai-compatible"
+    assert workflow.count('"package": "aisdk:@ai-sdk/openai-compatible"') == 2
+    assert "@opencode/ai/providers/openai-compatible" not in workflow
+
+
 def test_multiline_review_outputs_keep_closers_on_their_own_line():
     workflow = read(".github/workflows/agentic-review.yml")
     # Bodies may lack a trailing newline (printf '%s'); always force a newline
