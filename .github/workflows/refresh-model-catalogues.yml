@@ -406,7 +406,8 @@ jobs:
               fi
             fi
           fi
-          # ID 353209076 is the verified WOOFBOT App author of PR #200.
+          # ID 353209076 belongs to the existing App's bot user in PR #200.
+          # Confirm the actual bot login and ID after the App rename before publishing.
           bot_login="woofbot-randytarampi-ca[bot]"
           git config user.name "${bot_login}"
           git config user.email "353209076+${bot_login}@users.noreply.github.com"
