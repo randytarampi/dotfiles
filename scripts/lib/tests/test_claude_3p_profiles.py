@@ -1,3 +1,4 @@
+import pytest
 import importlib.util
 import json
 from pathlib import Path
@@ -155,3 +156,71 @@ def test_index_update_registers_unique_ids(tmp_path):
         if entry["name"].startswith("LiteLLM-")
     }
     assert len(ids) == len(names) - 1 and all(len(item) == 36 for item in ids)
+
+
+
+def test_existing_foreign_profile_is_never_overwritten(tmp_path):
+    target = tmp_path / "foreign-profile.json"
+    target.write_text('{"deploymentDisplayName": "Owner profile"}', encoding="utf-8")
+    target.chmod(0o600)
+    entry = profiles.build_profiles(registry(), None)["cloud"]
+    with pytest.raises(ValueError, match="not a recognised managed profile"):
+        profiles._validate_owned_profile(target, entry)
+    assert "Owner profile" in target.read_text(encoding="utf-8")
+
+
+def test_private_backup_is_created_exclusively_before_replacement(tmp_path):
+    target = tmp_path / "profile.json"
+    target.write_text('{"old": true}', encoding="utf-8")
+    target.chmod(0o600)
+    assert profiles._atomic_write(target, '{"new": true}', backup=True)
+    backup = target.with_name("profile.json.bak")
+    assert backup.stat().st_mode & 0o777 == 0o600
+    assert backup.read_text() == '{"old": true}'
+    assert target.read_text() == '{"new": true}'
+    with pytest.raises(ValueError, match="backup already exists"):
+        profiles._atomic_write(target, '{"next": true}', backup=True)
+    assert target.read_text() == '{"new": true}'
+
+
+def test_non_private_existing_file_and_foreign_index_are_refused(tmp_path):
+    target = tmp_path / "profile.json"
+    target.write_text('{"old": true}', encoding="utf-8")
+    target.chmod(0o644)
+    with pytest.raises(ValueError, match="non-private"):
+        profiles._atomic_write(target, '{"new": true}')
+    assert target.read_text() == '{"old": true}'
+
+    source = tmp_path / "configLibrary"
+    source.mkdir()
+    index = source / "_meta.json"
+    index.write_text(
+        json.dumps({"entries": [{"name": "LiteLLM-cloud", "id": "foreign-owner-id"}]}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="unmanaged profile index"):
+        profiles._update_index(source, profiles.build_profiles(registry(), None))
+
+
+def test_skipped_owned_profile_index_is_not_advertised(tmp_path):
+    source = tmp_path / "configLibrary"
+    source.mkdir()
+    entry_id = str(
+        profiles.uuid.uuid5(profiles.uuid.NAMESPACE_URL, "dotfiles-claude-3p-local")
+    )
+    (source / "_meta.json").write_text(
+        json.dumps(
+            {
+                "entries": [
+                    {"name": "LiteLLM-local", "id": entry_id},
+                    {"name": "Unrelated", "id": "owner-retained"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    _path, content = profiles._update_index(
+        source, {"cloud": profiles.build_profiles(registry(), None)["cloud"]}
+    )
+    names = [entry["name"] for entry in json.loads(content)["entries"]]
+    assert names == ["LiteLLM-cloud", "Unrelated"]
