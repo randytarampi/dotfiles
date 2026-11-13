@@ -109,27 +109,45 @@ def _checked_path(path):
     return path
 
 
-def _atomic_write(path, content, *, backup=True, dry_run=False):
+def _preflight_write(path, content, *, backup=True):
+    """Check owner state and backup conflicts before mutating any profile."""
     path = _checked_path(path)
     if path.exists():
         info = path.stat()
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-            raise ValueError(f"refusing unsafe profile file: {path}")
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.getuid()
+            or info.st_nlink != 1
+            or stat.S_IMODE(info.st_mode) != 0o600
+        ):
+            raise ValueError(f"refusing non-private or foreign profile file: {path}")
         if path.read_text(encoding="utf-8") == content:
             return False
-        if backup:
-            backup_path = path.with_name(path.name + ".bak")
-            if backup_path.exists() or backup_path.is_symlink():
-                raise ValueError(f"backup already exists or unsafe: {backup_path}")
-    elif dry_run:
-        return True
-    if dry_run:
-        return True
+        backup_path = path.with_name(path.name + ".bak")
+        if backup and (backup_path.exists() or backup_path.is_symlink()):
+            raise ValueError(f"backup already exists or unsafe: {backup_path}")
+    return True
+
+
+def _atomic_write(path, content, *, backup=True, dry_run=False):
+    changed = _preflight_write(path, content, backup=backup)
+    if not changed or dry_run:
+        return changed
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     _checked_path(path)
     if path.exists() and backup:
-        path.with_name(path.name + ".bak").write_bytes(path.read_bytes())
-        os.chmod(path.with_name(path.name + ".bak"), 0o600)
+        # Never create a world-readable copy of an app-sealed/API key, even
+        # briefly before chmod; exclusive creation prevents backup clobber.
+        backup_path = path.with_name(path.name + ".bak")
+        fd = os.open(str(backup_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            with os.fdopen(fd, "wb") as output:
+                output.write(path.read_bytes())
+                output.flush()
+                os.fsync(output.fileno())
+        except BaseException:
+            backup_path.unlink(missing_ok=True)
+            raise
     fd, temporary = tempfile.mkstemp(prefix=".dotfiles-claude-3p-", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as output:
@@ -137,11 +155,34 @@ def _atomic_write(path, content, *, backup=True, dry_run=False):
             output.write(content)
             output.flush()
             os.fsync(output.fileno())
+        # Existing-file replacement is limited to owner-checked files.
         os.replace(temporary, path)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
     return True
+
+
+def _validate_owned_profile(path, entry):
+    """Do not adopt a foreign file that happens to share our generated UUID."""
+    if not path.exists():
+        return
+    _checked_path(path)
+    try:
+        current = json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        raise ValueError("existing profile is not a recognised managed profile") from None
+    if not isinstance(current, dict) or any(
+        current.get(key) != entry[key]
+        for key in (
+            "deploymentDisplayName",
+            "inferenceProvider",
+            "inferenceGatewayBaseUrl",
+        )
+    ):
+        raise ValueError("existing profile is not a recognised managed profile")
+
+
 
 
 def _read_served_ids(config_path):
