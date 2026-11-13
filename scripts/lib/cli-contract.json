@@ -1438,7 +1438,11 @@
     },
     {
       "path": "scripts/generate-codex-catalogue.py",
-      "capabilities": ["public", "inspect", "mutates"],
+      "capabilities": [
+        "public",
+        "inspect",
+        "mutates"
+      ],
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
@@ -1492,6 +1496,26 @@
       "accepted_flags": [
         "--help",
         "--results"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-claude-3p-profiles.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--allow-partial",
+        "--api-key-source",
+        "--codex-catalog",
+        "--dry-run",
+        "--help",
+        "--no-backup",
+        "--source-dir"
       ],
       "positional_operand": null,
       "child_scripts": []
