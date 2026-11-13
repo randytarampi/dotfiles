@@ -231,15 +231,28 @@ def _update_index(source, profiles):
     ) or {}
     if not isinstance(index, dict) or not isinstance(index.get("entries"), list):
         raise ValueError("Claude-3p config index has an unsupported schema")
-    entries = {
-        item["name"]: item
-        for item in index["entries"]
-        if isinstance(item, dict) and isinstance(item.get("name"), str)
-    }
+    entries = {}
+    for item in index["entries"]:
+        if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+            raise ValueError("Claude-3p index contains a malformed entry")
+        name = item["name"]
+        if name in entries:
+            raise ValueError("Claude-3p index contains duplicate profile names")
+        entries[name] = item
     for preset in profiles:
         name = f"LiteLLM-{preset}"
         entry_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "dotfiles-claude-3p-" + preset))
+        if name in entries and entries[name].get("id") != entry_id:
+            raise ValueError(f"refusing to replace unmanaged profile index: {name}")
         entries[name] = {"id": entry_id, "name": name}
+    # Do not continue advertising skipped, now-unserved profiles from prior
+    # runs. Preserve unrelated and non-dotfiles entries in the app's index.
+    for name, item in list(entries.items()):
+        if not name.startswith("LiteLLM-") or name[8:] in profiles:
+            continue
+        owned_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "dotfiles-claude-3p-" + name[8:]))
+        if item.get("id") == owned_id:
+            del entries[name]
     index["entries"] = sorted(entries.values(), key=lambda item: item["name"])
     return index_path, json.dumps(index, indent=2) + "\n"
 
@@ -329,12 +342,19 @@ def main(argv=None):
         if not args.dry_run:
             source.mkdir(parents=True, exist_ok=True, mode=0o700)
         index_path, index_content = _update_index(source, profiles)
+        planned = []
         for preset, entry in profiles.items():
             path = (
                 source
                 / f"{uuid.uuid5(uuid.NAMESPACE_URL, 'dotfiles-claude-3p-' + preset)}.json"
             )
             content = json.dumps(entry, indent=2, sort_keys=True) + "\n"
+            _validate_owned_profile(path, entry)
+            _preflight_write(path, content, backup=not args.no_backup)
+            planned.append((preset, path, content))
+        # Validate all known conflicts before writing any individual entry.
+        _preflight_write(index_path, index_content, backup=not args.no_backup)
+        for preset, path, content in planned:
             changed = _atomic_write(
                 path, content, backup=not args.no_backup, dry_run=args.dry_run
             )
