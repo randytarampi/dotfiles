@@ -316,10 +316,10 @@ SECURITY_CASK_HINTS = (
     "wireguard",
     "aws-vpn-client",
     "gpg-suite",
-    "1password",
 )
 
-DEV_SECURITY_CASK_HINTS = ("1password-cli",)
+# Intentionally empty: 1Password CLI was the sole member; removed by owner request (2026-11-13).
+DEV_SECURITY_CASK_HINTS: tuple[str, ...] = ()
 
 MEDIA_CASK_HINTS = (
     "handbrake",
