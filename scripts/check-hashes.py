@@ -33,6 +33,7 @@ NON_TRACKED_CONFIGS = {
 NON_TRACKED_SCRIPTS = {
     "scripts/check-env-coverage.py",
     "scripts/check-hashes.py",  # self — doesn't need to track itself
+    "scripts/report-bootstrap-capabilities.py",  # Read-only OS/CPU report used in CI, never a chezmoi deploy/config input
     "scripts/check-docs-drift.py",  # Makefile-only verification tool
     "scripts/check-mcp-parity.py",  # Makefile-only verification tool
     "scripts/cleanup-brewfiles.py",  # Makefile-only cleanup tool
