@@ -6,7 +6,6 @@ path-reference field in its provider, auth, URL, models or metadata fields.
 """
 
 import argparse
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -165,31 +164,6 @@ def _read_served_ids(config_path):
         result.add(alias)
     return result
 
-def generate_catalogue(served_ids):
-    return {
-        "_dotfiles_managed": "dotfiles-litellm-codex-catalogue-v1",
-        "models": [
-            {
-                "slug": model_id,
-                "display_name": model_id,
-                "description": "LiteLLM served model",
-                "visibility": "list",
-                "supported_in_api": True,
-                "priority": index,
-                "context_window": 128000,
-                "max_context_window": 128000,
-                "input_modalities": ["text"],
-                "supported_reasoning_levels": [],
-                "default_reasoning_level": None,
-                "supports_parallel_tool_calls": False,
-                "supports_reasoning_summaries": False,
-                "shell_type": "unified_exec",
-            }
-            for index, model_id in enumerate(sorted(served_ids))
-        ],
-    }
-
-
 def _local_category_models(registry, preset):
     """Resolve local role categories through the shared tier classifier."""
     from discover_models import list_local_ollama_models
@@ -246,7 +220,6 @@ def main(argv=None):
         help="Accept skipping additional unserved profiles by this exact name;"
         " every other skip still fails (exit 1).",
     )
-    parser.add_argument("--codex-catalog", action="store_true")
     args = parser.parse_args(argv)
     load_env()
     if os.environ.get("DOTFILES_RUN_OPENCODE_SETUP", "0") != "1":
@@ -257,26 +230,6 @@ def main(argv=None):
     try:
         registry = tier_registry.load_registry()
         served_ids = _read_served_ids(Path.home() / ".local/share/litellm/config.yaml")
-        if args.codex_catalog:
-            output = Path.home() / ".codex/dotfiles-litellm-models.json"
-            content = (
-                json.dumps(generate_catalogue(served_ids), indent=2, sort_keys=True)
-                + "\n"
-            )
-            if args.dry_run:
-                logger.info(
-                    "Would write Codex LiteLLM catalogue for %d served models",
-                    len(served_ids),
-                )
-            else:
-                spec = importlib.util.spec_from_file_location(
-                    "generate_codex_catalogue",
-                    SCRIPT_DIR / "generate-codex-catalogue.py",
-                )
-                catalogue = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(catalogue)
-                catalogue.save_catalogue(output, content, replace=True)
-            return 0
         key = ""
         if args.api_key_source == "key-file":
             key = read_private_key(
