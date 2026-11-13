@@ -171,7 +171,9 @@ def _validate_owned_profile(path, entry):
     try:
         current = json.loads(path.read_text(encoding="utf-8"))
     except (ValueError, UnicodeDecodeError):
-        raise ValueError("existing profile is not a recognised managed profile") from None
+        raise ValueError(
+            "existing profile is not a recognised managed profile"
+        ) from None
     if not isinstance(current, dict) or any(
         current.get(key) != entry[key]
         for key in (
@@ -181,8 +183,6 @@ def _validate_owned_profile(path, entry):
         )
     ):
         raise ValueError("existing profile is not a recognised managed profile")
-
-
 
 
 def _merge_app_owned_fields(path, generated):
