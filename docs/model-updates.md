@@ -4,6 +4,16 @@
 
 Use this playbook when adding or changing models, switching tiers, or updating provider configuration. Keep the source JSON, tier behavior, documentation, and generated configuration aligned.
 
+## 13 November 2026: Inkling 2 Small — Ollama Cloud candidate
+
+The curated Ollama Cloud catalogue now includes `inkling-2-small` ([Ollama model page](https://ollama.com/library/inkling-2-small)); the optional Junie `ollama-cloud-inkling` group selects the exact direct `https://ollama.com/v1` model ID. A local daemon's `inkling-2-small:cloud` stub is **not** the direct cloud wire ID. Junie can derive a `litellm-ollama-cloud-inkling` twin, but the generator must omit it unless the exact `ollama-cloud/inkling-2-small` alias appears in the authenticated LiteLLM catalogue. The group does not invent a `fasterModel`.
+
+Ollama advertises image input, tool use, thinking and up to 1M tokens of context. Its published rates on 13 November 2026 are $0.30 input, $0.03 cached input and $1.00 output per million tokens ([pricing](https://ollama.com/pricing)); these are vendor rates, not account-specific entitlement or live inference evidence. The model remains **opt-in and paid**: no OMO-Slim primary, council, fallback, strict-free route, Pi default or other Junie group changes.
+
+Other newly listed releases were reviewed but not indiscriminately copied into the cloud chat allowlist. `ripple-preview` and the 9B `mimo-v2.6` distillation are locally distributed candidates; specialized audio and decision models require a distinct consumer and protocol. Kimi K3.1 Pro, MiniMax M3.1 Flash, MiMo V2.6 Pro/Flash, Beam and Muse Spark Open are already curated. Local models should be evaluated through existing qualified Ollama/oMLX discovery rather than pinned into paid cloud routes from a generic library listing.
+
+**Acceptance before use:** verify the exact model is visible to the owner's credential, run a harmless direct Junie task and a separate LiteLLM-twin task (only when the gateway advertises its alias), then exercise tool calls, image input, latency, accounting and error/fallback behaviour. Retain UNKNOWN status without those receipts. Roll back by removing the optional Junie group and allowlist entry, then regenerate using the normal owner-controlled deployment path without modifying private credentials or user-owned profiles.
+
 ## 6 November 2026: Kimi K3.1 Pro replacement (paid Ollama Cloud)
 
 Ollama publishes `kimi-k3.1-pro` at https://ollama.com/library/kimi-k3.1-pro with a 1M-token context window, text/image input, tool calling and thinking. Published rates per million tokens are $2 input, $0.20 cached input and $10 output, versus Kimi K3 at $3, $0.30 and $15 respectively (https://ollama.com/pricing, 2026-11-06).
