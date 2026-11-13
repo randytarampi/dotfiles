@@ -54,6 +54,4 @@ def test_inkling_gateway_twin_requires_the_exact_qualified_alias():
     # request to a direct Ollama endpoint or silently choose a substitute.
     assert TWIN not in MODULE.filter_litellm_groups({TWIN: expected}, None)
     assert TWIN not in MODULE.filter_litellm_groups({TWIN: expected}, {MODEL})
-    assert MODULE.filter_litellm_groups({TWIN: expected}, {ALIAS}) == {
-        TWIN: expected
-    }
+    assert MODULE.filter_litellm_groups({TWIN: expected}, {ALIAS}) == {TWIN: expected}
