@@ -205,9 +205,11 @@ Its explicit observer is `google/gemini-3.8-flash`. The former Zen MiMo image fa
 
 Ollama Cloud budget preset using the approved Anthropic-to-Ollama Cloud cost-tier alignment:
 
+Both `pro` and `pro-plus` now select `deepseek-v4.1-flash` as the orchestrator at the existing `max` reasoning effort. This changes only their primary orchestration model: specialist assignments, council seats and orchestrator fallback chains remain unchanged. The promotion is a source configuration change, not evidence of installed-client capability or superior task outcomes.
+
 | Role | Model | Variant |
 |------|-------|---------|
-| orchestrator | `glm-5.3-flash` | max |
+| orchestrator | `deepseek-v4.1-flash` | max |
 | oracle | `kimi-k3.1-pro` | max |
 | librarian | `gemma4:31b` | low |
 | explorer | `gemma4:31b` | low |
@@ -224,7 +226,7 @@ Fallbacks are provider-deduplicated and retain one best alternative per role. Th
 
 | Role | Model | Variant |
 |------|-------|---------|
-| orchestrator | `glm-5.3-flash` | max |
+| orchestrator | `deepseek-v4.1-flash` | max |
 | oracle | `gpt-6.1-sol` | high |
 | librarian / explorer | `gpt-6-luna` | low |
 | designer | `gpt-6-luna` | medium |
