@@ -90,9 +90,7 @@ def _parse(event, tmp_path, **host):
     ],
 )
 def test_human_label_on_bot_authored_pr(tmp_path, label, expected):
-    assert (
-        _parse(_label_event(label), tmp_path, LABEL_EVENT_NAME=label) == expected
-    )
+    assert _parse(_label_event(label), tmp_path, LABEL_EVENT_NAME=label) == expected
 
 
 def test_external_pr_author_is_not_the_review_requester(tmp_path):
