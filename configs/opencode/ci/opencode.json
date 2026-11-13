@@ -43,7 +43,7 @@
           "name": "mimo-v2.5-free"
         }
       },
-      "package": "@opencode/ai/providers/openai-compatible",
+      "package": "aisdk:@ai-sdk/openai-compatible",
       "settings": {
         "baseURL": "https://opencode.ai/zen/v1"
       }
