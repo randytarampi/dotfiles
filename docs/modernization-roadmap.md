@@ -174,3 +174,17 @@ For the closed #213, the recorded disposable-home acceptance includes native wri
 ### Historical evidence preserved by Git
 
 Original September phase decisions and dated source observations remain recoverable in the history of this file; the retired 2026-11-05 Paseo follow-up plan remains available [at the inspected pre-consolidation revision](https://github.com/randytarampi/dotfiles/blob/edf24eb40a53ffd553a94805d300967f07b11e8e/docs/PASEO-FOLLOWUP-PLAN.md). Relevant contemporary guides are [orchestration.md](orchestration.md), [voice.md](voice.md), [omlx.md](omlx.md), [chat-frontend.md](chat-frontend.md), [litellm.md](litellm.md), [paseo-security.md](paseo-security.md) and [capability-matrix.md](capability-matrix.md). Do not reintroduce duplicated live tier tables, orchestration ranges or migration proposals into this summary.
+
+
+## 9. Cross-platform clean-host bootstrap programme (opened 2026-11-12)
+
+[Programme #270](https://github.com/randytarampi/dotfiles/issues/270) tracks bounded clean-machine acceptance separately from the existing local-services roadmap. Source-level deployment checks on the moving GitHub runners are not real OS/architecture, package-manager or installed-client proof.
+
+- [#271](https://github.com/randytarampi/dotfiles/issues/271): core deploy and optional Codex/Poetry dependency.
+- [#272](https://github.com/randytarampi/dotfiles/issues/272): Homebrew first-install path and Linux package eligibility.
+- [#273](https://github.com/randytarampi/dotfiles/issues/273): Ubuntu 24.04/26.04 amd64/arm64 smoke evidence.
+- [#274](https://github.com/randytarampi/dotfiles/issues/274): native Windows/macOS VM bootstrap and legacy support boundaries.
+- [#275](https://github.com/randytarampi/dotfiles/issues/275): headless/embedded and other-architecture qualification.
+- [#276](https://github.com/randytarampi/dotfiles/issues/276): evidence-based CI/DX optimisation, coordinated with governance #267 and nightly #212.
+
+The authoritative acceptance contract and phase-level deviations are in [clean-bootstrap.md](clean-bootstrap.md). All six outcomes begin as **planned**, not host-verified. Record exact-head CI and owner-device receipts in each issue before promoting a platform's support claim or closing it. Preserve the stable `ci/required` aggregate during this tranche.
