@@ -321,9 +321,7 @@ def test_gate_requires_canonical_litellm_wire_and_maps_env_key_reference(
         return 200, {}, b'{"text": "synthetic"}', None
 
     monkeypatch.setattr(guarded, "guarded_send", stub_guard)
-    monkeypatch.setattr(
-        route_probes, "_strictfree_wire_key_matches", lambda _key: True
-    )
+    monkeypatch.setattr(route_probes, "_strictfree_wire_key_matches", lambda _key: True)
     result = route_probes.probe_stt(
         "http://127.0.0.1:4000/v1",
         ALIAS,
