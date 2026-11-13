@@ -199,6 +199,7 @@ DEV_FORMULA_EXACT = {
     "php",
     "pipenv",
     "pipx",
+    "poetry",
     "pinentry",
     "pinentry-mac",
     "pkgconf",
