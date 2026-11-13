@@ -131,6 +131,23 @@ def _multipart(model, timeout):
     return _request, body, "multipart/form-data; boundary=" + boundary
 
 
+def _strictfree_wire_key_matches(key_value, *, scoped_path=None):
+    """Verify that the outgoing bearer is the same scoped key we admit."""
+    import secrets
+    from pathlib import Path
+    from strictfree_evidence import _read_private_file
+
+    if not isinstance(key_value, str) or not key_value:
+        return False
+    path = scoped_path or (
+        Path.home() / ".local/share/litellm/clients/opencode.key"
+    )
+    try:
+        return secrets.compare_digest(_read_private_file(path).strip(), key_value)
+    except (OSError, ValueError):
+        return False
+
+
 def probe_stt(base_url, model, key_reference, key_value=None, timeout=5):
     endpoint = base_url.rstrip("/") + "/audio/transcriptions"
     request, body, content_type = _multipart(model, timeout)
@@ -144,6 +161,7 @@ def probe_stt(base_url, model, key_reference, key_value=None, timeout=5):
         if (
             base_url.rstrip("/") != "http://127.0.0.1:4000/v1"
             or key_reference != "LITELLM_OPENCODE_KEY"
+            or not _strictfree_wire_key_matches(key_value)
         ):
             return _result(
                 "unavailable", model, endpoint, ("strict-free-unqualified-route",)
