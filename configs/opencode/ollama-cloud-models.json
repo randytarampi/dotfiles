@@ -62,6 +62,9 @@
     },
     "muse-spark-open": {
       "name": "muse-spark-open"
+    },
+    "inkling-2-small": {
+      "name": "inkling-2-small"
     }
   }
 }
