@@ -1,6 +1,7 @@
 """Strict-free guarded-send tests; all gateway metadata is synthetic."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, timezone
+from datetime import datetime
 import hashlib
 from urllib.parse import urlsplit
 
@@ -35,8 +36,6 @@ def fetch_factory(calls, *, active=True, models=None):
             return {
                 "data": [{"id": ALIAS, "litellm_params": {"model": "backend/model"}}]
             }
-        from datetime import datetime
-
         return {
             "key": hashlib.sha256("sk-synthetic-client-key".encode()).hexdigest(),
             "info": {
@@ -223,15 +222,17 @@ def test_trusted_evidence_is_admitted_before_one_send(tmp_path):
             now=NOW,
             send=send,
             trusted_evidence=evidence,
+            root=root,
         )
         == "sent"
     )
     assert calls == [route]
 
 
-def test_trusted_evidence_respects_privacy_boundary_without_send():
+def test_trusted_evidence_respects_privacy_boundary_without_send(tmp_path):
+    root, digest = private_tree(tmp_path, "sk-synthetic-client-key")
     route = admission.Route(
-        "litellm", ENDPOINT, ALIAS, "backend/model", "client-a", "a" * 64, "private"
+        "litellm", ENDPOINT, ALIAS, "backend/model", "client-a", digest, "private"
     )
     evidence = admission.Evidence(
         route,
@@ -259,5 +260,60 @@ def test_trusted_evidence_respects_privacy_boundary_without_send():
             now=NOW,
             send=lambda value: sends.append(value),
             trusted_evidence=evidence,
+            root=root,
         )
     assert sends == []
+
+
+def test_trusted_evidence_must_match_actual_private_key_bytes(tmp_path):
+    root, digest = private_tree(tmp_path, "sk-synthetic-client-key")
+    route = admission.Route(
+        "litellm", ENDPOINT, ALIAS, "backend/model",
+        "client-a", "a" * 64, "audio-probe",
+    )
+    evidence = admission.Evidence(
+        route, "owner_verified_account_record", "synthetic-record",
+        NOW, NOW + timedelta(minutes=1), "recurring_account_free",
+        "active", "0", 1, 1, False,
+    )
+    calls = []
+    with pytest.raises(guarded.StrictFreeDenied, match="route-or-credential-drift"):
+        guarded.guarded_send(
+            provider="litellm", model_alias=ALIAS, endpoint=ENDPOINT,
+            credential_identity="client-a", privacy_class="audio-probe",
+            privacy_classes={"audio-probe"}, tokens=1, now=NOW,
+            send=lambda value: calls.append(value), trusted_evidence=evidence,
+            root=root,
+        )
+    assert digest != route.credential_fingerprint
+    assert calls == []
+
+
+def test_gate_requires_canonical_litellm_wire_and_maps_env_key_reference(
+    monkeypatch,
+):
+    import route_probes
+
+    monkeypatch.setenv("DOTFILES_STRICTFREE_GATE", "1")
+    calls = []
+
+    def stub_guard(**kwargs):
+        calls.append(kwargs)
+        return 200, {}, b'{"text": "synthetic"}', None
+
+    monkeypatch.setattr(guarded, "guarded_send", stub_guard)
+    result = route_probes.probe_stt(
+        "http://127.0.0.1:4000/v1", ALIAS,
+        "LITELLM_OPENCODE_KEY", key_value="synthetic-not-sent",
+    )
+    assert result.status == "ok"
+    assert len(calls) == 1
+    assert calls[0]["credential_identity"] == "opencode"
+    calls.clear()
+    for base in ("https://evil.example/v1", "http://localhost:4000/v1"):
+        result = route_probes.probe_stt(
+            base, ALIAS, "LITELLM_OPENCODE_KEY", key_value="synthetic-not-sent"
+        )
+        assert result.status == "unavailable"
+        assert "strict-free-unqualified-route" in result.notes
+    assert calls == []
