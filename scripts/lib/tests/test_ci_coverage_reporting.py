@@ -65,9 +65,15 @@ def test_final_coveralls_publisher_does_not_gate_required_ci():
     assert "uses: coverallsapp/github-action@v2" in finaliser
 
     assert "name: ci/required" in required
-    assert "needs: [verify, deploy]" in required
-    assert "needs.verify.result" in required
-    assert "needs.deploy.result" in required
+    # Source/deployment AND the core smoke matrix all gate the same stable
+    # status; advisory coverage finalisation must never affect it.
+    assert "needs: [verify, deploy, bootstrap-smoke]" in required
+    for dependency in ("verify", "deploy", "bootstrap-smoke"):
+        assert f"needs.{dependency}.result" in required
     assert "needs.finish.result" not in required
     assert "FINISH_RESULT" not in required
-    assert 'for result in "$VERIFY_RESULT" "$DEPLOY_RESULT"; do' in required
+    assert (
+        'for result in "$VERIFY_RESULT" "$DEPLOY_RESULT" "$SMOKE_RESULT"; do'
+        in required
+    )
+    assert '"$result" != "success"' in required

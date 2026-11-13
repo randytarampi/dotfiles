@@ -4,6 +4,13 @@
 # Remove these path-scoped exceptions after an actionlint release fixes #669.
 # The workflows and their tests still require the real client-id input.
 paths:
+  # actionlint v1.7.12 predates GitHub-hosted ubuntu-26.04 / -arm.
+  # These are official GitHub labels; the actual 26.04 x64/ARM64 jobs ran
+  # successfully on #279 (CI 43318825914). Keep this exception path- and
+  # message-scoped: invalid runner labels must still fail elsewhere.
+  .github/workflows/ci.yml:
+    ignore:
+      - 'label "ubuntu-26\.04(-arm)?" is unknown'
   .github/workflows/refresh-model-catalogues.yml:
     ignore:
       - 'missing input "app-id" which is required by action "actions/create-github-app-token@v3"'

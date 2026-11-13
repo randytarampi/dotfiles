@@ -40,9 +40,35 @@ Preserve .chezmoi source paths and the stable `ci/required` status check; requir
 |---|---|---|---|
 | Core | optional Codex runtime, tests, docs | PR linked in #271; update after actual CI | NOT RUN on fresh physical host |
 | Homebrew | first-run fix, negative tests | PR linked in #272; Linux package policy deferred | NOT RUN on clean Linux package installation |
-| Linux | amd64/arm64 deterministic smoke | PR linked in #273 after runner qualification | NOT RUN |
+| Linux | amd64/arm64 deterministic smoke | Required four-runner native matrix, `bootstrap-smoke` and opt-in Docker reproduction in stacked PR (see #273); pending exact-head CI | NOT RUN on physical hosts |
 | Windows/macOS | reusable native bootstrap + VM | issue #274; not in initial source tranche | NOT RUN |
 | Embedded | read-only capability / real boards | issue #275; separate owner acceptance | NOT RUN |
 | CI policy | measured possible tiering | issue #276; **existing required full PR CI preserved** | No branch-rule changes |
 
 Update this ledger with actual PR references, head commits, deviations, reviews and exact results in the same delivery cycle; do not represent a pending CI job or merge as host acceptance.
+
+## Deviation discovered by initial native smoke (2026-11-12)
+
+The first #279 matrix reached both deployment passes but **failed** its no-service-control assertion on all four runners: disabled LiteLLM and Open WebUI chezmoi paths invoked `systemctl --user disable --now` and `daemon-reload` despite no managed unit files. [#280](https://github.com/randytarampi/dotfiles/issues/280) records the concrete failure. The third PR now includes a narrow, tested guard for absent Linux units and managed process paths. This dependent correction is deliberately inside the smoke PR rather than weakening its guard or duplicating an unreviewed service refactor. Existing installed-user service teardown must still be tested on the owner host; native ARM runner success alone is not that proof.
+
+## Runner-label linter provenance (2026-11-12)
+
+The third PR's four Ubuntu 24.04/26.04 x64/ARM64 native smoke jobs **all passed** on [CI run 43318825914](https://github.com/randytarampi/dotfiles/actions/runs/43318825914), but aggregate verification failed because pinned actionlint `1.7.12` (released before Ubuntu 26.04 runner GA) reports the official `ubuntu-26.04` and `ubuntu-26.04-arm` hosted labels as unknown. Rather than inventing a non-native ARM job or suppressing all runner validation, `.github/actionlint.yaml` has one exact path-scoped pattern covering **only** these two labels. The real CI job/OS/architecture identity is asserted independently in the smoke workflow. Remove this compatibility exception when the pinned actionlint release knows those hosted labels. This is a tooling-version accommodation, not a relaxation of `ci/required` or Linux smoke acceptance.
+
+## Static review remediation (2026-11-12)
+
+Qlty's first review of #279 raised Docker `DL3066` (non-numeric `USER`), `DL4006` (installer pipe without `pipefail`) and Bash `SC2016` (single-quoted embedded script). The Dockerfile now explicitly creates and selects UID/GID 10001 and sets Bash pipefail for subsequent RUN; the smoke now writes the inner verification script to its throwaway HOME so the parent HOME cannot expand accidentally and shellcheck can inspect it. There is no new privileged Docker flag, user-owned HOME mount, live service or network route. These corrections are not a claim that the optional Docker image has been built locally.
+
+## Second-pass self-review: unit-file provenance (2026-11-13)
+
+On re-entry, the first #280 guard proved only that a regular unit file existed, which was insufficient for user-owned state preservation: a foreign unit with the same basename could have been disabled/deleted. The guard now checks **both** the description and exact virtualenv executable path found in legacy repo-generated units, leaving an unrecognised regular file and symlink untouched with a warning. Tests exercise legacy-owned, foreign regular, symlinked and completely absent units. **Negative-case trade-off:** a user-modified managed unit with no recognisable signature is deliberately preserved and needs manual removal; this is safer than deleting an ambiguous user service. These tests do not replace real host service acceptance.
+
+## Final adversarial safety refinement (2026-11-13)
+
+The #279 template-backed service tests previously forwarded the developer's ambient environment, including any API/provider values, into a synthetic test subprocess. They now pass only a tiny explicit environment (HOME/USER/PATH/TRACE, disabled gates and NO_COLOR). The Linux core smoke's denied-command trace also covers `pkill`, closing an omission in the no-service-control check. This still does not enforce network isolation against arbitrary Python/Node HTTP clients; it rejects known package/network/service-management executables while the isolated `env -i` prevents inheriting operator credentials. The README links this plan and the `make bootstrap-smoke` target. These refinements require fresh exact-head CI after publication; historical green checks are not sufficient.
+
+## CodeRabbit adversarial correction (2026-11-13)
+
+CodeRabbit's current-head review of [PR #279](https://github.com/randytarampi/dotfiles/pull/279) exposed two real failure modes. A grep for a service description and executable pathname could accept **commented-out** or otherwise inactive systemd directives and delete a user-modified unit; and a nonzero `chezmoi diff` inside `[[ -n "$(cmd)" ]]` could silently yield a clean-drift result. The remediation uses one shared read-only systemd unit matcher, checking exactly one active `[Unit] Description` and one active `[Service] ExecStart` against the known generated command envelope (including numeric port), and only tears down matched units. The fixture now rejects commented directives, suffixed executable paths, wrong sections, duplicate directives, and unrelated commands even when the known binary also exists. The isolated smoke now fails on nonzero diff exit, and includes a non-root assertion and synthetic secret-canary check.
+
+The **no-egress claim remains unproven** by native command-stubbed smoke: no host firewall or process network namespace is installed. [#281](https://github.com/randytarampi/dotfiles/issues/281) owns a separate networkless Docker runtime acceptance (with an actual non-stubbed socket negative control). Until its evidence is verified, no publication should call the native smoke a general no-network sandbox. Optional Docker reproduction should be launched with `--network none`; build-time downloads remain outside that *runtime* guarantee. CI and owner-host checks must be distinguished in the issue ledger.

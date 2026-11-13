@@ -6,6 +6,7 @@ source "${LIB_DIR}/common.sh"
 source "${LIB_DIR}/env.sh"
 source "${LIB_DIR}/caddy_helpers.sh"
 source "${LIB_DIR}/openwebui_service.sh"
+source "${LIB_DIR}/systemd_managed_unit.sh"
 
 # Script hash triggers (re-run when Open WebUI reconciliation changes):
 # scripts/configure-openwebui.py: {{ include "scripts/configure-openwebui.py" | sha256sum }}
@@ -13,6 +14,7 @@ source "${LIB_DIR}/openwebui_service.sh"
 # scripts/lib/openwebui.py: {{ include "scripts/lib/openwebui.py" | sha256sum }}
 # scripts/lib/embedding_representation.py: {{ include "scripts/lib/embedding_representation.py" | sha256sum }}
 # scripts/lib/openwebui_service.sh: {{ include "scripts/lib/openwebui_service.sh" | sha256sum }}
+# scripts/lib/systemd_managed_unit.sh: {{ include "scripts/lib/systemd_managed_unit.sh" | sha256sum }}
 # scripts/lib/local_engines.py: {{ include "scripts/lib/local_engines.py" | sha256sum }}
 # scripts/lib/route_probes.py: {{ include "scripts/lib/route_probes.py" | sha256sum }}
 # scripts/lib/paseo_http.py: {{ include "scripts/lib/paseo_http.py" | sha256sum }}
@@ -57,15 +59,25 @@ if [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]]; then
   DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP=0 "$CONFIGURE_SCRIPT" --reconcile-terminal || warn "Failed to clear Open Terminal registration"
   PLIST_DIR="$(caddy_launch_agents_dir 2>/dev/null || printf '%s' "$HOME/Library/LaunchAgents")"
   PLIST_PATH="$PLIST_DIR/com.openwebui.web.plist"
+  managed_unit_owned=0
   if [[ "$OS_NAME" == "darwin" ]]; then
     launchctl bootout "$(openwebui_service_domain)/com.openwebui.web" 2>/dev/null || true
   else
-    systemctl --user disable --now open-webui.service 2>/dev/null || true
-    rm -f "$HOME/.config/systemd/user/open-webui.service"
-    systemctl --user daemon-reload 2>/dev/null || true
+    managed_unit="$HOME/.config/systemd/user/open-webui.service"
+    if dotfiles_managed_systemd_unit_matches "$managed_unit" openwebui "$HOME"; then
+      managed_unit_owned=1
+      systemctl --user disable --now open-webui.service 2>/dev/null || true
+      rm -f "$managed_unit"
+      systemctl --user daemon-reload 2>/dev/null || true
+    elif [[ -e "$managed_unit" || -L "$managed_unit" ]]; then
+      warn "Preserving unrecognised open-webui.service unit; review it manually"
+    fi
   fi
   rm -f "$PLIST_PATH"
-  pkill -f "$HOME/.local/share/openwebui/venv/bin/open-webui serve" 2>/dev/null || true
+  if [[ -x "$HOME/.local/share/openwebui/venv/bin/open-webui" ]] &&
+    { [[ "$OS_NAME" == "darwin" ]] || [[ "$managed_unit_owned" == "1" ]]; }; then
+    pkill -f "$HOME/.local/share/openwebui/venv/bin/open-webui serve" 2>/dev/null || true
+  fi
   if [[ "$OS_NAME" == "darwin" ]]; then
     launchctl bootout "$(openwebui_terminal_service_domain)/com.openwebui.terminal" 2>/dev/null || true
     rm -f "$HOME/Library/LaunchAgents/com.openwebui.terminal.plist"

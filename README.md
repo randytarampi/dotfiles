@@ -36,6 +36,7 @@ The Makefile assumes Bash and Unix utilities. Windows uses winget/PowerShell for
 | `make doctor` | Inspect deployed configuration/host drift |
 | `make verify` | Run the integrated validation suite (may require host tooling and services) |
 | `make ci-verify` | Run the CI-oriented verification subset |
+| `make bootstrap-smoke` | Deploy core Linux dotfiles twice in a disposable HOME, without optional package/service gates |
 | `make drift` / `make migrate-preview` | Inspect private environment drift and proposed gate migration |
 | `make check-hashes` / `make check-cli-contract` | Check deployment inputs and public script interfaces |
 
@@ -62,7 +63,7 @@ AI clients share policy and discovery inputs where supported, but each has its o
 
 | Task | Canonical guide |
 | --- | --- |
-| Install, upgrade or troubleshoot the host | [Installation](docs/install.md) and [orchestration](docs/orchestration.md) |
+| Install, upgrade or troubleshoot the host | [Installation](docs/install.md), [clean-host acceptance](docs/clean-bootstrap.md) and [orchestration](docs/orchestration.md) |
 | Add scripts, gates, MCP tools or skills | [Adding components](docs/adding.md) and [repository conventions](docs/conventions.md) |
 | Understand AI presets and model updates | [Tiers](docs/tiers.md), [model updates](docs/model-updates.md), [capability matrix](docs/capability-matrix.md) |
 | Configure OpenCode, Pi, Junie or other clients | [OpenCode](docs/opencode.md), [Pi](docs/pi.md), [Junie](docs/junie.md), [unmanaged clients](docs/unmanaged-clients.md) |
