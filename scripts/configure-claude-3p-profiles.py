@@ -146,30 +146,24 @@ def _atomic_write(path, content, *, backup=True, dry_run=False):
 
 
 def _read_served_ids(config_path):
-    """Read model names only from the local LiteLLM registry."""
+    """Return exact *served* LiteLLM model_name aliases, never backend IDs."""
     if config_path.is_symlink() or not config_path.is_file():
         raise ValueError("LiteLLM registry config is unavailable or unsafe")
     import yaml
 
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     rows = config.get("model_list") if isinstance(config, dict) else None
-    if not isinstance(rows, list):
+    if not isinstance(rows, list) or not rows:
         raise ValueError("LiteLLM registry has no model_list")
     result = set()
     for row in rows:
         if not isinstance(row, dict) or not isinstance(row.get("model_name"), str):
-            continue
-        params = row.get("litellm_params")
-        model = params.get("model") if isinstance(params, dict) else None
-        if not isinstance(model, str):
-            continue
-        result.add(
-            model.removeprefix("ollama/")
-            if model.startswith("ollama/")
-            else row["model_name"]
-        )
+            raise ValueError("LiteLLM registry contains invalid model row")
+        alias = row["model_name"]
+        if not alias or alias != alias.strip():
+            raise ValueError("LiteLLM registry contains an unsafe model alias")
+        result.add(alias)
     return result
-
 
 def generate_catalogue(served_ids):
     return {
