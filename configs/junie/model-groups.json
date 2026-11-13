@@ -196,6 +196,10 @@
       "fasterModel": "kimi-k2.7-code",
       "fasterProvider": "ollama-cloud"
     },
+    "ollama-cloud-inkling": {
+      "provider": "ollama-cloud",
+      "primaryModel": "inkling-2-small"
+    },
     "groq-gpt-oss": {
       "provider": "groq",
       "primaryModel": "openai/gpt-oss-120b",
