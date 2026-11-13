@@ -352,6 +352,11 @@ jobs:
               "mode": "primary",
               "permission": {"edit": "deny", "bash": "deny", "task": "deny"},
           }
+          # The native GitHub CLI installed by the pinned action has been
+          # observed running as build despite AGENT=plan. V1 merges global
+          # permission rules into both agents. Fail closed even on fallback.
+          config["default_agent"] = "plan"
+          config["permission"] = {"edit": "deny", "bash": "deny", "task": "deny"}
 
           options = {
               "groq": ("openai/gpt-oss-120b", "https://api.groq.com/openai/v1", "GROQ_API_KEY", "HAS_GROQ_KEY"),
