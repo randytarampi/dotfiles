@@ -1,6 +1,7 @@
 """Isolate opt-in Ollama formula installation from desktop-app ownership."""
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -34,6 +35,9 @@ def run_preflight(tmp_path, system="Darwin", desktop_dev="false", cask=""):
         "PREFLIGHT": str(PREFLIGHT),
         "CASK_TEST": cask,
         "DESKTOP_DEV": desktop_dev,
+        # Hosts with /Applications/Ollama.app must not fail the hermetic
+        # cases; point the preflight at the isolated, empty mount root.
+        "OLLAMA_BREW_PREFLIGHT_APPLICATIONS_DIR": str(tmp_path / "apps"),
     }
     result = subprocess.run(
         [
@@ -47,6 +51,22 @@ def run_preflight(tmp_path, system="Darwin", desktop_dev="false", cask=""):
         check=False,
     )
     return result, home
+
+
+def test_absolute_applications_override_still_refuses_present_app(tmp_path):
+    apps = tmp_path / "apps"
+    apps.mkdir()
+    (apps / "Ollama.app").mkdir()
+    result, home = run_preflight(tmp_path)
+    assert result.returncode == 1, result.stderr
+    assert "Ollama.app exists" in result.stderr
+    # The HOME-relative path is honoured without the override directory.
+    shutil.rmtree(apps)
+    (home / "Applications").mkdir()
+    (home / "Applications" / "Ollama.app").mkdir()
+    result, _ = run_preflight(tmp_path)
+    assert result.returncode == 1, result.stderr
+    assert "Ollama.app exists" in result.stderr
 
 
 def test_headless_opt_in_passes_without_desktop_install(tmp_path):
