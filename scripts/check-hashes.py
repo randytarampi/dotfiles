@@ -53,6 +53,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/lib/strict_free_admission.py",  # Pure E1.0 review policy; not used by deployed generators
     "scripts/generate-codex-catalogue.py",  # Owner-only manual catalogue generator; never deployed automatically
     "scripts/configure-claude-3p-profiles.py",  # Explicit owner-run Claude-3p profile generator; no chezmoi deployment hook
+    "scripts/lib/strictfree_guarded_send.py",  # Opt-in STT route-probe pre-send guard; no chezmoi deployment input
     "scripts/lib/strict_free_executor.py",  # Synthetic test adapter only; no deployed request consumer
     "scripts/lib/strictfree_evidence.py",  # Read-only owner-only key-scope evidence library; not a deployed pre-send guard
     "scripts/litellm-oauth.py",  # Interactive one-time OAuth bootstrap; mutates ~/.config/litellm caches, not deployed config
