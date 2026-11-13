@@ -136,7 +136,7 @@ def test_native_opencode_uses_oidc_and_hardened_plan_agent():
     assert "pull_request_review_comment" not in opencode.split("    runs-on:", 1)[0]
     # Aggregate reviews must not require the rate-limited standalone Gemini
     # lane; explicit review-gemini remains available and fail-closed.
-    assert workflow.count('review-all" then "junie,copilot"') == 2
+    assert workflow.count('review-all" then "junie,copilot"') == 1
     assert 'review-gemini" then "gemini"' in workflow
     assert 'review-opencode" then ""' in workflow
     assert 'review-all" then "opencode,junie,gemini,copilot"' not in workflow
