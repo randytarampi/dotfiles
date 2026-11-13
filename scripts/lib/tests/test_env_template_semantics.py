@@ -10,7 +10,7 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # the 2026-11-09 reorder that returns the stranded global deployment/Phase 4
 # gate lines to the '== Deployment phases and service gates ==' block.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "b032de372e79566de6cfd8b772aaf6c6497cd44960988206e21b5104175fbf09"
+    "05674d43f77c2995b7517f33dec49382bdc978cab8d6945c12d2e4aabed6f8b9"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
