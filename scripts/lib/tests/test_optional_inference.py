@@ -329,7 +329,7 @@ def test_review_workflow_starts_local_router_only_for_qualified_free_pool():
     assert 'OPENCODE_DISABLE_PROJECT_CONFIG: "true"' in workflow
 
 
-def test_review_v2_provider_schema_is_consistent_for_all_routes(tmp_path):
+def test_review_v2_source_stays_canonical_with_v1_native_action_runtime_mirror(tmp_path):
     fixture = json.loads(
         (ROOT / "configs/opencode/ci/opencode.json").read_text(encoding="utf-8")
     )
@@ -351,9 +351,14 @@ def test_review_v2_provider_schema_is_consistent_for_all_routes(tmp_path):
         target.mkdir()
         result, config, output = _run_review_model_setup(target, **overrides)
         assert result.returncode == 0, result.stderr
-        assert "provider" not in config
         assert output["selected_provider"] == route
         entry = config["providers"][route]
         assert entry["package"] == "aisdk:@ai-sdk/openai-compatible"
         assert entry["settings"]["baseURL"].startswith("http")
         assert "npm" not in entry and "options" not in entry
+        # The native GitHub action still installs v1.19.5 and reads only
+        # provider/npm/options. Keep this compatibility mirror runtime-only.
+        legacy = config["provider"][route]
+        assert legacy["npm"] == "@ai-sdk/openai-compatible"
+        assert legacy["options"] == entry["settings"]
+        assert legacy["models"] == entry["models"]
