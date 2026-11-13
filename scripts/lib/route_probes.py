@@ -6,6 +6,7 @@ import io
 import http.client
 import json
 import math
+import os
 import urllib.parse
 import urllib.request
 import urllib.error
@@ -133,7 +134,38 @@ def _multipart(model, timeout):
 def probe_stt(base_url, model, key_reference, key_value=None, timeout=5):
     endpoint = base_url.rstrip("/") + "/audio/transcriptions"
     request, body, content_type = _multipart(model, timeout)
-    code, _, data, _ = request(endpoint, body, key_value, timeout, content_type)
+    if os.environ.get("DOTFILES_STRICTFREE_GATE", "0") == "1":
+        from strict_free_executor import StrictFreeDenied
+        from strictfree_guarded_send import guarded_send
+
+        # This producer passes an environment variable name, while the B2
+        # collector uses the client key-file stem. Bind the known wire route
+        # explicitly; fail closed for any other STT endpoint or credential.
+        if (
+            base_url.rstrip("/") != "http://127.0.0.1:4000/v1"
+            or key_reference != "LITELLM_OPENCODE_KEY"
+        ):
+            return _result(
+                "unavailable", model, endpoint, ("strict-free-unqualified-route",)
+            )
+        try:
+            code, _, data, _ = guarded_send(
+                provider="litellm",
+                model_alias=model,
+                endpoint="http://127.0.0.1:4000",
+                credential_identity="opencode",
+                privacy_class="audio-probe",
+                privacy_classes={"audio-probe"},
+                tokens=1,
+                now=datetime.now(timezone.utc),
+                send=lambda _route: request(
+                    endpoint, body, key_value, timeout, content_type
+                ),
+            )
+        except StrictFreeDenied as error:
+            return _result("unavailable", model, endpoint, (str(error),))
+    else:
+        code, _, data, _ = request(endpoint, body, key_value, timeout, content_type)
     failed = _status_result(code, model, endpoint)
     if failed:
         return failed
