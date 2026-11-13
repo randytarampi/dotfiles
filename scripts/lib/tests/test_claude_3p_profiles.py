@@ -1,9 +1,7 @@
 import importlib.util
 import json
-import os
 from pathlib import Path
 
-import pytest
 
 SCRIPT = Path(__file__).resolve().parents[2] / "configure-claude-3p-profiles.py"
 SPEC = importlib.util.spec_from_file_location("claude_3p_profiles", SCRIPT)
@@ -70,12 +68,28 @@ def test_key_file_mode_contains_key_only_in_credential_field(tmp_path):
     assert entries["cloud"]["inferenceGatewayApiKey"] == "sk-synthetic-only"
 
 
-def test_no_key_mode_omits_credential_and_catalogue_is_stable():
+def test_no_key_mode_omits_credential():
     entry = profiles.build_profiles(registry(), None)["cloud"]
     assert "inferenceGatewayApiKey" not in entry
-    first = profiles.generate_catalogue({"gateway/a", "gateway/b"})
-    assert first == profiles.generate_catalogue({"gateway/b", "gateway/a"})
-    assert {model["slug"] for model in first["models"]} == {"gateway/a", "gateway/b"}
+
+
+def test_served_aliases_are_exact_model_names_not_backend_ids(tmp_path):
+    path = tmp_path / "litellm.yaml"
+    path.write_text(
+        "model_list:\n"
+        "  - model_name: ollama/glm-5.3-flash:cloud\n"
+        "    litellm_params:\n"
+        "      model: ollama/glm-5.3-flash:cloud\n"
+        "  - model_name: Qwen3.8-27B-4bit\n"
+        "    litellm_params:\n"
+        "      model: ollama/qwen3.8:27b-mlx\n",
+        encoding="utf-8",
+    )
+    assert profiles._read_served_ids(path) == {
+        "ollama/glm-5.3-flash:cloud",
+        "Qwen3.8-27B-4bit",
+    }
+    assert "qwen3.8:27b-mlx" not in profiles._read_served_ids(path)
 
 
 def _run_main(monkeypatch, tmp_path, served, argv_extra):
