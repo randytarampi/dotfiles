@@ -79,17 +79,17 @@ Catalogue `MATCH` means only that an exact model ID appeared in the authenticate
 
 ## 2026-09-01: Anthropic/Ollama Cloud Equivalence Alignment
 
-The approved cost-tier alignment maps Anthropic model families to Ollama Cloud IDs (OpenCode convention, without the local proxy's `:cloud` suffix):
+The original cost-tier alignment mapped Anthropic model families to Ollama Cloud IDs (OpenCode convention, without the local proxy's `:cloud` suffix). This table is historical context; current role assignments are defined in `configs/opencode/oh-my-opencode-slim.json` and [tiers.md](tiers.md):
 
 | Anthropic | Ollama Cloud | Use |
 |-----------|--------------|-----|
 | `claude-fable-5-1` | `kimi-k3` | Oracle |
 | `claude-opus-5` | `glm-5.3` | Council |
-| `claude-sonnet-5` | `glm-5.3-flash` | Orchestrator |
+| `claude-sonnet-5` | `glm-5.3-flash` | Former orchestrator; now `pro` designer |
 | `claude-haiku-4.5` | `gemma4:31b` | Librarian, explorer, fixer |
 | `claude-sonnet-4.6` | `deepseek-v4.1-flash` | Utility |
 
-The `pro` tier now uses `glm-5.3-flash` for orchestrator and designer, `kimi-k3` for oracle, `gemma4:31b` for librarian/explorer, `deepseek-v4.1-flash` for fixer, and `glm-5.3` for council synthesis. This is cost-tier alignment, not proven capability parity. GLM-5.3-Flash and Gemma4 benchmark claims are vendor-reported. The pricing basis used was OpenRouter per-million-token pricing: GLM-5.3 `$1.40/$4.40`, Kimi K3 `$3/$15`, GLM-5.3-Flash `$0.075/$0.25`, and DeepSeek V4 Flash approximately `$0.05/$0.10`, compared with Opus 5 at `$5/$25` (input/output).
+As of 2026-11-13, both `pro` and `pro-plus` select Ollama Cloud `deepseek-v4.1-flash` as orchestrator with the existing `max` variant. `pro` retains `glm-5.3-flash` for design, `kimi-k3.1-pro` for oracle and council gamma, `gemma4:31b` for librarian/explorer/observer, `kimi-k2.7-code` for fixer and `glm-5.3` for council synthesis. `pro-plus` retains Sol as oracle, Luna for utility/design roles and GLM-5.3 for council synthesis. Their orchestrator fallbacks remain `glm-5.3` for `pro` and Sol for `pro-plus`. The switch is not authenticated runtime, tool-call, quality or billing evidence. The historical alignment rates above are not current Ollama Cloud prices; verify current provider rates before paid requests.
 
 ## Drift check & sync reminder
 
