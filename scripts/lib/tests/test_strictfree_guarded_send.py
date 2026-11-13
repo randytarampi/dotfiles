@@ -321,6 +321,9 @@ def test_gate_requires_canonical_litellm_wire_and_maps_env_key_reference(
         return 200, {}, b'{"text": "synthetic"}', None
 
     monkeypatch.setattr(guarded, "guarded_send", stub_guard)
+    monkeypatch.setattr(
+        route_probes, "_strictfree_wire_key_matches", lambda _key: True
+    )
     result = route_probes.probe_stt(
         "http://127.0.0.1:4000/v1",
         ALIAS,
@@ -338,3 +341,28 @@ def test_gate_requires_canonical_litellm_wire_and_maps_env_key_reference(
         assert result.status == "unavailable"
         assert "strict-free-unqualified-route" in result.notes
     assert calls == []
+
+
+def test_wire_bearer_must_match_the_private_scoped_key(tmp_path):
+    import route_probes
+
+    key = tmp_path / "opencode.key"
+    key.write_text("sk-synthetic-good\n", encoding="utf-8")
+    key.chmod(0o600)
+    assert route_probes._strictfree_wire_key_matches(
+        "sk-synthetic-good", scoped_path=key
+    )
+    assert not route_probes._strictfree_wire_key_matches(
+        "sk-synthetic-other", scoped_path=key
+    )
+    assert not route_probes._strictfree_wire_key_matches(None, scoped_path=key)
+    key.chmod(0o644)
+    assert not route_probes._strictfree_wire_key_matches(
+        "sk-synthetic-good", scoped_path=key
+    )
+    key.chmod(0o600)
+    alias = tmp_path / "alias.key"
+    alias.symlink_to(key)
+    assert not route_probes._strictfree_wire_key_matches(
+        "sk-synthetic-good", scoped_path=alias
+    )
