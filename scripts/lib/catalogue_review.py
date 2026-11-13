@@ -292,7 +292,7 @@ def render_pr_body(current: dict, previous: dict | None = None) -> str:
         + _bullets(price_changed)
         + "\n## Contributors and roles\n\n"
         "- **Implementation and other material contributions:** "
-        "Woofdy GitHub App — published and committed the candidate report. "
+        "Woofbot GitHub App — published and committed the candidate report. "
         "The separate read-only refresh job fetched model and pricing evidence. "
         "The generator implementation is reviewed in its source-code PR.\n"
         "- **Review:** None yet; this draft is not an approval.\n\n"
