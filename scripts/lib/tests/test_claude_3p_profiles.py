@@ -3,7 +3,6 @@ import importlib.util
 import json
 from pathlib import Path
 
-
 SCRIPT = Path(__file__).resolve().parents[2] / "configure-claude-3p-profiles.py"
 SPEC = importlib.util.spec_from_file_location("claude_3p_profiles", SCRIPT)
 profiles = importlib.util.module_from_spec(SPEC)
@@ -156,7 +155,6 @@ def test_index_update_registers_unique_ids(tmp_path):
         if entry["name"].startswith("LiteLLM-")
     }
     assert len(ids) == len(names) - 1 and all(len(item) == 36 for item in ids)
-
 
 
 def test_existing_foreign_profile_is_never_overwritten(tmp_path):
