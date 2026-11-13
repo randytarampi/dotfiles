@@ -81,6 +81,8 @@ Project configuration values select the tier, skills, MCPs, ACP agents, CodeGrap
 
 `make bootstrap-smoke` runs the actual deployment twice in a disposable HOME, checks chezmoi drift (including a failed diff command), and stubs known package-manager, download and service-control commands. It does **not** block all outbound network traffic (such as direct Python sockets); see [#281](https://github.com/randytarampi/dotfiles/issues/281) for network-contained acceptance. It requires bash, make, Python 3 and chezmoi **but not Poetry, Codex or credentials**. The required CI matrix uses explicit Ubuntu 24.04 and 26.04 runners on x64 and ARM64.
 
+A separate **required**, representative Ubuntu 24.04 x64 container check builds an unprivileged image from the committed checkout, then executes the same two-pass bootstrap with `docker run --network none`. Before deployment it verifies the absence of a default IPv4 route and attempts a direct, non-stubbed TCP socket connection to `1.1.1.1:443` that must fail with a network-unreachable error. Native version/architecture smoke remains independently required but is not itself a network sandbox.
+
 For optional, committed-tree-only Docker reproduction (avoid adding untracked credentials to the image context):
 
 ```bash
