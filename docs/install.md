@@ -35,6 +35,8 @@ The single source of truth for secrets and toggles is `~/.env` (or `$HOME\.env` 
 ### Step 3: Makefile + chezmoi Orchestration
 Initialize chezmoi, then use `make deploy` so `~/.env` is loaded in the same shell process as each chezmoi command:
 
+**Homebrew first install (macOS/Linux):** `DOTFILES_RUN_PACKAGES_SETUP=1` is an **explicit, mutating opt-in**. The package script resolves brew after installation (known Intel/Apple Silicon/Linux locations or `HOMEBREW_PREFIX`), fails on installer/shellenv errors and refuses to run any bundle without a real brew executable. Default `dev` includes platform-specific formulas; **Linux and ARM package-manifest completeness remains unqualified** ([#272](https://github.com/randytarampi/dotfiles/issues/272)). On minimal/headless machines keep the package gate disabled, install prerequisites with the OS package manager, and inspect selected manifests before opting in.
+
 **Headless Ollama (macOS/Linux):** `local_ai_headless` is a separate default-off Homebrew formula category and does not auto-start a daemon. Before opting in, see [Ollama package ownership and cutover](ollama-service.md); the macOS package lane refuses an installed Ollama.app or a simultaneously selected `desktop_dev` category.
 
 **Windows package manifest contract:** `wingetfile*` files contain one exact WinGet package ID per non-comment line, not WinGet JSON exports. The package setup gate installs them with `winget install --id <ID> --exact` rather than `winget import`. `DOTFILES_WINGETFILE_IGNORE` excludes exact comma-separated IDs. This installs/upgrades packages, not Windows Services or scheduled tasks. Windows-host WinGet behaviour remains a separate acceptance test.

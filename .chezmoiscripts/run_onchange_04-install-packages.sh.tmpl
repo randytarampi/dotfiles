@@ -48,6 +48,7 @@ fi
 # install-fonts.sh: {{ include "scripts/install-fonts.sh" | sha256sum }}
 # install-npm-brewfile-packages.sh: {{ include "scripts/install-npm-brewfile-packages.sh" | sha256sum }}
 # scripts/lib/ollama_brew_preflight.sh: {{ include "scripts/lib/ollama_brew_preflight.sh" | sha256sum }}
+# scripts/lib/homebrew_bootstrap.sh: {{ include "scripts/lib/homebrew_bootstrap.sh" | sha256sum }}
 {{- if eq .chezmoi.os "windows" }}
 # scripts/lib/winget_manifest.sh: {{ include "scripts/lib/winget_manifest.sh" | sha256sum }}
 # wingetfile hashes (triggers re-run when any wingetfile changes):
@@ -81,17 +82,10 @@ fi
 
 # --- Brew (macOS / Linux) ---
 if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
-  BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
-  BREW_BIN="${BREW_PREFIX}/bin/brew"
-
-  if ! command -v brew &>/dev/null; then
-    if [[ -x "${BREW_BIN}" ]]; then
-      eval "$("${BREW_BIN}" shellenv)"
-    else
-      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-      eval "$("${BREW_BIN}" shellenv)"
-    fi
-  fi
+  # Resolve *after* installation; a missing brew --prefix must not become
+  # /bin/brew. Stop on failed download/install/shellenv before any bundle.
+  source "${LIB_DIR}/homebrew_bootstrap.sh"
+  dotfiles_homebrew_ready || die "Homebrew prerequisite unavailable; refusing package reconciliation"
 
   # Trust third-party taps before running brew bundle
   for tap_name in $(grep -h '^tap "' "{{ .chezmoi.sourceDir }}"/Brewfile* 2>/dev/null | sed -E 's/^tap "([^"]+)".*/\1/'); do
