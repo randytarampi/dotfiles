@@ -24,8 +24,14 @@ from strictfree_evidence import (
 
 
 def build_route(
-    provider, model_alias, endpoint, credential_identity, privacy_class,
-    *, root=None, backend_id="unknown",
+    provider,
+    model_alias,
+    endpoint,
+    credential_identity,
+    privacy_class,
+    *,
+    root=None,
+    backend_id="unknown",
 ):
     """Bind a literal local-gateway route to the scoped client key bytes."""
     if (
@@ -103,8 +109,13 @@ def guarded_send(
             raise StrictFreeDenied("malformed-account-evidence")
         try:
             actual_route = build_route(
-                provider, model_alias, endpoint, credential_identity, privacy_class,
-                root=root, backend_id=route.backend_id,
+                provider,
+                model_alias,
+                endpoint,
+                credential_identity,
+                privacy_class,
+                root=root,
+                backend_id=route.backend_id,
             )
         except (OSError, ValueError):
             raise StrictFreeDenied("invalid-credential-binding") from None
@@ -161,7 +172,11 @@ def guarded_send(
         raise StrictFreeDenied("snapshot-not-account-qualified")
     try:
         route = build_route(
-            provider, model_alias, endpoint, credential_identity, privacy_class,
+            provider,
+            model_alias,
+            endpoint,
+            credential_identity,
+            privacy_class,
             root=root,
         )
     except (OSError, ValueError):
