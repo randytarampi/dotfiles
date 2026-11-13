@@ -4,7 +4,7 @@
   "presets": {
     "pro": {
       "orchestrator": {
-        "model": "ollama-cloud/glm-5.3-flash",
+        "model": "ollama-cloud/deepseek-v4.1-flash",
         "variant": "max",
         "skills": [
           "*"
@@ -69,7 +69,7 @@
     },
     "pro-plus": {
       "orchestrator": {
-        "model": "ollama-cloud/glm-5.3-flash",
+        "model": "ollama-cloud/deepseek-v4.1-flash",
         "variant": "max",
         "skills": [
           "*"
