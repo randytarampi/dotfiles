@@ -218,6 +218,7 @@ def _read_served_ids(config_path):
         result.add(alias)
     return result
 
+
 def _local_category_models(registry, preset):
     """Resolve local role categories through the shared tier classifier."""
     from discover_models import list_local_ollama_models
