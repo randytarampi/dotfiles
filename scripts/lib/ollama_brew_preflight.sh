@@ -15,7 +15,8 @@ ollama_brew_package_preflight() {
     return 1
   fi
 
-  if [[ -d "/Applications/Ollama.app" || -d "$HOME/Applications/Ollama.app" ]]; then
+  local applications_dir="${OLLAMA_BREW_PREFLIGHT_APPLICATIONS_DIR:-/Applications}"
+  if [[ -d "$applications_dir/Ollama.app" || -d "$HOME/Applications/Ollama.app" ]]; then
     printf '%s\n' "Refusing headless Ollama formula: Ollama.app exists; migrate explicitly first" >&2
     return 1
   fi
