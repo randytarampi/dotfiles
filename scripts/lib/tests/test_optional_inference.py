@@ -335,7 +335,7 @@ def test_review_v2_provider_schema_is_consistent_for_all_routes(tmp_path):
     )
     assert "provider" not in fixture
     assert fixture["providers"]["opencode"]["package"] == (
-        "@opencode/ai/providers/openai-compatible"
+        "aisdk:@ai-sdk/openai-compatible"
     )
     for provider in fixture["providers"].values():
         assert "npm" not in provider and "options" not in provider
@@ -354,6 +354,6 @@ def test_review_v2_provider_schema_is_consistent_for_all_routes(tmp_path):
         assert "provider" not in config
         assert output["selected_provider"] == route
         entry = config["providers"][route]
-        assert entry["package"] == "@opencode/ai/providers/openai-compatible"
+        assert entry["package"] == "aisdk:@ai-sdk/openai-compatible"
         assert entry["settings"]["baseURL"].startswith("http")
         assert "npm" not in entry and "options" not in entry
