@@ -14,6 +14,28 @@ def load(path):
     return json.loads((ROOT / path).read_text(encoding="utf-8"))
 
 
+def test_paid_cloud_orchestration_promotes_deepseek_without_changing_specialists():
+    slim = load("configs/opencode/oh-my-opencode-slim.json")
+    candidate = "ollama-cloud/deepseek-v4.1-flash"
+    allowlist = load("configs/opencode/ollama-cloud-models.json")["models"]
+    assert "deepseek-v4.1-flash" in allowlist
+    for tier in ("pro", "pro-plus"):
+        orchestrator = slim["presets"][tier]["orchestrator"]
+        assert orchestrator["model"] == candidate
+        assert orchestrator["variant"] == "max"
+        assert candidate not in slim["_tiers"][tier]["fallback"]["orchestrator"]
+        council = slim["council"]["presets"][tier]
+        nested_council = slim["_tiers"][tier]["council"]["presets"][tier]
+        assert council["alpha"]["model"] == candidate
+        assert nested_council["alpha"]["model"] == candidate
+    assert slim["presets"]["pro"]["designer"]["model"] == "ollama-cloud/glm-5.3-flash"
+    assert slim["presets"]["pro-plus"]["designer"]["model"] == "openai/gpt-6-luna"
+    assert slim["_tiers"]["pro"]["fallback"]["orchestrator"] == ["ollama-cloud/glm-5.3"]
+    assert slim["_tiers"]["pro-plus"]["fallback"]["orchestrator"] == [
+        "openai/gpt-6.1-sol"
+    ]
+
+
 def test_terra_and_upstream_translations():
     slim = load("configs/opencode/oh-my-opencode-slim.json")
     p = slim["presets"]
