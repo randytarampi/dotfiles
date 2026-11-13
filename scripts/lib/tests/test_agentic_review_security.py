@@ -155,10 +155,8 @@ def test_ci_opencode_custom_provider_packages_match_v2_contract():
     """V2 accepts aisdk: AI SDK locators; the legacy internal path hides models."""
     config = json.loads(read("configs/opencode/ci/opencode.json"))
     workflow = read(".github/workflows/agentic-review.yml")
-    assert (
-        config["providers"]["opencode"]["package"]
-        == "aisdk:@ai-sdk/openai-compatible"
-    )
+    package = config["providers"]["opencode"]["package"]
+    assert package == "aisdk:@ai-sdk/openai-compatible"
     assert workflow.count('"package": "aisdk:@ai-sdk/openai-compatible"') == 2
     assert "@opencode/ai/providers/openai-compatible" not in workflow
 
