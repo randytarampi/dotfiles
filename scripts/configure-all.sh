@@ -460,14 +460,25 @@ else
 fi
 
 # 3.6. Configure Codex CLI provider (must run after MCP config which also writes to config.toml)
+# An empty host should not need Poetry solely for an absent, unrequested client.
+# Keep the legacy managed profile and the explicit gateway opt-in observable:
+# installed Codex, an existing config.toml, or DOTFILES_RUN_CODEX_SETUP=1
+# still requires the locked runtime (and fails before mutation when absent).
+codex_configuration_requested() {
+  [[ "${DOTFILES_RUN_CODEX_SETUP:-0}" == "1" ]] ||
+    command -v codex >/dev/null 2>&1 ||
+    [[ -f "${CODEX_HOME:-$HOME/.codex}/config.toml" ]]
+}
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Codex configuration (dry-run mode)"
-elif ! step_skipped codex; then
+elif step_skipped codex; then
+  info "Skipping Codex configuration (--skip codex)"
+elif codex_configuration_requested; then
   info "Configuring Codex CLI provider..."
   require_codex_runtime "$DOTFILES_DIR"
   run_step "Codex configuration" poetry --directory "$DOTFILES_DIR" run python "$SCRIPT_DIR/configure-codex.py"
 else
-  info "Skipping Codex configuration"
+  info "Codex CLI absent, no profile or explicit setup gate — skipping Codex configuration (Poetry not required)"
 fi
 
 # 4. Mozart router

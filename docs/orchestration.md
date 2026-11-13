@@ -96,7 +96,7 @@ sequenceDiagram
     Configure->>Configure: configure-mcps.py (MCP)
     Configure->>Configure: configure-opencode.py (tier, models)
     Configure->>Configure: configure-meridian.py (plugin injection + SDK features)
-    Configure->>Configure: configure-codex.py (Codex provider config)
+    Configure->>Configure: configure-codex.py (only if CLI, profile, or explicit gate exists)
     Configure->>Configure: configure-mozart-router.py
     Configure->>Configure: configure-agent-guidance.py
     Configure->>Configure: codegraph install
@@ -105,6 +105,10 @@ sequenceDiagram
     Configure->>Configure: configure-paseo-web.py (read-only inspection; owner-only apply)
     Configure->>Configure: configure-caddy.py (opt-in)
 ```
+
+### Optional Codex configuration and the core bootstrap boundary
+
+`configure-all.sh` configures Codex only when `codex` is on PATH, `CODEX_HOME/config.toml` (default `~/.codex/config.toml`) already exists, or `DOTFILES_RUN_CODEX_SETUP=1`. An empty home with no installed Codex skips this generator, avoiding a mandatory Poetry dependency during initial core deployment. Selected clients still require the locked Poetry interpreter and TOML parser, and missing prerequisites fail before the generator touches user-owned configuration. This eligibility check does not replace the separate, narrowly scoped LiteLLM gateway setup gate in `configure-codex.py`.
 
 ### Executed orchestration checks
 
