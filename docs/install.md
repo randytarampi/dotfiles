@@ -41,7 +41,27 @@ Initialize chezmoi, then use `make deploy` so `~/.env` is loaded in the same she
 
 **Windows package manifest contract:** `wingetfile*` files contain one exact WinGet package ID per non-comment line, not WinGet JSON exports. The package setup gate installs them with `winget install --id <ID> --exact` rather than `winget import`. `DOTFILES_WINGETFILE_IGNORE` excludes exact comma-separated IDs. This installs/upgrades packages, not Windows Services or scheduled tasks. Windows-host WinGet behaviour remains a separate acceptance test.
 
-**Windows qualification:** The Makefile invokes Bash and Unix utilities. Winget/PowerShell can bootstrap packages, but Makefile targets require a prepared POSIX-compatible environment (such as Git Bash or WSL with appropriate paths, Make and the required CLI tools). Native PowerShell alone is not a proven deployment or verification path. Validate the installed host rather than assuming cross-shell parity.
+**Windows qualification:** The Makefile invokes Bash and Unix utilities. Winget/PowerShell can bootstrap packages, but Makefile targets require a prepared POSIX-compatible environment. **Git Bash on Windows is the currently CI-tested path; WSL2 is a separate Linux-host workflow and PowerShell-only deployment is NOT qualified.** Required CI installs chezmoi **v2.72.2** from the official installer rather than relying on an older WinGet/Chocolatey version, then configures its `.sh` interpreter before the two deployments. Real Windows 11 x64/ARM64 fresh-VM first-install evidence is still [#274](https://github.com/randytarampi/dotfiles/issues/274).
+
+**Preview-first Windows/Git Bash interpreter helper (no package or service changes):**
+
+```bash
+# Run from the repository checkout in Git Bash, after installing make and chezmoi.
+bash scripts/bootstrap/windows-chezmoi-interpreter.sh --print
+mkdir -p "$HOME/.config/chezmoi"
+bash scripts/bootstrap/windows-chezmoi-interpreter.sh --write "$HOME/.config/chezmoi/interpreters.toml"
+bash scripts/bootstrap/windows-chezmoi-interpreter.sh --check "$HOME/.config/chezmoi/interpreters.toml"
+
+# Use the explicit config for first initialization; keep the same config
+# for subsequent deploys. These examples assume no spaces in its file path.
+cz_config="$(cygpath -m "$HOME/.config/chezmoi/interpreters.toml")"
+chezmoi --config "$cz_config" init --source "$PWD"
+CHEZMOI="chezmoi --config $cz_config" make deploy
+```
+
+The helper derives the native `bash.exe` location using `cygpath`, validates TOML literal-string safety, previews without writing, refuses to overwrite an existing config (or any symlink) by default, and writes a mode-600 file atomically when explicitly requested. The `--force` override replaces only an existing regular file. **A Windows profile path containing spaces is not yet verified with Makefile's multi-word `CHEZMOI` override**; don't present this recipe as universally safe, or mutate a user's existing chezmoi configuration to work around it. The current GitHub runner path is known-good, not proof of a fresh Windows VM.
+
+**macOS qualification:** CI uses floating `macos-latest` with Homebrew prerequisites; this is not an OS-version/CPU support guarantee. macOS 10.15–14 remains **legacy core-only, best-effort**, not a claim that current Brewfiles, GUI tools or local AI work. Explicit release/CPU/fresh-account receipts on Intel and Apple Silicon remain part of [#274](https://github.com/randytarampi/dotfiles/issues/274).
 
 The Codex configuration step in `make deploy` requires Poetry and this repository's locked production Python dependencies **when Codex is installed, an existing `~/.codex/config.toml` (or `CODEX_HOME/config.toml`) is present, or `DOTFILES_RUN_CODEX_SETUP=1`**. If all three are absent, the Codex step is skipped and a core deployment does not require Poetry for Codex. If Codex configuration is selected, install Poetry with your platform package manager or its official installer, then run `poetry install --only main --no-root` from the checkout. Missing Poetry/TOML dependencies stop the selected Codex step rather than silently downgrading. `make configure` has the same rule; use `bash scripts/configure-all.sh --skip codex` only when deliberately excluding Codex. An installed Codex CLI is not itself proof that provider inference is configured or authenticated.
 
@@ -53,13 +73,12 @@ The staged cross-platform clean-host qualification plan is in [Clean bootstrap a
   chezmoi init --source ~/Development/dotfiles
   make deploy
   ```
-- **Windows (PowerShell 7):**
+- **Windows (PowerShell 7 for prerequisite inspection, then Git Bash for `make deploy`):**
   ```powershell
-  if (-not (Get-Command chezmoi -ErrorAction SilentlyContinue)) {
-      winget install twpayne.chezmoi
-  }
-  chezmoi init --source "$HOME\Development\dotfiles"
-  make deploy
+  Get-Command git, winget, make, chezmoi -ErrorAction SilentlyContinue
+  # Confirm chezmoi --version meets minimumVersion 2.70.2; CI uses v2.72.2.
+  # Install missing prerequisites deliberately. Run the Git Bash helper above
+  # before deployment; do not run make deploy from plain PowerShell.
   ```
 
 On first setup, run `make deploy` twice. The second pass should be a no-op, but it helps surface any idempotency gaps in the templates, scripts, or configure generators.
