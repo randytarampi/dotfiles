@@ -78,10 +78,10 @@ def test_publication_credentials_are_checked_before_app_token_creation():
         "      - name: Validate GitHub App publication credentials"
     ) < publish.index("      - id: publish_app_token")
     assert (
-        "HAS_APP_CLIENT_ID: ${{ vars.WOOFDY_GITHUB_APP_CLIENT_ID != '' }}" in preflight
+        "HAS_APP_CLIENT_ID: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID != '' }}" in preflight
     )
     assert (
-        "HAS_APP_PRIVATE_KEY: ${{ secrets.WOOFDY_GITHUB_APP_PRIVATE_KEY != '' }}"
+        "HAS_APP_PRIVATE_KEY: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY != '' }}"
         in preflight
     )
     assert (
@@ -89,8 +89,8 @@ def test_publication_credentials_are_checked_before_app_token_creation():
         in preflight
     )
     assert "docs/model-updates.md#publishing-credentials-and-recovery" in preflight
-    assert "client-id: ${{ vars.WOOFDY_GITHUB_APP_CLIENT_ID }}" in publish
-    assert "private-key: ${{ secrets.WOOFDY_GITHUB_APP_PRIVATE_KEY }}" in publish
+    assert "client-id: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID }}" in publish
+    assert "private-key: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY }}" in publish
     assert "app-id:" not in publish
     assert "secrets.APP_ID" not in publish
 
@@ -127,7 +127,7 @@ def test_publication_credentials_preflight_fails_closed_without_values():
             )
 
 
-def test_actionlint_woofdy_client_id_compatibility_is_scoped():
+def test_actionlint_woofbot_client_id_compatibility_is_scoped():
     import yaml
 
     config = yaml.safe_load(read(".github/actionlint.yaml"))
@@ -153,8 +153,8 @@ def test_actionlint_woofdy_client_id_compatibility_is_scoped():
     for path in allowed:
         assert paths[path]["ignore"] == known_false_positives
         workflow = read(path)
-        assert "client-id: ${{ vars.WOOFDY_GITHUB_APP_CLIENT_ID }}" in workflow
-        assert "private-key: ${{ secrets.WOOFDY_GITHUB_APP_PRIVATE_KEY }}" in workflow
+        assert "client-id: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID }}" in workflow
+        assert "private-key: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY }}" in workflow
         assert "app-id:" not in workflow
 
 
@@ -275,7 +275,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path, monkey
         1,
     )[1]
     start = publish.index('          publish_branch="model-catalogue-bot/inventory"')
-    end = publish.index('          bot_login="woofdy-randytarampi-ca[bot]"')
+    end = publish.index('          bot_login="woofbot-randytarampi-ca[bot]"')
     shell = "\n".join(
         line[10:]
         for line in publish[start:end].splitlines()
@@ -312,7 +312,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path, monkey
         ["git", "init", "-q", "-b", "master"], cwd=checkout, check=True, env=git_env
     )
     subprocess.run(
-        ["git", "config", "user.name", "woofdy-randytarampi-ca[bot]"],
+        ["git", "config", "user.name", "woofbot-randytarampi-ca[bot]"],
         cwd=checkout,
         check=True,
         env=git_env,
@@ -322,7 +322,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path, monkey
             "git",
             "config",
             "user.email",
-            "353209076+woofdy-randytarampi-ca[bot]@users.noreply.github.com",
+            "353209076+woofbot-randytarampi-ca[bot]@users.noreply.github.com",
         ],
         cwd=checkout,
         check=True,
@@ -376,7 +376,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path, monkey
     )
 
     # A contaminated calling environment must not silently forge the bot tip.
-    bot_email = "353209076+woofdy-randytarampi-ca[bot]@users.noreply.github.com"
+    bot_email = "353209076+woofbot-randytarampi-ca[bot]@users.noreply.github.com"
     tip_identity = subprocess.check_output(
         ["git", "show", "-s", "--format=%ae%n%ce", "HEAD"],
         cwd=checkout,
@@ -423,7 +423,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path, monkey
         "isDraft": True,
         "baseRefName": "main",
         "headRefName": "model-catalogue-bot/inventory",
-        "author": {"login": "woofdy-randytarampi-ca[bot]"},
+        "author": {"login": "woofbot-randytarampi-ca[bot]"},
     }
 
     report_dir = tmp_path / "model-catalogue"
@@ -463,7 +463,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path, monkey
                 "login": discovered["author"]["login"],
                 "id": (
                     353209076
-                    if discovered["author"]["login"] == "woofdy-randytarampi-ca[bot]"
+                    if discovered["author"]["login"] == "woofbot-randytarampi-ca[bot]"
                     else 123
                 ),
             },
@@ -509,11 +509,11 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path, monkey
             "ref": "model-catalogue-bot/inventory",
             "repo": {"full_name": "randytarampi/dotfiles"},
         },
-        "user": {"login": "woofdy-randytarampi-ca[bot]", "id": 353209076},
+        "user": {"login": "woofbot-randytarampi-ca[bot]", "id": 353209076},
     }
     # A GraphQL App login representation must not veto a canonical REST
-    # record validated against WOOFDY's numeric GitHub identity.
-    graphql_alias = {**valid, "author": {"login": "woofdy-randytarampi-ca"}}
+    # record validated against WOOFBOT's numeric GitHub identity.
+    graphql_alias = {**valid, "author": {"login": "woofbot-randytarampi-ca"}}
     assert "Catalogue unchanged" in evaluate(
         timestamp_only, [graphql_alias], rest_details=canonical_valid
     )
@@ -618,7 +618,7 @@ def test_publisher_checkout_has_full_history_for_three_dot_branch_guard():
     assert "origin/${DEFAULT_BRANCH}...${BOT_BRANCH_EXPECTED_TIP}" in publish
 
 
-def test_candidate_report_uses_template_and_woofdy_commit_identity():
+def test_candidate_report_uses_template_and_woofbot_commit_identity():
     workflow = WORKFLOW.read_text(encoding="utf-8")
     refresh, publish = workflow.split("  publish:\n", 1)
     assert "free-model-candidates.json" in refresh
@@ -643,7 +643,7 @@ def test_candidate_report_uses_template_and_woofdy_commit_identity():
     assert "free-model-review-sha256" in publish
     assert "scripts/lib/catalogue_review.py" in publish
     assert "Invalid trusted publishing SHA" in publish
-    assert 'bot_login="woofdy-randytarampi-ca[bot]"' in publish
+    assert 'bot_login="woofbot-randytarampi-ca[bot]"' in publish
     assert "353209076+${bot_login}@users.noreply.github.com" in publish
     assert 'git config user.name "${bot_login}"' in publish
     assert (

@@ -4,7 +4,7 @@ This opt-in integration covers GroqCloud, Mistral Studio, Cloudflare **Workers A
 
 ## Hosted catalogue review versus runtime qualification
 
-The weekly WOOFDY candidate report is intentionally **not** an automatic free-pool enrolment path. It observes only OpenCode Console today and labels Groq, Mistral, Cloudflare and NVIDIA NIM (among other configured providers) `not_assessed`; no optional provider keys are copied to the collector. The general `free` preset uses the separate dynamic, account-scoped evidence resolver from #119. A future provider-specific collector needs a bounded, authenticated listing, exact model IDs, cost and entitlement evidence and a private, reviewed credential boundary before it can be shown as observed. Even then, catalogues only nominate review candidates; provider terms, tool/image acceptance and strict-free request-time admission remain separate owner checks (#87).
+The weekly WOOFBOT candidate report is intentionally **not** an automatic free-pool enrolment path. It observes only OpenCode Console today and labels Groq, Mistral, Cloudflare and NVIDIA NIM (among other configured providers) `not_assessed`; no optional provider keys are copied to the collector. The general `free` preset uses the separate dynamic, account-scoped evidence resolver from #119. A future provider-specific collector needs a bounded, authenticated listing, exact model IDs, cost and entitlement evidence and a private, reviewed credential boundary before it can be shown as observed. Even then, catalogues only nominate review candidates; provider terms, tool/image acceptance and strict-free request-time admission remain separate owner checks (#87).
 
 ## Configure accounts and credentials
 

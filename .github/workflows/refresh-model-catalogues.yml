@@ -241,20 +241,20 @@ jobs:
 
       - name: Validate GitHub App publication credentials
         env:
-          HAS_APP_CLIENT_ID: ${{ vars.WOOFDY_GITHUB_APP_CLIENT_ID != '' }}
-          HAS_APP_PRIVATE_KEY: ${{ secrets.WOOFDY_GITHUB_APP_PRIVATE_KEY != '' }}
+          HAS_APP_CLIENT_ID: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID != '' }}
+          HAS_APP_PRIVATE_KEY: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY != '' }}
         run: |
           set -euo pipefail
           if [[ "${HAS_APP_CLIENT_ID}" != "true" || "${HAS_APP_PRIVATE_KEY}" != "true" ]]; then
-            echo "::error title=Missing GitHub App publication credentials::Configure WOOFDY_GITHUB_APP_CLIENT_ID as an Actions variable and WOOFDY_GITHUB_APP_PRIVATE_KEY as an environment secret for model-catalogue-publish. See docs/model-updates.md#publishing-credentials-and-recovery."
+            echo "::error title=Missing GitHub App publication credentials::Configure WOOFBOT_GITHUB_APP_CLIENT_ID as an Actions variable and WOOFBOT_GITHUB_APP_PRIVATE_KEY as an environment secret for model-catalogue-publish. See docs/model-updates.md#publishing-credentials-and-recovery."
             exit 1
           fi
 
       - id: publish_app_token
         uses: actions/create-github-app-token@v3
         with:
-          client-id: ${{ vars.WOOFDY_GITHUB_APP_CLIENT_ID }}
-          private-key: ${{ secrets.WOOFDY_GITHUB_APP_PRIVATE_KEY }}
+          client-id: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID }}
+          private-key: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
       - name: Publish the bot branch and create or update its draft PR
@@ -284,7 +284,7 @@ jobs:
             bot_subject="$(git show -s --format='%s' "${BOT_BRANCH_EXPECTED_TIP}")"
             # Historical #200 revision is a one-time, immutable exception.
             legacy_tip="6fbf14bfeec1222b0ae376b500e1888384a26e4d"
-            current_bot="353209076+woofdy-randytarampi-ca[bot]@users.noreply.github.com"
+            current_bot="353209076+woofbot-randytarampi-ca[bot]@users.noreply.github.com"
             current_subject="chore(agents): refresh free-model candidate inventory"
             if [[ "${BOT_BRANCH_EXPECTED_TIP}" != "${legacy_tip}" ]] &&
               [[ "${bot_email}:${bot_subject}" != "${current_bot}:${current_subject}" ]]; then
@@ -304,7 +304,7 @@ jobs:
             if ! jq -e --arg base "${DEFAULT_BRANCH}" \
               --arg head "${publish_branch}" \
               --arg repo "${GITHUB_REPOSITORY}" \
-              --arg author "woofdy-randytarampi-ca[bot]" \
+              --arg author "woofbot-randytarampi-ca[bot]" \
               --argjson author_id 353209076 \
               --argjson pr_number "${existing_pr}" \
               '(.number == $pr_number) and (.state == "open") and
@@ -321,7 +321,7 @@ jobs:
           # classification after main changes its OpenCode model registry.
           git fetch --no-tags origin "refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
           # Do not overwrite a human-modified branch merely because a PR
-          # was originally opened by Woofdy. Verify the fetched branch tip,
+          # was originally opened by Woofbot. Verify the fetched branch tip,
           # not just the open PR's author and last-known SHA.
           if [[ "${BOT_BRANCH_EXISTS}" == "true" ]]; then
             prior_paths="$(git diff --name-only "origin/${DEFAULT_BRANCH}...${BOT_BRANCH_EXPECTED_TIP}")"
@@ -340,7 +340,7 @@ jobs:
             fi
             legacy_tip="6fbf14bfeec1222b0ae376b500e1888384a26e4d"
             if [[ "${BOT_BRANCH_EXPECTED_TIP}" != "${legacy_tip}" ]]; then
-              expected_email="353209076+woofdy-randytarampi-ca[bot]@users.noreply.github.com"
+              expected_email="353209076+woofbot-randytarampi-ca[bot]@users.noreply.github.com"
               expected_subject="chore(agents): refresh free-model candidate inventory"
               old_author="$(git show -s --format='%ae' "${BOT_BRANCH_EXPECTED_TIP}")"
               old_committer="$(git show -s --format='%ce' "${BOT_BRANCH_EXPECTED_TIP}")"
@@ -406,8 +406,8 @@ jobs:
               fi
             fi
           fi
-          # ID 353209076 is the verified WOOFDY App author of PR #200.
-          bot_login="woofdy-randytarampi-ca[bot]"
+          # ID 353209076 is the verified WOOFBOT App author of PR #200.
+          bot_login="woofbot-randytarampi-ca[bot]"
           git config user.name "${bot_login}"
           git config user.email "353209076+${bot_login}@users.noreply.github.com"
           git commit -m "chore(agents): refresh free-model candidate inventory"

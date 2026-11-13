@@ -290,14 +290,14 @@ def test_generated_companion_passes_the_same_immutable_sha_to_the_reusable_workf
     assert pin != trusted
 
 
-def test_manual_fix_uses_woofdy_app_publisher_credentials():
+def test_manual_fix_uses_woofbot_app_publisher_credentials():
     workflow = read(".github/workflows/agentic-review-fix.yml")
     generate, publish = workflow.split("  publish:\n", 1)
-    assert "WOOFDY_GITHUB_APP_CLIENT_ID" not in generate
-    assert "WOOFDY_GITHUB_APP_PRIVATE_KEY" not in generate
+    assert "WOOFBOT_GITHUB_APP_CLIENT_ID" not in generate
+    assert "WOOFBOT_GITHUB_APP_PRIVATE_KEY" not in generate
     assert "environment: agentic-review-fix" in publish
-    assert "client-id: ${{ vars.WOOFDY_GITHUB_APP_CLIENT_ID }}" in publish
-    assert "private-key: ${{ secrets.WOOFDY_GITHUB_APP_PRIVATE_KEY }}" in publish
+    assert "client-id: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID }}" in publish
+    assert "private-key: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY }}" in publish
     assert "app-id:" not in publish
     assert "secrets.APP_ID" not in publish
     assert "permission-contents: write" in publish

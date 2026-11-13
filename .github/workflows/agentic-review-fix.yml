@@ -286,8 +286,8 @@ jobs:
         id: publish
         uses: actions/create-github-app-token@v3
         with:
-          client-id: ${{ vars.WOOFDY_GITHUB_APP_CLIENT_ID }}
-          private-key: ${{ secrets.WOOFDY_GITHUB_APP_PRIVATE_KEY }}
+          client-id: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID }}
+          private-key: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
       - name: Publish a unique bot branch and create or update its draft PR
