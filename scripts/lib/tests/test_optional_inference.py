@@ -329,7 +329,9 @@ def test_review_workflow_starts_local_router_only_for_qualified_free_pool():
     assert 'OPENCODE_DISABLE_PROJECT_CONFIG: "true"' in workflow
 
 
-def test_review_v2_source_stays_canonical_with_v1_native_action_runtime_mirror(tmp_path):
+def test_review_v2_source_stays_canonical_with_v1_native_action_runtime_mirror(
+    tmp_path,
+):
     fixture = json.loads(
         (ROOT / "configs/opencode/ci/opencode.json").read_text(encoding="utf-8")
     )
