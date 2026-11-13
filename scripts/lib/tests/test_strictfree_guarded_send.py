@@ -268,21 +268,40 @@ def test_trusted_evidence_respects_privacy_boundary_without_send(tmp_path):
 def test_trusted_evidence_must_match_actual_private_key_bytes(tmp_path):
     root, digest = private_tree(tmp_path, "sk-synthetic-client-key")
     route = admission.Route(
-        "litellm", ENDPOINT, ALIAS, "backend/model",
-        "client-a", "a" * 64, "audio-probe",
+        "litellm",
+        ENDPOINT,
+        ALIAS,
+        "backend/model",
+        "client-a",
+        "a" * 64,
+        "audio-probe",
     )
     evidence = admission.Evidence(
-        route, "owner_verified_account_record", "synthetic-record",
-        NOW, NOW + timedelta(minutes=1), "recurring_account_free",
-        "active", "0", 1, 1, False,
+        route,
+        "owner_verified_account_record",
+        "synthetic-record",
+        NOW,
+        NOW + timedelta(minutes=1),
+        "recurring_account_free",
+        "active",
+        "0",
+        1,
+        1,
+        False,
     )
     calls = []
     with pytest.raises(guarded.StrictFreeDenied, match="route-or-credential-drift"):
         guarded.guarded_send(
-            provider="litellm", model_alias=ALIAS, endpoint=ENDPOINT,
-            credential_identity="client-a", privacy_class="audio-probe",
-            privacy_classes={"audio-probe"}, tokens=1, now=NOW,
-            send=lambda value: calls.append(value), trusted_evidence=evidence,
+            provider="litellm",
+            model_alias=ALIAS,
+            endpoint=ENDPOINT,
+            credential_identity="client-a",
+            privacy_class="audio-probe",
+            privacy_classes={"audio-probe"},
+            tokens=1,
+            now=NOW,
+            send=lambda value: calls.append(value),
+            trusted_evidence=evidence,
             root=root,
         )
     assert digest != route.credential_fingerprint
@@ -303,8 +322,10 @@ def test_gate_requires_canonical_litellm_wire_and_maps_env_key_reference(
 
     monkeypatch.setattr(guarded, "guarded_send", stub_guard)
     result = route_probes.probe_stt(
-        "http://127.0.0.1:4000/v1", ALIAS,
-        "LITELLM_OPENCODE_KEY", key_value="synthetic-not-sent",
+        "http://127.0.0.1:4000/v1",
+        ALIAS,
+        "LITELLM_OPENCODE_KEY",
+        key_value="synthetic-not-sent",
     )
     assert result.status == "ok"
     assert len(calls) == 1
