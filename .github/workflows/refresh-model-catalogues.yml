@@ -257,6 +257,21 @@ jobs:
           private-key: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
+      - name: Verify Woofbot installation identity before publication
+        env:
+          GH_TOKEN: ${{ steps.publish_app_token.outputs.token }}
+          PUBLISH_APP_SLUG: ${{ steps.publish_app_token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          if [[ "${PUBLISH_APP_SLUG}" != "woofbot-randytarampi-ca" ]]; then
+            echo "::error::Unexpected GitHub App slug for Woofbot publisher" >&2
+            exit 1
+          fi
+          bot_id="$(gh api "/users/${PUBLISH_APP_SLUG}[bot]" --jq .id)"
+          if [[ "${bot_id}" != "353209076" ]]; then
+            echo "::error::Unexpected GitHub App bot user ID for Woofbot publisher" >&2
+            exit 1
+          fi
       - name: Publish the bot branch and create or update its draft PR
         env:
           GH_TOKEN: ${{ steps.publish_app_token.outputs.token }}
