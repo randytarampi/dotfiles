@@ -78,7 +78,6 @@ def _assert_registered(config, provider, model, base_url, credential):
     assert model in modern["models"]
 
 
-
 def test_default_free_pool_registers_only_v2_provider(tmp_path):
     result, config, outputs, proxy = _generate(
         tmp_path, "free", HAS_MISTRAL_KEY="true", HAS_OPENCODE_KEY="true"
@@ -110,7 +109,6 @@ def test_default_free_pool_registers_only_v2_provider(tmp_path):
         {"action": "grep", "resource": "*", "effect": "allow"},
     ]
     assert config["agents"]["review"]["permissions"] == config["permissions"]
-
 
 
 @pytest.mark.parametrize(
