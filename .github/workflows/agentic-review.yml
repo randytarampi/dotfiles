@@ -139,7 +139,7 @@ jobs:
                 --arg actual_sender "${LABEL_EVENT_SENDER}" \
                 --arg actual_pr "${LABEL_EVENT_PR}" \
                 '
-                  if ($event_name == "pull_request")
+                  if (($event_name == "pull_request_target") or ($event_name == "pull_request"))
                     and ($actual_action == "labeled")
                     and (.action == "labeled")
                     and (.sender.type == "User")
