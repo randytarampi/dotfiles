@@ -1501,6 +1501,20 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/detect-embedding-inventory.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/configure-claude-3p-profiles.py",
       "capabilities": [
         "public",
