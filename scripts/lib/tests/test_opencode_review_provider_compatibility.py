@@ -16,7 +16,7 @@ def _model_builder():
     step = next(
         item
         for item in data["jobs"]["opencode"]["steps"]
-        if item.get("name") == "Configure read-only OpenCode plan agent"
+        if item.get("name") == "Configure read-only OpenCode v2 review agent"
     )
     return step["run"].split("python3 - <<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
 
@@ -67,21 +67,19 @@ def _generate(tmp_path, requested, **keys):
 
 
 def _assert_registered(config, provider, model, base_url, credential):
-    legacy = config["provider"][provider]
-    assert legacy["npm"] == "@ai-sdk/openai-compatible"
-    assert legacy["options"] == {
-        "baseURL": base_url,
-        "apiKey": "{env:" + credential + "}",
-    }
-    assert model in legacy["models"]
+    assert "provider" not in config
     modern = config["providers"][provider]
     assert modern["env"] == [credential]
     assert modern["package"] == "aisdk:@ai-sdk/openai-compatible"
-    assert modern["settings"] == legacy["options"]
-    assert modern["models"] == legacy["models"]
+    assert modern["settings"] == {
+        "baseURL": base_url,
+        "apiKey": "{env:" + credential + "}",
+    }
+    assert model in modern["models"]
 
 
-def test_default_free_pool_registers_both_runtime_provider_schemas(tmp_path):
+
+def test_default_free_pool_registers_only_v2_provider(tmp_path):
     result, config, outputs, proxy = _generate(
         tmp_path, "free", HAS_MISTRAL_KEY="true", HAS_OPENCODE_KEY="true"
     )
@@ -101,19 +99,18 @@ def test_default_free_pool_registers_both_runtime_provider_schemas(tmp_path):
         item["litellm_params"]["api_key"].startswith("os.environ/")
         for item in proxy["model_list"]
     )
-    assert config["agent"]["plan"]["permission"] == {
-        "edit": "deny",
-        "bash": "deny",
-        "task": "deny",
-    }
-    assert config["default_agent"] == "plan"
-    # Both build and plan inherit V1's global permissions; a fallback to
-    # build must not silently re-enable shell, edit, or subagent tools.
-    assert config["permission"] == {
-        "edit": "deny",
-        "bash": "deny",
-        "task": "deny",
-    }
+    assert config["mcp"] == {}
+    assert config["plugins"] == []
+    assert config["default_agent"] == "review"
+    assert config["agents"]["review"]["mode"] == "primary"
+    assert config["permissions"] == [
+        {"action": "*", "resource": "*", "effect": "deny"},
+        {"action": "read", "resource": "*", "effect": "allow"},
+        {"action": "glob", "resource": "*", "effect": "allow"},
+        {"action": "grep", "resource": "*", "effect": "allow"},
+    ]
+    assert config["agents"]["review"]["permissions"] == config["permissions"]
+
 
 
 @pytest.mark.parametrize(
@@ -133,7 +130,7 @@ def test_default_free_pool_registers_both_runtime_provider_schemas(tmp_path):
         ),
     ],
 )
-def test_direct_provider_requests_are_v1_compatible(
+def test_direct_provider_requests_are_v2_only(
     tmp_path, provider, credential, model, base_url
 ):
     result, config, outputs, proxy = _generate(
@@ -163,7 +160,7 @@ def test_no_keys_preserves_builtin_opencode_route(tmp_path):
     result, config, outputs, proxy = _generate(tmp_path, "free")
     assert result.returncode == 0, result.stderr
     assert outputs["model"] == "opencode/big-pickle"
-    assert "review-free" not in config.get("provider", {})
+    assert "review-free" not in config.get("providers", {})
     assert proxy is None
 
 
