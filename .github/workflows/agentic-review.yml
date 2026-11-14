@@ -638,7 +638,7 @@ jobs:
         uses: actions/create-github-app-token@v3
         id: publisher
         with:
-          app-id: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID }}
+          client-id: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID }}
           private-key: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY }}
           permission-pull-requests: write
       - name: Publish one head-specific OpenCode review
