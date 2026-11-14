@@ -21,11 +21,11 @@ def main(argv=None, *, config_provider=None, receipt_reader=None, environ=None):
         help="Compute and print the same read-only report",
     )
     if argv is not None:
-        args = parser.parse_args(argv)
+        parser.parse_args(argv)
     elif environ is not None:
-        args = argparse.Namespace(dry_run=False)
+        pass  # programmatic invocation: flags are defaulted
     else:
-        args = parser.parse_args()
+        parser.parse_args()
     env = os.environ if environ is None else environ
     if env.get("DOTFILES_RUN_OPENWEBUI_EMBEDDING_INVENTORY", "0") != "1":
         print(
