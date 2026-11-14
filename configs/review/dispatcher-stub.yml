@@ -10,7 +10,11 @@ on:
     types: [created]
   # A base-context label event retains publisher secrets for fork PRs.
   # Never run fork-authored code in the privileged dispatcher.
-  pull_request_target:
+  # The trigger is needed to retain publisher credentials for fork labels.
+  # The caller never checks out or executes PR code. The reusable workflow
+  # limits label selection to authenticated humans, separates read-only review
+  # from App publication, and rejects changed PR heads before publishing.
+  pull_request_target: # zizmor: ignore[dangerous-triggers] controlled labelled PR dispatch only
     types: [labeled]
 
 permissions:
