@@ -161,6 +161,10 @@ def test_opencode_v2_labels_comments_and_isolated_app_publication():
     assert opencode.index("name: Install pinned OpenCode v2") < opencode.index(
         "name: Start runner-local LiteLLM native free pool"
     )
+    # Run third-party lifecycle scripts before fetching any untrusted PR files.
+    assert opencode.index("name: Install pinned OpenCode v2") < opencode.index(
+        "uses: actions/checkout@v7"
+    )
     assert "opencode run --standalone --archived --format json" in opencode
     assert "--agent review" in opencode
     assert '"action": "*", "resource": "*", "effect": "deny"' in opencode
