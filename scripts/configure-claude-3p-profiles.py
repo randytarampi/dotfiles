@@ -75,7 +75,7 @@ def build_profiles(registry, served_ids, api_key=""):
                 missing.append(f"{role} model {model} is not served")
             models.append(
                 {
-                    "name": model,
+                    "name": f"anthropic/claude-{preset}-{role}",
                     "anthropicFamilyTier": family,
                     "isFamilyDefault": True,
                     "labelOverride": model,

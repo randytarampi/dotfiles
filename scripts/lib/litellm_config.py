@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import copy
 import math
 import logging
 import os
@@ -1437,7 +1438,7 @@ def _retained_ledger_families(
     return retained
 
 
-def compute_model_list(environ=None, previous_entries=None):
+def compute_model_list(environ=None, previous_entries=None, *, anthropic_bridges=None):
     """Return LiteLLM model entries without reading secrets or doing writes."""
     environ = environ or os.environ
     global last_generation_notes
@@ -2154,11 +2155,38 @@ def compute_model_list(environ=None, previous_entries=None):
             seen_bare.add(alias)
         filtered.append(item)
     entries = sorted(filtered, key=lambda item: item["model_name"])
+    entries, bridge_notes = apply_anthropic_bridges(entries, anthropic_bridges or {})
+    last_generation_notes.extend(bridge_notes)
     validate_routing_entries(entries, port=routing_port)
     for item in entries:
         item.pop("_alias_kind", None)
         item.pop("_upstream_ref", None)
     return entries
+
+
+def apply_anthropic_bridges(model_list_rows, bridges):
+    """Bind Claude-3p aliases only to wire models already present in rows."""
+    rows = list(model_list_rows)
+    by_name = {row.get("model_name"): row for row in rows if isinstance(row, dict)}
+    additions = []
+    warnings = []
+    for preset, roles in sorted(bridges.items()):
+        for role, wire_model in sorted(roles.items()):
+            target = by_name.get(wire_model)
+            if target is None:
+                warnings.append(
+                    f"anthropic bridge {preset}/{role} withheld: target {wire_model!r} is not generated"
+                )
+                continue
+            alias = f"anthropic/claude-{preset}-{role}"
+            if alias in by_name:
+                continue
+            row = copy.deepcopy(target)
+            row["model_name"] = alias
+            additions.append(row)
+            by_name[alias] = row
+    rows.extend(additions)
+    return sorted(rows, key=lambda item: item["model_name"]), warnings
 
 
 def render_config(environ=None, entries=None):
