@@ -54,7 +54,7 @@ def _parse(event, tmp_path, **host):
         "INPUT_PR_NUMBER": "",
         "INPUT_TOKENS": "",
         "DEFAULT_INFERENCE_PROVIDER": "free",
-        "GITHUB_EVENT_NAME": "pull_request",
+        "GITHUB_EVENT_NAME": "pull_request_target",
         "GITHUB_ACTOR": "randytarampi",
         "GITHUB_REPOSITORY": "randytarampi/dotfiles",
         "LABEL_EVENT_ACTION": "labeled",
@@ -91,6 +91,18 @@ def _parse(event, tmp_path, **host):
 )
 def test_human_label_on_bot_authored_pr(tmp_path, label, expected):
     assert _parse(_label_event(label), tmp_path, LABEL_EVENT_NAME=label) == expected
+
+
+def test_fork_label_uses_base_event_and_external_pr_author(tmp_path):
+    event = _label_event(label="review-opencode")
+    event["pull_request"]["head"] = {
+        "repo": {"full_name": "external/fork"},
+        "sha": "a" * 40,
+        "ref": "contributor-branch",
+    }
+    event["pull_request"]["author_association"] = "FIRST_TIME_CONTRIBUTOR"
+    event["pull_request"]["user"] = {"login": "external-user"}
+    assert _parse(event, tmp_path, LABEL_EVENT_NAME="review-opencode") == "opencode"
 
 
 def test_external_pr_author_is_not_the_review_requester(tmp_path):
