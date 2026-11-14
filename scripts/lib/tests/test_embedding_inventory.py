@@ -197,3 +197,22 @@ def test_cli_gate_off_and_on_use_only_injected_dependencies(capsys, tmp_path):
     output = capsys.readouterr().out
     assert '"status": "UNAVAILABLE"' in output
     assert "secret" not in output
+    # An enabled but unhealthy inventory cannot be counted as a PASS.
+    assert (
+        module.main(
+            config_provider=lambda: None,
+            receipt_reader=lambda: {"state": "absent"},
+            environ={"DOTFILES_RUN_OPENWEBUI_EMBEDDING_INVENTORY": "1"},
+        )
+        == 1
+    )
+    assert '"status": "UNKNOWN"' in capsys.readouterr().out
+    assert (
+        module.main(
+            config_provider=lambda: dict(CONFIG),
+            receipt_reader=lambda: {"state": "unknown"},
+            environ={"DOTFILES_RUN_OPENWEBUI_EMBEDDING_INVENTORY": "1"},
+        )
+        == 1
+    )
+    assert '"state": "UNKNOWN"' in capsys.readouterr().out
