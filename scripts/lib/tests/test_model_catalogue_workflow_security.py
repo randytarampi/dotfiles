@@ -151,6 +151,7 @@ def test_actionlint_woofbot_client_id_compatibility_is_scoped():
     allowed = {
         ".github/workflows/refresh-model-catalogues.yml",
         ".github/workflows/agentic-review-fix.yml",
+        ".github/workflows/agentic-review.yml",
     }
     known_false_positives = [
         'missing input "app-id" which is required by action '
