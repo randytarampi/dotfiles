@@ -43,6 +43,9 @@ def test_label_dispatch_keeps_fork_secrets_in_trusted_base_context():
         assert "  pull_request:\n" not in stub
         assert "types: [labeled]" in stub
         assert "secrets: inherit" in stub
+        assert "id-token: write" not in stub
+        assert "issues: write" not in stub
+        assert "pull-requests: write" in stub
         assert "actions/checkout@" not in stub
     reviewer = read(".github/workflows/agentic-review.yml")
     assert '$event_name == "pull_request_target"' in reviewer
