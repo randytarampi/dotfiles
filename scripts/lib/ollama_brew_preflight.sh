@@ -15,7 +15,10 @@ ollama_brew_package_preflight() {
     return 1
   fi
 
-  local applications_dir="${OLLAMA_BREW_PREFLIGHT_APPLICATIONS_DIR:-/Applications}"
+  # The managed package lane calls this function with one argument; only tests
+  # pass a second, isolated Applications root. Environment alone cannot bypass
+  # the installed host /Applications check.
+  local applications_dir="${2:-/Applications}"
   if [[ -d "$applications_dir/Ollama.app" || -d "$HOME/Applications/Ollama.app" ]]; then
     printf '%s\n' "Refusing headless Ollama formula: Ollama.app exists; migrate explicitly first" >&2
     return 1
