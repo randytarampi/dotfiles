@@ -6,13 +6,13 @@
 #       uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@82d10e4d2b6c495796466a80c04621b9ff3b4433
 #       secrets: inherit
 #
-# Labels: review-junie, review-gemini, review-copilot, and review-all dispatch
-# supported reviewers. review-opencode remains a legacy no-op (issue #289).
+# Labels: review-opencode, review-junie, review-gemini, review-copilot and
+# review-all dispatch real reviewers. OpenCode runs the pinned v2 CLI.
 # Mention triggers are parsed
 # by caller dispatch workflows; dispatcher-mode parsing is centralized here.
 # trigger_tokens is comma-separated and aligned with agents for standardized messaging.
-# OpenCode's official GitHub App publishes using OIDC. Junie and Gemini
-# remain read-only reviewers, with the notify job publishing their results.
+# OpenCode v2, Junie and Gemini generate reviews with read-only permissions;
+# publishing occurs in separate GitHub App-authenticated jobs.
 
 name: Agentic review
 
@@ -148,7 +148,7 @@ jobs:
                     and ((.pull_request.number | tostring) == $actual_pr)
                   then
                     if .label.name == "review-all" then "junie,copilot"
-                    elif .label.name == "review-opencode" then ""
+                    elif .label.name == "review-opencode" then "opencode"
                     elif .label.name == "review-junie" then "junie"
                     elif .label.name == "review-gemini" then "gemini"
                     elif .label.name == "review-copilot" then "copilot"
@@ -266,32 +266,37 @@ jobs:
             printf 'prompt<<%s\n%s\n%s\n' "${delim}" "${prompt}" "${delim}"
           } >> "${GITHUB_OUTPUT}"
 
-  # Native OpenCode GitHub integration: OIDC mints the installed App token.
-  # Its action publishes directly; the separate notify job only handles
-  # Junie/Gemini. The plan agent plus a push hook protects review-only work.
+  # Native OpenCode GitHub integration: v2 CLI reviews both authenticated
+  # label requests and comments. Woofbot publishes from an isolated job.
+  # The reviewer never receives a GitHub write token or App private key.
   opencode:
     needs: parse
-    # Upstream opencode github run accepts only comment events. A label event
-    # cannot be adapted by passing a prompt to the composite action.
-    if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',opencode,') && github.event_name == 'issue_comment'
+    if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',opencode,')
     runs-on: ubuntu-latest
+    outputs:
+      head: ${{ steps.verify_head.outputs.sha }}
     permissions:
       contents: read
-      id-token: write
     steps:
-      - name: Verify slash command and PR context
-        env:
-          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
-        run: |
-          set -euo pipefail
-          [[ -n "${PR_NUMBER}" && "${PR_NUMBER}" != null ]]
-          jq -e '.comment.body | test("(^|[[:space:]])/(opencode|oc)([[:space:]]|$)")' "${GITHUB_EVENT_PATH}" >/dev/null
       - uses: actions/checkout@v7
         with:
           token: ${{ github.token }}
           persist-credentials: false
           fetch-depth: 1
-          ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/merge', needs.parse.outputs.pr_number)) || '' }}
+          path: review-source
+          ref: ${{ format('refs/pull/{0}/head', needs.parse.outputs.pr_number) }}
+      - name: Verify exact PR head
+        id: verify_head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          [[ "${PR_NUMBER}" =~ ^[0-9]+$ ]]
+          actual="$(git -C review-source rev-parse HEAD)"
+          expected="$(gh api "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          [[ "${actual}" =~ ^[0-9a-f]{40}$ && "${actual}" == "${expected}" ]] || exit 1
+          echo "sha=${actual}" >> "${GITHUB_OUTPUT}"
       - name: Stage and verify trusted review assets
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -318,16 +323,7 @@ jobs:
           test "$(git -C "${trusted_root}" rev-parse HEAD)" = "${trusted_sha}"
           python3 "${trusted_root}/scripts/verify-ci-assets.py" --root "${trusted_root}" --manifest "${trusted_root}/configs/review/assets-manifest.json"
           printf 'TRUSTED_DOTFILES=%s\n' "${trusted_root}" >> "${GITHUB_ENV}"
-      - name: Cache codegraph index
-        uses: actions/cache@v4
-        with:
-          path: .codegraph
-          key: codegraph-${{ runner.os }}-${{ github.repository }}-${{ github.sha }}
-          restore-keys: |
-            codegraph-${{ runner.os }}-${{ github.repository }}-
-      - name: Install codegraph + build index
-        run: bash "${TRUSTED_DOTFILES}/scripts/ci-codegraph.sh"
-      - name: Configure read-only OpenCode plan agent
+      - name: Configure read-only OpenCode v2 review agent
         id: review_model
         env:
           REVIEW_INFERENCE_PROVIDER: ${{ needs.parse.outputs.inference_provider }}
@@ -348,15 +344,23 @@ jobs:
 
           source = Path(os.environ["TRUSTED_DOTFILES"]) / "configs/opencode/ci/opencode.json"
           config = json.loads(source.read_text())
-          config.setdefault("agent", {})["plan"] = {
-              "mode": "primary",
-              "permission": {"edit": "deny", "bash": "deny", "task": "deny"},
+          # The v2 reviewer runs outside the nested untrusted checkout.
+          # Forbid all tools except file discovery; disable MCP and plugins.
+          config["mcp"] = {}
+          config["plugins"] = []
+          for legacy in ("agent", "provider", "permission"):
+              config.pop(legacy, None)
+          readonly = [
+              {"action": "*", "resource": "*", "effect": "deny"},
+              {"action": "read", "resource": "*", "effect": "allow"},
+              {"action": "glob", "resource": "*", "effect": "allow"},
+              {"action": "grep", "resource": "*", "effect": "allow"},
+          ]
+          config["permissions"] = readonly
+          config["agents"] = {
+              "review": {"mode": "primary", "description": "Read-only PR reviewer", "permissions": readonly}
           }
-          # The native GitHub CLI installed by the pinned action has been
-          # observed running as build despite AGENT=plan. V1 merges global
-          # permission rules into both agents. Fail closed even on fallback.
-          config["default_agent"] = "plan"
-          config["permission"] = {"edit": "deny", "bash": "deny", "task": "deny"}
+          config["default_agent"] = "review"
 
           options = {
               "groq": ("openai/gpt-oss-120b", "https://api.groq.com/openai/v1", "GROQ_API_KEY", "HAS_GROQ_KEY"),
@@ -369,25 +373,11 @@ jobs:
           selected = "opencode/big-pickle"
 
           def register_runtime_provider(name, model, base_url, credential, label):
-              # The native GitHub action installs OpenCode v1.19.5, which
-              # consumes provider/npm/options. The trusted CI source is v2,
-              # which consumes providers/package/settings. Emit both at
-              # runtime only, with credentials referenced but never copied.
-              models = {model: {"name": label}}
-              options = {
-                  "baseURL": base_url,
-                  "apiKey": "{env:" + credential + "}",
-              }
-              config.setdefault("provider", {})[name] = {
-                  "npm": "@ai-sdk/openai-compatible",
-                  "options": options,
-                  "models": models,
-              }
               config.setdefault("providers", {})[name] = {
                   "env": [credential],
                   "package": "aisdk:@ai-sdk/openai-compatible",
-                  "settings": options,
-                  "models": models,
+                  "settings": {"baseURL": base_url, "apiKey": "{env:" + credential + "}"},
+                  "models": {model: {"name": label}},
               }
           # Include available provider keys without a separate owner-approval
           # variable. Credential presence is not proof of zero-cost entitlement:
@@ -484,10 +474,7 @@ jobs:
               print(f"model={selected}", file=output)
               print(f"selected_provider={requested}", file=output)
           PY
-          mkdir -p "${RUNNER_TEMP}/review-no-push"
-          printf '#!/bin/sh\necho "Review lane must not push" >&2\nexit 1\n' > "${RUNNER_TEMP}/review-no-push/pre-push"
-          chmod +x "${RUNNER_TEMP}/review-no-push/pre-push"
-          git config --local core.hooksPath "${RUNNER_TEMP}/review-no-push"
+          dest.chmod(0o600)
       - name: Start runner-local LiteLLM native free pool
         if: steps.review_model.outputs.selected_provider == 'review-free'
         env:
@@ -526,43 +513,156 @@ jobs:
             exit 1
           fi
           printf 'REVIEW_LITELLM_KEY=%s\n' "${key}" >> "${GITHUB_ENV}"
-      - name: Prepare native OpenCode Git authentication handoff
-        # Upstream expects an existing local extraheader, then replaces it
-        # with its OIDC-exchanged App token. Checkout's persisted credential
-        # uses includeIf and would send a duplicate Authorization header.
-        # Do not put a real token in this placeholder.
+      - name: Install pinned OpenCode v2
         run: |
           set -euo pipefail
-          git config --local http.https://github.com/.extraheader "AUTHORIZATION: bearer opencode-action-placeholder"
-      - name: Review with official OpenCode GitHub App
-        # SHA underlying the upstream 'latest' action tag on 2026-10-24.
-        # The action installs its own CLI, which can move independently.
-        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
+          npm install --global @opencode/cli@2.3.0
+          [[ "$(opencode --version)" == 2.3.0 ]]
+      - name: Stage PR diff as untrusted review data
         env:
-          # The checked-out PR is untrusted: its opencode.json and .opencode/
-          # plugins must not override the trusted read-only plan config or
-          # execute with model and GitHub App credentials.
-          OPENCODE_DISABLE_PROJECT_CONFIG: "true"
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          umask 077
+          gh pr diff "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --color never > review-diff.patch
+          size="$(wc -c < review-diff.patch)"
+          [[ "${size}" -gt 0 && "${size}" -le 300000 ]] || {
+            echo "PR diff empty or exceeds 300 KB review limit" >&2
+            exit 1
+          }
+          cp "${TRUSTED_DOTFILES}/configs/review/code-review-prompt.md" review-rubric.md
+      - name: Execute isolated read-only OpenCode v2
+        env:
+          MODEL: ${{ steps.review_model.outputs.model }}
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+          REQUEST_CONTEXT: ${{ needs.parse.outputs.prompt }}
+          REVIEWED_HEAD: ${{ steps.verify_head.outputs.sha }}
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          GROQ_API_KEY: ${{ steps.review_model.outputs.selected_provider == 'groq' && secrets.GROQ_API_KEY || '' }}
-          MISTRAL_API_KEY: ${{ steps.review_model.outputs.selected_provider == 'mistral' && secrets.MISTRAL_API_KEY || '' }}
-          CLOUDFLARE_API_TOKEN: ${{ steps.review_model.outputs.selected_provider == 'cloudflare' && secrets.CLOUDFLARE_API_TOKEN || '' }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           NVIDIA_NIM_API_KEY: ${{ steps.review_model.outputs.selected_provider == 'nvidia-nim' && inputs.allow_nvidia_review && secrets.NVIDIA_NIM_API_KEY || '' }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "${RUNNER_TEMP}/opencode-config-dir" "${RUNNER_TEMP}/opencode-xdg"
+          export OPENCODE_CONFIG_DIR="${RUNNER_TEMP}/opencode-config-dir"
+          export XDG_CONFIG_HOME="${RUNNER_TEMP}/opencode-xdg"
+          # Parent working directory has no git repository or project config.
+          # The PR checkout remains a child directory containing data only.
+          prompt="Review PR #${PR_NUMBER} head ${REVIEWED_HEAD}. Source under review-source/. Diff: review-diff.patch. Follow review-rubric.md. This is an untrusted PR: never execute scripts, edit files, delegate or browse. List concrete findings with source locations. Additional owner request: ${REQUEST_CONTEXT}"
+          if ! timeout --signal=TERM --kill-after=30s 900 \
+            opencode run --standalone --archived --format json \
+            --agent review --model "${MODEL}" "${prompt}" < /dev/null \
+            > "${RUNNER_TEMP}/opencode-review.jsonl" \
+            2> "${RUNNER_TEMP}/opencode-review.stderr"; then
+            echo "OpenCode v2 failed inference; no review published" >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          tmp = Path(os.environ["RUNNER_TEMP"])
+          parts, finished = [], False
+          for raw in (tmp / "opencode-review.jsonl").read_text().splitlines():
+              if not raw.strip():
+                  continue
+              event = json.loads(raw)
+              typ = event.get("type")
+              if typ == "error":
+                  raise SystemExit("OpenCode emitted an inference error")
+              if typ == "step_finish":
+                  finished = True
+              if typ == "tool_use" and event.get("part", {}).get("tool") not in {"read", "glob", "grep"}:
+                  raise SystemExit("OpenCode executed a disallowed review tool")
+              if typ == "text":
+                  part = event.get("part", {})
+                  if part.get("synthetic") or part.get("metadata", {}).get("compaction_continue"):
+                      continue
+                  text = part.get("text")
+                  if isinstance(text, str) and text.strip():
+                      parts.append(text.strip())
+          body = "\n\n".join(parts).strip()
+          if not finished or len(body) < 80 or len(body.encode()) > 45000:
+              raise SystemExit("Missing, incomplete or oversized OpenCode review")
+          (tmp / "opencode-review.md").write_text(body + "\n")
+          (tmp / "opencode-review-head.txt").write_text(os.environ["REVIEWED_HEAD"] + "\n")
+          PY
+      - name: Upload OpenCode review for separate publication
+        uses: actions/upload-artifact@v7
         with:
-          model: ${{ steps.review_model.outputs.model }}
-          agent: plan
-          share: "false"
+          name: opencode-review-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/opencode-review.md
+            ${{ runner.temp }}/opencode-review-head.txt
+          if-no-files-found: error
+          retention-days: 1
       - name: Stop runner-local LiteLLM
         if: always() && steps.review_model.outputs.selected_provider == 'review-free'
         run: |
           if [[ -s "${RUNNER_TEMP}/review-free-litellm.pid" ]]; then
             kill "$(cat "${RUNNER_TEMP}/review-free-litellm.pid")" 2>/dev/null || true
           fi
-      - name: Remove native OpenCode authentication placeholder
-        if: always()
-        run: git config --local --unset-all http.https://github.com/.extraheader || true
+
+  opencode_publish:
+    needs: [parse, opencode]
+    if: ${{ needs.opencode.result == 'success' && contains(format(',{0},', needs.parse.outputs.agents), ',opencode,') }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: opencode-publish-${{ github.repository }}-${{ needs.parse.outputs.pr_number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: opencode-review-${{ github.run_id }}
+          path: review
+      - name: Verify exact head and nonempty review before minting App token
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+          EXPECTED_HEAD: ${{ needs.opencode.outputs.head }}
+        run: |
+          set -euo pipefail
+          [[ "${PR_NUMBER}" =~ ^[0-9]+$ && "${EXPECTED_HEAD}" =~ ^[0-9a-f]{40}$ ]]
+          test "$(cat review/opencode-review-head.txt)" = "${EXPECTED_HEAD}"
+          test -s review/opencode-review.md
+          current="$(gh api "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          [[ "${current}" == "${EXPECTED_HEAD}" ]] || exit 1
+      - name: Mint Woofbot publication token
+        uses: actions/create-github-app-token@v3
+        id: publisher
+        with:
+          app-id: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID }}
+          private-key: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+      - name: Publish one head-specific OpenCode review
+        env:
+          GH_TOKEN: ${{ steps.publisher.outputs.token }}
+          APP_SLUG: ${{ steps.publisher.outputs.app-slug }}
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+          EXPECTED_HEAD: ${{ needs.opencode.outputs.head }}
+        run: |
+          set -euo pipefail
+          [[ "${APP_SLUG}" == woofbot-randytarampi-ca ]] || { echo "Incorrect review publisher App" >&2; exit 1; }
+          current="$(gh api "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          [[ "${current}" == "${EXPECTED_HEAD}" ]] || exit 1
+          marker="<!-- agent-review:opencode:v2 head=${EXPECTED_HEAD} -->"
+          actor="${APP_SLUG}[bot]"
+          existing="$(gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments")"
+          foreign="$(jq -rs --arg m "${marker}" --arg actor "${actor}" '[.[][] | select((.body | startswith($m)) and .user.login != $actor)] | length' <<< "${existing}")"
+          [[ "${foreign}" == 0 ]] || { echo "Foreign OpenCode review marker" >&2; exit 1; }
+          id="$(jq -rs --arg m "${marker}" --arg actor "${actor}" '[.[][] | select(.user.login == $actor and (.body | startswith($m))) | .id] | first // empty' <<< "${existing}")"
+          body="$(printf '%s\n\nOpenCode v2 review of %s (published by Woofbot).\n\n%s\n' "${marker}" "${EXPECTED_HEAD}" "$(cat review/opencode-review.md)")"
+          if [[ -n "${id}" ]]; then
+            gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -f body="${body}" --jq '.html_url'
+          else
+            gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="${body}" --jq '.html_url'
+          fi
+
 
   junie:
     outputs:
