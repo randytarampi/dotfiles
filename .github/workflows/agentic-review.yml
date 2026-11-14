@@ -61,6 +61,8 @@ on:
     secrets:
       OPENCODE_API_KEY:
         required: false
+      WOOFBOT_GITHUB_APP_PRIVATE_KEY:
+        required: false
       JUNIE_API_KEY:
         required: false
       JUNIE_GITHUB_APP_PRIVATE_KEY:
@@ -473,8 +475,8 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               print(f"model={selected}", file=output)
               print(f"selected_provider={requested}", file=output)
-          PY
           dest.chmod(0o600)
+          PY
       - name: Start runner-local LiteLLM native free pool
         if: steps.review_model.outputs.selected_provider == 'review-free'
         env:
