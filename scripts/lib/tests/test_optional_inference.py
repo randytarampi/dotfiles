@@ -285,8 +285,12 @@ def test_review_free_native_router_has_independent_ordered_deployments(tmp_path)
     assert router_config["general_settings"]["master_key"] == (
         "os.environ/REVIEW_LITELLM_KEY"
     )
-    assert config["default_agent"] == "plan"
-    assert config["permission"] == {"edit": "deny", "bash": "deny", "task": "deny"}
+    assert config["default_agent"] == "review"
+    assert config["permissions"][0] == {
+        "action": "*",
+        "resource": "*",
+        "effect": "deny",
+    }
     assert not any("nvidia" in str(row) for row in deployments)
 
 
@@ -327,9 +331,9 @@ def test_review_workflow_starts_local_router_only_for_qualified_free_pool():
     assert "--host 127.0.0.1 --port 4907" in workflow
     assert "litellm[proxy]==1.102.1" in workflow
     assert "RUNNER_TRACKING_ID" in workflow
-    assert "Review with official OpenCode GitHub App" in workflow
+    assert "Execute isolated read-only OpenCode v2" in workflow
     assert "Stop runner-local LiteLLM" in workflow
-    assert 'OPENCODE_DISABLE_PROJECT_CONFIG: "true"' in workflow
+    assert "OPENCODE_CONFIG_DIR=" in workflow
 
 
 def test_review_v2_source_and_runtime_are_v2_only(
