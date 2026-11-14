@@ -27,8 +27,7 @@ def test_normal_lanes_pin_and_verify_trusted_assets_without_workspace_checkout()
     assert workflow.count("verify-ci-assets.py") == 3
     assert "repository: randytarampi/dotfiles" not in workflow
     assert "ref: main" not in workflow
-    # Native OpenCode requires a read-only checkout auth header for OIDC handoff.
-    # Every other normal reviewer lane still disables persisted credentials.
+    # Every normal reviewer lane uses non-persistent read-only checkout credentials.
     assert "persist-credentials: true" not in workflow
     assert "contents: write" not in workflow
     assert "Configure git identity" not in workflow
@@ -113,42 +112,47 @@ def test_read_only_generation_and_scoped_publication():
     assert "github.event.comment.id || github.run_id" in workflow
 
 
-def test_native_opencode_uses_oidc_and_hardened_plan_agent():
+def test_opencode_v2_labels_comments_and_isolated_app_publication():
     workflow = read(".github/workflows/agentic-review.yml")
-    opencode = re.search(r"(?ms)^  opencode:$(.*?)(?=^  \w)", workflow).group(1)
-    assert "id-token: write" in opencode
+    opencode = re.search(r"(?ms)^  opencode:$(.*?)(?=^  \\w)", workflow).group(1)
+    publisher = re.search(r"(?ms)^  opencode_publish:$(.*?)(?=^  \\w)", workflow).group(1)
     assert "contents: read" in opencode
     assert "contents: write" not in opencode
-    assert "anomalyco/opencode/github@" in opencode
-    assert "77fc88c8ade8e5a620ebbe1197f3a572d29ae91a" in opencode
-    assert "agent: plan" in opencode
-    assert 'share: "false"' in opencode
-    assert '"edit": "deny", "bash": "deny", "task": "deny"' in opencode
-    assert "core.hooksPath" in opencode
+    assert "id-token: write" not in opencode
     assert "persist-credentials: false" in opencode
-    assert "AUTHORIZATION: bearer opencode-action-placeholder" in opencode
-    assert "Remove native OpenCode authentication placeholder" in opencode
-    assert "git config --local --unset-all" in opencode
-    assert "token: ${{ github.token }}" in opencode
-    assert "OPENCODE_APP_ID" not in workflow
-    assert "OPENCODE_APP_PRIVATE_KEY" not in workflow
-    assert "github.event_name == 'issue_comment'" in opencode
-    assert "pull_request_review_comment" not in opencode.split("    runs-on:", 1)[0]
-    # Aggregate reviews must not require the rate-limited standalone Gemini
-    # lane; explicit review-gemini remains available and fail-closed.
-    assert workflow.count('review-all" then "junie,copilot"') == 1
+    assert "path: review-source" in opencode
+    assert "Verify exact PR head" in opencode
+    assert "@opencode/cli@2.3.0" in opencode
+    assert "opencode run --standalone --archived --format json" in opencode
+    assert "--agent review" in opencode
+    assert '"action": "*", "resource": "*", "effect": "deny"' in opencode
+    assert '"action": "read", "resource": "*", "effect": "allow"' in opencode
+    assert 'config["mcp"] = {}' in opencode
+    assert 'config["plugins"] = []' in opencode
+    assert 'config["default_agent"] = "review"' in opencode
+    assert "OPENCODE_CONFIG_DIR=" in opencode
+    assert "XDG_CONFIG_HOME=" in opencode
+    assert "anomalyco/opencode/github@" not in opencode
+    assert "WOOFBOT_GITHUB_APP_PRIVATE_KEY" not in opencode
+    assert "actions/upload-artifact@v7" in opencode
+    assert "contents: read" in publisher
+    assert "actions/checkout@" not in publisher
+    assert "OPENCODE_API_KEY" not in publisher
+    assert "actions/create-github-app-token@v3" in publisher
+    assert "vars.WOOFBOT_GITHUB_APP_CLIENT_ID" in publisher
+    assert "secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY" in publisher
+    assert "permission-pull-requests: write" in publisher
+    assert "woofbot-randytarampi-ca" in publisher
+    assert "needs.opencode.outputs.head" in publisher
+    assert "agent-review:opencode:v2 head=" in publisher
+    assert "gh api --paginate" in publisher
+    assert "gh api --method PATCH" in publisher
+    assert "gh api --method POST" in publisher
+    assert 'review-opencode" then "opencode"' in workflow
+    assert 'review-all" then "junie,copilot"' in workflow
     assert 'review-gemini" then "gemini"' in workflow
-    assert 'review-opencode" then ""' in workflow
-    assert 'review-all" then "opencode,junie,gemini,copilot"' not in workflow
-    assert 'review-opencode" then "opencode"' not in workflow
     fix = read(".github/workflows/agentic-review-fix.yml")
     assert 'OPENCODE_VERSION: "2.2.5"' in fix
-    assert (
-        'curl -fsSL https://opencode.ai/v2/install | bash -s -- --version "${OPENCODE_VERSION}"'
-        in fix
-    )
-    assert 'export PATH="$HOME/.opencode/bin:$PATH"' in fix
-    assert 'escaped_version="${OPENCODE_VERSION//./\\\\.}"' in fix
 
 
 def test_ci_opencode_custom_provider_packages_match_v2_contract():
@@ -158,8 +162,8 @@ def test_ci_opencode_custom_provider_packages_match_v2_contract():
     package = config["providers"]["opencode"]["package"]
     assert package == "aisdk:@ai-sdk/openai-compatible"
     assert workflow.count('"package": "aisdk:@ai-sdk/openai-compatible"') == 1
-    assert '"npm": "@ai-sdk/openai-compatible"' in workflow
-    assert 'config.setdefault("provider", {})[name]' in workflow
+    assert '"npm": "@ai-sdk/openai-compatible"' not in workflow
+    assert 'config.setdefault("provider", {})[name]' not in workflow
     assert "@opencode/ai/providers/openai-compatible" not in workflow
 
 
