@@ -131,7 +131,7 @@ def generate_catalogue(payload, model_ids, context_window):
                 "default_verbosity": "low",
                 "default_reasoning_summary": "auto",
                 "supports_reasoning_summary_parameter": False,
-                "supports_search_tool": True,
+                "supports_search_tool": False,
                 "web_search_tool_type": "text",
                 "apply_patch_tool_type": None,
                 "auto_compact_token_limit": None,
