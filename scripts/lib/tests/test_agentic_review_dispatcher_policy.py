@@ -29,7 +29,9 @@ def _parse(tmp_path, event):
         "DEFAULT_INFERENCE_PROVIDER": "free",
         "GITHUB_OUTPUT": str(output_file),
         # Host-controlled context, independent of reusable event_json input.
-        "GITHUB_EVENT_NAME": "pull_request_target" if "label" in event else "issue_comment",
+        "GITHUB_EVENT_NAME": (
+            "pull_request_target" if "label" in event else "issue_comment"
+        ),
         "GITHUB_ACTOR": event["sender"]["login"],
         "GITHUB_REPOSITORY": "randytarampi/dotfiles",
         "LABEL_EVENT_ACTION": event.get("action", ""),
