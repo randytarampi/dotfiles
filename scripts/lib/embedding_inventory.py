@@ -26,88 +26,89 @@ NO_AUTHORITATIVE_PROBE = "no-authoritative-probe-contract"
 NO_COLLECTION_LISTING = "no authoritative read-only collection listing on this build"
 
 
+def _fetch_config(config_provider):
+    """Call the injected config getter; return (config, error_reason)."""
+    if not callable(config_provider):
+        return None, "config getter unavailable"
+    try:
+        config = config_provider()
+    except Exception:
+        return None, "config getter unavailable"
+    if not isinstance(config, dict):
+        return None, "config getter returned an unhealthy shape"
+    return config, None
+
+
+def _fetch_receipt(receipt_reader):
+    """Call the injected receipt reader; return (receipt, error_reason)."""
+    if not callable(receipt_reader):
+        return None, "receipt unavailable"
+    try:
+        receipt = receipt_reader()
+    except Exception:
+        return None, "receipt unavailable or invalid"
+    if not isinstance(receipt, dict) or receipt.get("state") not in {
+        "absent",
+        "present",
+    }:
+        return None, "receipt reader returned an unhealthy shape"
+    return dict(receipt), None
+
+
+def _provenance_report(config):
+    customized = config.get("customized")
+    override = config.get("provenance") == "override" or customized is True
+    if override:
+        status = "OVERRIDE"
+    elif customized is False:
+        status = "DEFAULT"
+    else:
+        status = "UNKNOWN"
+    return {"status": status, "reason": "config-provenance" if override else None}
+
+
+def _adoption_report(config, receipt, config_error, receipt_error):
+    customized = config.get("customized") if config is not None else None
+    if config is None:
+        return {"status": "UNKNOWN", "reason": "config evidence unavailable"}
+    if custom_provenance(config):
+        return {"status": "REFUSED", "reason": "pinned user override"}
+    if (
+        customized is False
+        and receipt is not None
+        and receipt.get("index_empty") is True
+    ):
+        return {"status": "PERMITTED", "reason": None}
+    return {
+        "status": "UNKNOWN",
+        "reason": receipt_error or "defaults and empty index not both proven",
+    }
+
+
+def custom_provenance(config):
+    """True only for an explicit pinned user override on the config."""
+    return config.get("provenance") == "override" or config.get("customized") is True
+
+
 def collect_inventory(config_provider, receipt_reader, *, now=None):
     """Collect config and receipt evidence without probing or mutating services."""
     timestamp = now or datetime.datetime.now(datetime.timezone.utc).isoformat()
-    config = None
-    config_error = None
-    if callable(config_provider):
-        try:
-            config = config_provider()
-            if not isinstance(config, dict):
-                config_error = "config getter returned an unhealthy shape"
-                config = None
-        except Exception:
-            config_error = "config getter unavailable"
-    else:
-        config_error = "config getter unavailable"
-
-    receipt = None
-    receipt_error = None
-    if callable(receipt_reader):
-        try:
-            receipt = receipt_reader()
-            if not isinstance(receipt, dict) or receipt.get("state") not in {
-                "absent",
-                "present",
-            }:
-                receipt_error = "receipt reader returned an unhealthy shape"
-                receipt = None
-            elif receipt.get("state") == "present":
-                receipt = dict(receipt)
-                receipt["state"] = "present"
-        except Exception:
-            receipt_error = "receipt unavailable or invalid"
-    else:
-        receipt_error = "receipt unavailable"
-
+    config, config_error = _fetch_config(config_provider)
+    receipt, receipt_error = _fetch_receipt(receipt_reader)
+    usable_receipt = (
+        receipt
+        if receipt is not None and receipt.get("state") in {"absent", "present"}
+        else None
+    )
+    report = build_inventory(config or {}, state=usable_receipt)
     if config is None:
-        report = build_inventory(
-            {},
-            state=(
-                receipt
-                if receipt and receipt.get("state") in {"absent", "present"}
-                else None
-            ),
-        )
         report["webui_config_identity"] = {"status": "UNKNOWN", "reason": config_error}
-        report["config_provenance"] = {"status": "UNKNOWN", "reason": config_error}
-        report["adoption"] = {
-            "status": "UNKNOWN",
-            "reason": "config evidence unavailable",
-        }
-    else:
-        report = build_inventory(
-            config,
-            state=(
-                receipt
-                if receipt is not None and receipt.get("state") in {"absent", "present"}
-                else None
-            ),
-        )
-        customized = config.get("customized")
-        override = config.get("provenance") == "override" or customized is True
-        report["config_provenance"] = {
-            "status": (
-                "OVERRIDE"
-                if override
-                else "DEFAULT" if customized is False else "UNKNOWN"
-            ),
-            "reason": "config-provenance" if override else None,
-        }
-        if override:
-            report["adoption"] = {"status": "REFUSED", "reason": "pinned user override"}
-        elif (
-            customized is False
-            and receipt is not None
-            and receipt.get("index_empty") is True
-        ):
-            report["adoption"] = {"status": "PERMITTED", "reason": None}
-        else:
-            report["adoption"] = {
-                "status": "UNKNOWN",
-                "reason": receipt_error or "defaults and empty index not both proven",
-            }
+    report["config_provenance"] = (
+        {"status": "UNKNOWN", "reason": config_error}
+        if config is None
+        else _provenance_report(config)
+    )
+    report["adoption"] = _adoption_report(config, receipt, config_error, receipt_error)
     report["collected_at"] = timestamp
     report["collections"] = {
         "count": "UNKNOWN",
