@@ -22,8 +22,8 @@ def test_normal_lanes_pin_and_verify_trusted_assets_without_workspace_checkout()
     assert 'required: false\n        default: ""' not in workflow
     assert "inputs.trusted_ref || github.sha" not in workflow
     assert 'trusted_sha="b144' not in workflow
-    # Three trusted asset checks plus two exact PR-head checks.
-    assert workflow.count("rev-parse HEAD") == 5
+    # Three trusted asset checks plus three exact PR-head checks.
+    assert workflow.count("rev-parse HEAD") == 6
     assert workflow.count("verify-ci-assets.py") == 3
     assert "repository: randytarampi/dotfiles" not in workflow
     assert "ref: main" not in workflow
@@ -43,7 +43,7 @@ def test_scheduled_runs_derive_a_nonempty_trusted_ref_from_the_commit_sha():
 
 def test_manifest_verification_precedes_codegraph_execution():
     workflow = read(".github/workflows/agentic-review.yml")
-    assert workflow.index("verify-ci-assets.py") < workflow.index("ci-codegraph.sh")
+    assert workflow.index("verify-ci-assets.py") < workflow.index("opencode run --standalone")
 
 
 def test_read_only_generation_and_scoped_publication():
@@ -114,8 +114,8 @@ def test_read_only_generation_and_scoped_publication():
 
 def test_opencode_v2_labels_comments_and_isolated_app_publication():
     workflow = read(".github/workflows/agentic-review.yml")
-    opencode = re.search(r"(?ms)^  opencode:$(.*?)(?=^  \\w)", workflow).group(1)
-    publisher = re.search(r"(?ms)^  opencode_publish:$(.*?)(?=^  \\w)", workflow).group(
+    opencode = re.search(r"(?ms)^  opencode:$(.*?)(?=^  \w)", workflow).group(1)
+    publisher = re.search(r"(?ms)^  opencode_publish:$(.*?)(?=^  \w)", workflow).group(
         1
     )
     assert "contents: read" in opencode
@@ -142,6 +142,7 @@ def test_opencode_v2_labels_comments_and_isolated_app_publication():
     assert "OPENCODE_API_KEY" not in publisher
     assert "actions/create-github-app-token@v3" in publisher
     assert "vars.WOOFBOT_GITHUB_APP_CLIENT_ID" in publisher
+    assert "client-id: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID }}" in publisher
     assert "secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY" in publisher
     assert "permission-pull-requests: write" in publisher
     assert "woofbot-randytarampi-ca" in publisher
