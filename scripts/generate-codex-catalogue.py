@@ -127,6 +127,8 @@ def generate_catalogue(payload, model_ids, context_window):
                 "input_modalities": ["text"],
                 "supported_reasoning_levels": [],
                 "default_reasoning_level": None,
+                "support_verbosity": False,
+                "default_verbosity": "low",
                 "supports_parallel_tool_calls": False,
                 "supports_reasoning_summaries": False,
                 "shell_type": "unified_exec",
