@@ -264,31 +264,78 @@ jobs:
           bash -n tests/bootstrap/smoke.sh
           bash tests/bootstrap/smoke.sh
 
-  # One representative required no-egress path, complementary to the four
-  # native OS/architecture probes. A networkless Docker *runtime* is a real
-  # socket boundary; stubbing curl/wget alone is not.
+  # Mirror the native L0 OS/CPU matrix inside real networkless runtimes.
+  # A native runner and a Docker --network none runtime prove distinct things.
+  # Keep both required: skipping an architecture must never yield a green aggregate.
   bootstrap-networkless:
-    name: Bootstrap core (networkless container)
-    runs-on: ubuntu-24.04
+    name: Bootstrap core (networkless ${{ matrix.os }})
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            release: "24.04"
+            architecture: x86_64
+            platform: linux/amd64
+          - os: ubuntu-24.04-arm
+            release: "24.04"
+            architecture: aarch64
+            platform: linux/arm64
+          - os: ubuntu-26.04
+            release: "26.04"
+            architecture: x86_64
+            platform: linux/amd64
+          - os: ubuntu-26.04-arm
+            release: "26.04"
+            architecture: aarch64
+            platform: linux/arm64
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - name: Assert native OS and CPU before container build
+        shell: bash
+        env:
+          EXPECTED_RELEASE: ${{ matrix.release }}
+          EXPECTED_ARCH: ${{ matrix.architecture }}
+        run: |
+          . /etc/os-release
+          test "$ID" = ubuntu
+          test "$VERSION_ID" = "$EXPECTED_RELEASE"
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+          docker version
+          echo "host=ubuntu-$VERSION_ID arch=$EXPECTED_ARCH"
       - name: Build unprivileged Ubuntu core image
         shell: bash
+        env:
+          TARGET_PLATFORM: ${{ matrix.platform }}
+          TARGET_RELEASE: ${{ matrix.release }}
         run: |
-          docker build --platform linux/amd64 \
-            --build-arg UBUNTU_VERSION=24.04 \
+          docker build --platform "$TARGET_PLATFORM" \
+            --build-arg UBUNTU_VERSION="$TARGET_RELEASE" \
             -f tests/bootstrap/Dockerfile \
             -t dotfiles-bootstrap:networkless .
-      - name: Prove no outbound sockets and deploy twice
+      - name: Assert matching container platform, denied egress and L0 idempotency
         shell: bash
+        env:
+          TARGET_PLATFORM: ${{ matrix.platform }}
+          EXPECTED_RELEASE: ${{ matrix.release }}
+          EXPECTED_ARCH: ${{ matrix.architecture }}
         run: |
-          docker run --rm --network none --platform linux/amd64 --pull never \
+          docker run --rm --network none --cap-drop=ALL \
+            --security-opt no-new-privileges --platform "$TARGET_PLATFORM" --pull never \
+            -e EXPECTED_RELEASE -e EXPECTED_ARCH \
             dotfiles-bootstrap:networkless bash -c '
               set -euo pipefail
+              . /etc/os-release
+              test "$ID" = ubuntu
+              test "$VERSION_ID" = "$EXPECTED_RELEASE"
+              test "$(uname -m)" = "$EXPECTED_ARCH"
+              test "$(id -u)" -eq 10001
               python3 tests/bootstrap/assert_no_egress.py
               bash tests/bootstrap/smoke.sh
             '
