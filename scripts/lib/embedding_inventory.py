@@ -68,22 +68,20 @@ def _provenance_report(config):
 
 
 def _adoption_report(config, receipt, config_error, receipt_error):
-    customized = config.get("customized") if config is not None else None
+    """Never authorize adoption from ledger presence or unverified hints.
+
+    H1 cannot prove collection/index emptiness or untouched configuration,
+    even if a synthetic fixture supplies an index_empty boolean. A later
+    trusted collection inventory must prove both conditions.
+    """
     if config is None:
         return {"status": "UNKNOWN", "reason": "config evidence unavailable"}
     if custom_provenance(config):
         return {"status": "REFUSED", "reason": "pinned user override"}
-    if (
-        customized is False
-        and receipt is not None
-        and receipt.get("index_empty") is True
-    ):
-        return {"status": "PERMITTED", "reason": None}
     return {
         "status": "UNKNOWN",
-        "reason": receipt_error or "defaults and empty index not both proven",
+        "reason": receipt_error or "authoritative empty-index proof unavailable",
     }
-
 
 def custom_provenance(config):
     """True only for an explicit pinned user override on the config."""
@@ -129,6 +127,8 @@ def collect_inventory(config_provider, receipt_reader, *, now=None):
 
 def read_state(path: Path):
     """Validate private ledger existence without disclosing its contents."""
+    if any(parent.is_symlink() for parent in path.parents):
+        raise ValueError("embedding state parent path is a symlink")
     try:
         info = path.lstat()
     except FileNotFoundError:
