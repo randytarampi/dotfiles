@@ -4681,4 +4681,3 @@ def test_anthropic_bridges_copy_existing_target_and_refuse_unknown():
             [target, conflicting], {"preset": {"oracle": "gateway/model"}}
         )
     assert conflicting["litellm_params"]["model"] == "openai/different-backend"
-
