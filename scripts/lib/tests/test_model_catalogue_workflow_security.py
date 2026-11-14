@@ -170,6 +170,13 @@ def test_actionlint_woofbot_client_id_compatibility_is_scoped():
     for path in allowed:
         assert paths[path]["ignore"] == known_false_positives
         workflow = read(path)
+        # The agentic-review workflow also has independent Junie and Gemini
+        # App publishers that correctly use numeric app-id. Restrict this
+        # client-id check to the Woofbot publisher rather than the whole file.
+        if path == ".github/workflows/agentic-review.yml":
+            workflow = workflow.split("  opencode_publish:\n", 1)[1].split(
+                "\n  junie:\n", 1
+            )[0]
         assert "client-id: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID }}" in workflow
         assert "private-key: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY }}" in workflow
         assert "app-id:" not in workflow
