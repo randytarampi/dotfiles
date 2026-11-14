@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW = ROOT / ".github/workflows/agentic-review.yml"
 
 
-def _parse(tmp_path, event):
+def _parse(tmp_path, event, event_name=None):
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     script = workflow["jobs"]["parse"]["steps"][0]["run"]
     output_file = tmp_path / "github-output"
@@ -29,7 +29,7 @@ def _parse(tmp_path, event):
         "DEFAULT_INFERENCE_PROVIDER": "free",
         "GITHUB_OUTPUT": str(output_file),
         # Host-controlled context, independent of reusable event_json input.
-        "GITHUB_EVENT_NAME": (
+        "GITHUB_EVENT_NAME": event_name or (
             "pull_request_target" if "label" in event else "issue_comment"
         ),
         "GITHUB_ACTOR": event["sender"]["login"],
@@ -120,6 +120,7 @@ def test_authorised_opencode_comment_does_not_trigger_gemini(tmp_path):
     assert outputs["inference_provider"] == "free"
 
 
+@pytest.mark.parametrize("event_kind", ["issue_comment", "pull_request_review_comment"])
 @pytest.mark.parametrize(
     ("body", "expected"),
     [
@@ -129,7 +130,7 @@ def test_authorised_opencode_comment_does_not_trigger_gemini(tmp_path):
     ],
 )
 def test_scoped_dependency_name_does_not_dispatch_an_extra_reviewer(
-    tmp_path, body, expected
+    tmp_path, body, expected, event_kind
 ):
     event = {
         "issue": {"number": 99, "pull_request": {"url": "https://example.invalid"}},
@@ -141,8 +142,12 @@ def test_scoped_dependency_name_does_not_dispatch_an_extra_reviewer(
         "repository": {"owner": {"login": "maintainer"}},
         "sender": {"login": "maintainer", "type": "User"},
     }
-    result, outputs = _parse(tmp_path, event)
+    if event_kind == "pull_request_review_comment":
+        event.pop("issue")
+        event["pull_request"] = {"number": 99}
+    result, outputs = _parse(tmp_path, event, event_name=event_kind)
     assert result.returncode == 0, result.stderr
+    assert outputs["pr_number"] == "99"
     assert outputs["agents"] == expected
     if expected == "junie":
         assert "@opencode" not in outputs["tokens"]
