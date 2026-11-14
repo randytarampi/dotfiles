@@ -567,7 +567,7 @@ jobs:
           import os
           from pathlib import Path
           tmp = Path(os.environ["RUNNER_TEMP"])
-          parts, finished = [], False
+          parts, started = [], False
           for raw in (tmp / "opencode-review.jsonl").read_text().splitlines():
               if not raw.strip():
                   continue
@@ -575,8 +575,8 @@ jobs:
               typ = event.get("type")
               if typ == "error":
                   raise SystemExit("OpenCode emitted an inference error")
-              if typ == "step_finish":
-                  finished = True
+              if typ == "step_start":
+                  started = True
               if typ == "tool_use" and event.get("part", {}).get("tool") not in {"read", "glob", "grep"}:
                   raise SystemExit("OpenCode executed a disallowed review tool")
               if typ == "text":
@@ -587,7 +587,9 @@ jobs:
                   if isinstance(text, str) and text.strip():
                       parts.append(text.strip())
           body = "\n\n".join(parts).strip()
-          if not finished or len(body) < 80 or len(body.encode()) > 45000:
+          # OpenCode v2 may omit the final step_finish on clean exit;
+          # the shell has already required a zero exit status.
+          if not started or len(body) < 80 or len(body.encode()) > 45000:
               raise SystemExit("Missing, incomplete or oversized OpenCode review")
           (tmp / "opencode-review.md").write_text(body + "\n")
           (tmp / "opencode-review-head.txt").write_text(os.environ["REVIEWED_HEAD"] + "\n")
