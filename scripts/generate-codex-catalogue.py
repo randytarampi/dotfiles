@@ -92,8 +92,8 @@ def generate_catalogue(payload, model_ids, context_window):
         or not payload["data"]
     ):
         raise ValueError("missing served LiteLLM model inventory")
-    if not isinstance(model_ids, (list, tuple)) or not model_ids or len(model_ids) > 20:
-        raise ValueError("specify one to twenty exact model IDs")
+    if not isinstance(model_ids, (list, tuple)) or not model_ids or len(model_ids) > 40:
+        raise ValueError("specify one to forty exact model IDs")
     if (
         not isinstance(context_window, int)
         or isinstance(context_window, bool)
