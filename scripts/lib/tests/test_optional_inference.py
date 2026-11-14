@@ -368,5 +368,7 @@ def test_review_v2_source_and_runtime_are_v2_only(
         assert config["mcp"] == {}
         assert config["plugins"] == []
         assert config["permissions"][0] == {
-            "action": "*", "resource": "*", "effect": "deny"
+            "action": "*",
+            "resource": "*",
+            "effect": "deny",
         }
