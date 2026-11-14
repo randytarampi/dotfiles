@@ -1,6 +1,6 @@
 # Agentic Review on GitHub
 
-Agentic PR review for this repo and downstream repos (`me`, `pwa`, `pseudoimage`, `pseudolocalize`, `lwip`, `slamscan`), built on the three official agentic GitHub Actions plus GitHub Copilot's native reviewer. All reviewer triggers are opt-in (labels or mentions) — nothing runs on every push.
+Agentic PR review for this repo and downstream repos (`me`, `pwa`, `pseudoimage`, `pseudolocalize`, `lwip`, `slamscan`), built on a pinned OpenCode v2 CLI, official Junie and Gemini GitHub Actions, and GitHub Copilot's native reviewer. All reviewer triggers are opt-in (labels or mentions) — nothing runs on every push.
 
 The shared review prompt lives in `configs/review/code-review-prompt.md` and is used by both the GitHub Actions and local review lanes.
 
@@ -14,7 +14,7 @@ The shared review prompt lives in `configs/review/code-review-prompt.md` and is 
 | Gemini | `google-github-actions/run-gemini-cli@v0` | `@gemini-cli /review` mention, or `review-gemini` label | `GEMINI_API_KEY` | behavior regressions, missing tests, operational risk |
 | Copilot auto-request | REST job in the reusable workflow | `review-copilot` label | none | requests `copilot-pull-request-reviewer[bot]` |
 
-`review-all` requests Junie and Copilot on a label event. The standalone Gemini reviewer is explicitly opt-in via `review-gemini` or an authorised Gemini command because its model's free-tier quota can be exhausted independently. A specifically requested Gemini review still fails visibly on HTTP 429/503. GitHub requires triage or higher access to apply labels. The dispatcher checks the actual GitHub event's actor, action, label and PR against the forwarded event, not the PR author's `author_association`. Thus a human maintainer can label a bot-authored or external PR; bot-sent or mismatched events remain excluded. The v2 reviewer supports both authorised `review-opencode` label events and `/opencode` or `/oc` PR conversation comments through the same validated parser; the publisher refuses stale heads. Other reviewers retain their current opt-in label/mention support. See [GitHub's label permissions](https://docs.github.com/en/issues/using-labels-and-milestones-to-track-work/managing-labels#applying-a-label).
+`review-all` requests Junie and Copilot on a label event. The standalone Gemini reviewer is explicitly opt-in via `review-gemini` or an authorised Gemini command because its model's free-tier quota can be exhausted independently. A specifically requested Gemini review still fails visibly on HTTP 429/503. GitHub requires triage or higher access to apply labels. The dispatcher handles label events with `pull_request_target: labeled` in trusted base-branch context so fork PRs retain repository secrets. It checks the actual event's actor, action, label and PR against the forwarded event, not the PR author's `author_association`. Fork PR code is never checked out or executed by that privileged dispatcher; the separate reviewer job checks out the head as untrusted review data. Thus a human maintainer can label a bot-authored or external PR; bot-sent or mismatched events remain excluded. The v2 reviewer supports both authorised `review-opencode` label events and `/opencode` or `/oc` PR conversation comments through the same validated parser; the publisher refuses stale heads. Other reviewers retain their current opt-in label/mention support. See [GitHub's label permissions](https://docs.github.com/en/issues/using-labels-and-milestones-to-track-work/managing-labels#applying-a-label).
 
 ## Labels
 
@@ -169,7 +169,7 @@ Junie and Gemini require successful model execution, nonempty review artifacts a
 
 Before promotion, test a controlled PR with both owner-applied `review-opencode` and an authorised `/opencode` comment: exact-head model inference, valid Woofbot App installation, non-empty comment, repeat-request update-in-place, stale-head refusal and forbidden tool denials. Separately exercise missing credentials, rate limits and unauthorised label/comment events. The source-level tests alone cannot prove those operational paths.
 
-OpenCode checks out a PR merge ref. Junie and Gemini check out the PR head ref and compare the checked-out SHA with the live PR head before model execution. This guards against an incorrect starting snapshot; verify the head has not changed before accepting the published review. Advancing the immutable `trusted_ref` in dispatchers and re-onboarding downstream consumers is a separate rollout step after merge and runtime validation.
+OpenCode, Junie and Gemini check out the PR head ref and compare the checked-out SHA with the live PR head before model execution. This guards against an incorrect starting snapshot; verify the head has not changed before accepting the published review. Advancing the immutable `trusted_ref` in dispatchers and re-onboarding downstream consumers is a separate rollout step after merge and runtime validation.
 
 ## Predictability
 
@@ -219,13 +219,13 @@ An owner-controlled disposable PR should exercise a real authorised review throu
 - Automatic downstream rollout after changing the trusted workflow — each destination still needs an independently reviewed caller PR and owner-supplied credentials.
 - The OpenCode v2 reviewer requires the Woofbot App installed on each repository with its own Actions variable and secret, plus sufficient PR-comment permission. The publisher (not the reviewer) obtains a short-lived App token. Do not grant the reviewer `id-token: write` or repository write permissions.
 
-### Official OpenCode action prompt compatibility
+### OpenCode v2 input, fork labels and authentication
 
-At the inspected upstream action commit, `opencode github run` reads the original GitHub comment body; the composite action advertises a `prompt` input but its CLI implementation does not consume that value. Therefore the native OpenCode lane **does not claim automatic enforcement of the trusted review rubric**. The repo's `AGENTS.md` remains available during review, and maintainers can include review-specific instructions in an authorized `/opencode` comment. Restoring strict canonical-rubric injection into the native action is separate work that requires upstream-supported behavior.
+The active OpenCode job uses the pinned v2 CLI, not the retired `anomalyco/opencode/github` composite action. It stages `review-rubric.md` from the immutable trusted assets and `review-diff.patch` from the requested PR. The model is asked to follow that rubric and inspect the PR head checked out under `review-source/`. A read-only GitHub token, isolated v2 configuration and a deny-by-default tool allowlist protect review generation; actual hosted tool-permission enforcement still requires a live acceptance check.
 
-### Native OpenCode checkout credential compatibility
+Owner-applied `review-*` labels trigger the dispatcher through `pull_request_target: labeled` **on the trusted base branch**. This keeps publisher and model secrets available when the PR comes from a fork, while no fork-authored code executes in the privileged dispatcher. The model job treats the fork checkout as untrusted data and starts the CLI from its parent. Re-onboard downstream repositories that still use `pull_request: labeled`: the old caller cannot guarantee secrets for fork PRs, and a source-only test cannot prove the new hosted path.
 
-The upstream action expects an existing Git HTTP authentication header and replaces it with its own short-lived App installation token. Persisting the checkout's `github.token` caused **duplicate Authorization headers** during the native action's PR branch fetch (live run 40100986283, attempt 2). The OpenCode checkout now keeps `persist-credentials: false`. A non-secret placeholder header is staged immediately before the native action, replaced by the action's App token, and removed in an `always()` cleanup step. No `github.token` value is stored in the placeholder. The other reviewer lanes retain their previous checkout authentication policy.
+The separate `opencode_publish` job performs another exact-head check before and after minting a short-lived Woofbot GitHub App installation token. It publishes only its App-owned head-specific PR comment. There is **no** native OpenCode App OIDC exchange and **no** placeholder Git HTTP authentication header in the v2 reviewer. This replaces both retired compatibility techniques rather than carrying them forward.
 
 ### Independent reviewer requests and Junie checkout
 
