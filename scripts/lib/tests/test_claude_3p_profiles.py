@@ -92,6 +92,28 @@ def test_no_key_mode_omits_credential():
     assert "inferenceGatewayApiKey" not in entry
 
 
+def test_default_key_file_mode_writes_scoped_bearer(monkeypatch, tmp_path):
+    served = {
+        "gateway/oracle",
+        "gateway/orchestrator",
+        "gateway/designer",
+        "gateway/librarian",
+        "ollama/oracle",
+        "ollama/orchestrator",
+        "ollama/designer",
+        "ollama/librarian",
+    }
+    _, code = _run_main(monkeypatch, tmp_path, served, ["--dry-run"])
+    assert code == 0
+    # The default key-file mode embeds the scoped bearer so profiles apply
+    # without manual key entry; the synthetic value stays confined to the
+    # injected credential field.
+    entry = profiles.build_profiles(registry(), None, "sk-synthetic-bearer")["cloud"]
+    embedded = json.dumps(entry)
+    assert embedded.count("sk-synthetic-bearer") == 1
+    assert entry["inferenceGatewayApiKey"] == "sk-synthetic-bearer"
+
+
 def test_served_aliases_are_exact_model_names_not_backend_ids(tmp_path):
     path = tmp_path / "litellm.yaml"
     path.write_text(
@@ -113,6 +135,9 @@ def test_served_aliases_are_exact_model_names_not_backend_ids(tmp_path):
 
 def _run_main(monkeypatch, tmp_path, served, argv_extra):
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+    monkeypatch.setattr(
+        profiles, "read_private_key", lambda _path: "sk-synthetic-bearer"
+    )
 
     def served_with_bridges(_path):
         selected = set(served)
