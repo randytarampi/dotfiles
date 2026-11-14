@@ -71,7 +71,9 @@ def test_valid_review_is_head_bound_and_nonempty(tmp_path):
     assert (tmp_path / "opencode-review-head.txt").read_text().strip() == "c" * 40
 
 
-@pytest.mark.parametrize("tool", ["shell", "bash", "edit", "write", "execute", "subagent"])
+@pytest.mark.parametrize(
+    "tool", ["shell", "bash", "edit", "write", "execute", "subagent"]
+)
 def test_forbidden_tool_execution_prevents_publication(tmp_path, tool):
     events = _valid_events()
     events.insert(1, {"type": "tool_use", "part": {"tool": tool}})
@@ -80,7 +82,9 @@ def test_forbidden_tool_execution_prevents_publication(tmp_path, tool):
     assert not (tmp_path / "opencode-review.md").exists()
 
 
-@pytest.mark.parametrize("case", ["error", "unfinished", "empty", "synthetic", "broken_json"])
+@pytest.mark.parametrize(
+    "case", ["error", "unfinished", "empty", "synthetic", "broken_json"]
+)
 def test_incomplete_or_failed_model_output_is_not_publishable(tmp_path, case):
     events = _valid_events()
     if case == "error":
