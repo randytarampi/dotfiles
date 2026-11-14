@@ -2180,6 +2180,12 @@ def apply_anthropic_bridges(model_list_rows, bridges):
                 continue
             alias = f"anthropic/claude-{preset}-{role}"
             if alias in by_name:
+                if by_name[alias].get("litellm_params") != target.get(
+                    "litellm_params"
+                ):
+                    raise ValueError(
+                        f"Claude bridge alias {alias} collides with a different route"
+                    )
                 continue
             row = copy.deepcopy(target)
             row["model_name"] = alias
