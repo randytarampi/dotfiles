@@ -484,6 +484,14 @@ jobs:
               print(f"selected_provider={requested}", file=output)
           dest.chmod(0o600)
           PY
+      - name: Install pinned OpenCode v2
+        run: |
+          set -euo pipefail
+          # npm's install-script policy can leave @opencode/cli's launcher as a
+          # nonfunctional placeholder unless its pinned postinstall is allowed.
+          # Permit only this package, never all dependency lifecycle scripts.
+          npm install --global --allow-scripts=@opencode/cli @opencode/cli@2.3.0
+          [[ "$(opencode --version)" == 2.3.0 ]]
       - name: Start runner-local LiteLLM native free pool
         if: steps.review_model.outputs.selected_provider == 'review-free'
         env:
@@ -522,14 +530,6 @@ jobs:
             exit 1
           fi
           printf 'REVIEW_LITELLM_KEY=%s\n' "${key}" >> "${GITHUB_ENV}"
-      - name: Install pinned OpenCode v2
-        run: |
-          set -euo pipefail
-          # npm's install-script policy can leave @opencode/cli's launcher as a
-          # nonfunctional placeholder unless its pinned postinstall is allowed.
-          # Permit only this package, never all dependency lifecycle scripts.
-          npm install --global --allow-scripts=@opencode/cli @opencode/cli@2.3.0
-          [[ "$(opencode --version)" == 2.3.0 ]]
       - name: Stage PR diff as untrusted review data
         env:
           GH_TOKEN: ${{ github.token }}
