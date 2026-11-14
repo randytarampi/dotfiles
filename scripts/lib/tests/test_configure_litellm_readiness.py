@@ -198,8 +198,9 @@ def test_generation_requires_valid_runtime_only_when_emitting_enabled_lanes(
         lambda path: previous_entries_expected,
     )
 
-    def compute_model_list(*, previous_entries=None):
+    def compute_model_list(*, previous_entries=None, anthropic_bridges=None):
         assert previous_entries == previous_entries_expected
+        assert isinstance(anthropic_bridges, dict)
         return [entry]
 
     monkeypatch.setattr(CONFIGURE, "compute_model_list", compute_model_list)
