@@ -119,6 +119,7 @@ def test_authorised_opencode_comment_does_not_trigger_gemini(tmp_path):
     assert outputs["agents"] == "opencode"
     assert outputs["inference_provider"] == "free"
 
+
 @pytest.mark.parametrize(
     ("body", "expected"),
     [
