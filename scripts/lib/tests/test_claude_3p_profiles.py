@@ -200,6 +200,7 @@ def test_served_aliases_are_exact_model_names_not_backend_ids(tmp_path):
 
 def _run_main(monkeypatch, tmp_path, served, argv_extra):
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+
     def dedicated_desktop_key(path):
         assert path.name == "claude-desktop.key"
         return "sk-synthetic-bearer"
@@ -363,9 +364,7 @@ def test_regeneration_preserves_app_sealed_key_and_unmanaged_metadata(tmp_path):
         **desired,
         "inferenceGatewayApiKey": "sk-synthetic-replacement",
     }
-    default_preserved = profiles._merge_app_owned_fields(
-        target, explicitly_rekeyed
-    )
+    default_preserved = profiles._merge_app_owned_fields(target, explicitly_rekeyed)
     assert default_preserved["inferenceGatewayApiKey"] == "synthetic-app-sealed-blob"
     replaced = profiles._merge_app_owned_fields(
         target, explicitly_rekeyed, replace_credential=True
