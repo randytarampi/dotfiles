@@ -69,13 +69,16 @@ def build_profiles(registry, served_ids, api_key=""):
         for role in MODEL_ROLES:
             family = family_tiers[role]
             model = role_models.get(role)
+            alias = f"anthropic/claude-{preset}-{role}"
             if not isinstance(model, str) or not model:
                 missing.append(f"{role} unresolved")
             elif served_ids is not None and model not in served_ids:
                 missing.append(f"{role} model {model} is not served")
+            elif served_ids is not None and alias not in served_ids:
+                missing.append(f"{role} bridge alias {alias} is not served")
             models.append(
                 {
-                    "name": f"anthropic/claude-{preset}-{role}",
+                    "name": alias,
                     "anthropicFamilyTier": family,
                     "isFamilyDefault": True,
                     "labelOverride": model,
