@@ -81,6 +81,7 @@ def read_private_key(path):
         raise ValueError("Claude-3p scoped key is malformed")
     return token.decode("ascii")
 
+
 def build_profiles(registry, served_ids, api_key=""):
     profiles = {}
     for preset in registry["presets"]:
