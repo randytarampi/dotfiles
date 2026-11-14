@@ -273,3 +273,35 @@ def test_new_catalogue_write_failure_is_atomic_and_leaves_no_partial_target(
         catalogue.save_catalogue(target, content, replace=False)
     assert not target.exists()
     assert list(tmp_path.glob(".dotfiles-codex-*")) == []
+
+
+def test_launch_hosted_rows_are_copied_verbatim_and_fail_closed(tmp_path):
+    launch = tmp_path / "ollama-launch-models.json"
+    launch.write_text(
+        json.dumps(
+            {
+                "models": [
+                    {
+                        "slug": "gpt-6-astra",
+                        "display_name": "GPT-6-Astra",
+                        "supported_in_api": False,
+                    },
+                    {
+                        "slug": "kimi-k3.1-pro:cloud",
+                        "display_name": "kimi",
+                        "supported_in_api": True,
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    rows = catalogue.load_launch_hosted_rows(launch)
+    assert [row["slug"] for row in rows] == ["gpt-6-astra"]
+    assert rows[0]["display_name"] == "GPT-6-Astra"
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"models": [{"slug": "x"}]}), encoding="utf-8")
+    with pytest.raises(ValueError):
+        catalogue.load_launch_hosted_rows(bad)
+    with pytest.raises(ValueError):
+        catalogue.load_launch_hosted_rows(tmp_path / "absent.json")
