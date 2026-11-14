@@ -37,13 +37,13 @@ def run_preflight(tmp_path, system="Darwin", desktop_dev="false", cask=""):
         "DESKTOP_DEV": desktop_dev,
         # Hosts with /Applications/Ollama.app must not fail the hermetic
         # cases; point the preflight at the isolated, empty mount root.
-        "OLLAMA_BREW_PREFLIGHT_APPLICATIONS_DIR": str(tmp_path / "apps"),
+        "APPLICATIONS_DIR": str(tmp_path / "apps"),
     }
     result = subprocess.run(
         [
             "bash",
             "-c",
-            'source "$PREFLIGHT"; ollama_brew_package_preflight "$DESKTOP_DEV"',
+            'source "$PREFLIGHT"; ollama_brew_package_preflight "$DESKTOP_DEV" "$APPLICATIONS_DIR"',
         ],
         env=env,
         capture_output=True,
