@@ -31,6 +31,7 @@ from litellm_config import (  # noqa: E402
     write_config,
 )
 import litellm_config  # noqa: E402
+import tier_registry  # noqa: E402
 from litellm_client_auth import resolve_client_auth  # noqa: E402
 
 
@@ -201,6 +202,35 @@ def _persist_generation_notes(notes, path=None):
         except OSError:
             pass
         raise
+
+
+def _anthropic_bridges():
+    """Resolve Claude-3p preset roles using the same local category mapping."""
+    from discover_models import list_local_ollama_models
+
+    registry = tier_registry.load_registry()
+    local_models = list_local_ollama_models()
+    bridges = {}
+    for preset in registry["presets"]:
+        categories = (
+            tier_registry.classify_models_for_preset(
+                local_models,
+                registry,
+                preset,
+                profile=tier_registry.get_profile_name(registry, preset),
+            )
+            if local_models
+            else {}
+        )
+        role_models = tier_registry.materialize_role_models(
+            registry, preset, categories
+        )
+        bridges[preset] = {
+            role: model
+            for role, model in role_models.items()
+            if isinstance(model, str) and model
+        }
+    return bridges
 
 
 def _refresh_rates_snapshot(dry_run=False):
@@ -1044,7 +1074,14 @@ def main():
             previous_entries = litellm_config.read_previous_entries(config_path)
         except (OSError, ValueError, TypeError):
             pass
-        entries = compute_model_list(previous_entries=previous_entries)
+        try:
+            anthropic_bridges = _anthropic_bridges()
+        except Exception as bridge_error:  # noqa: BLE001 - optional alias surface
+            anthropic_bridges = {}
+            logger.warning("Claude-3p bridge discovery unavailable: %s", bridge_error)
+        entries = compute_model_list(
+            previous_entries=previous_entries, anthropic_bridges=anthropic_bridges
+        )
         if (
             os.environ.get(litellm_config.OPENAI_SERVICE_LANES_ENV, "0") == "1"
             and any(
