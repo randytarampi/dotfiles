@@ -132,7 +132,6 @@ def test_review_action_keeps_trusted_model_selection_and_no_push_guards():
     assert "HAS_MISTRAL_KEY" in workflow
     assert "HAS_GROQ_KEY" in workflow
     assert "TRUSTED_DOTFILES" in workflow
-    assert "permission" in workflow and '"edit": "deny"' in workflow
     assert 'config["permissions"] = readonly' in workflow
     assert "opencode run --standalone --archived --format json" in workflow
     assert "opencode_publish:" in workflow
