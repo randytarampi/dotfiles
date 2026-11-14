@@ -116,6 +116,7 @@ def test_served_aliases_are_exact_model_names_not_backend_ids(tmp_path):
 
 def _run_main(monkeypatch, tmp_path, served, argv_extra):
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+
     def served_with_bridges(_path):
         selected = set(served)
         for preset, provider in (("cloud", "gateway"), ("local", "ollama")):
