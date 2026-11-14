@@ -63,6 +63,14 @@ def _valid_events():
     ]
 
 
+def test_clean_exit_without_terminal_step_finish_is_accepted(tmp_path):
+    # OpenCode v2 may omit the final step_finish from JSONL (upstream #53207).
+    events = [event for event in _valid_events() if event["type"] != "step_finish"]
+    result = _execute(tmp_path, events)
+    assert result.returncode == 0, result.stderr
+    assert "source.py:42" in (tmp_path / "opencode-review.md").read_text()
+
+
 def test_valid_review_is_head_bound_and_nonempty(tmp_path):
     result = _execute(tmp_path, _valid_events())
     assert result.returncode == 0, result.stderr
@@ -83,14 +91,14 @@ def test_forbidden_tool_execution_prevents_publication(tmp_path, tool):
 
 
 @pytest.mark.parametrize(
-    "case", ["error", "unfinished", "empty", "synthetic", "broken_json"]
+    "case", ["error", "no_start", "empty", "synthetic", "broken_json"]
 )
 def test_incomplete_or_failed_model_output_is_not_publishable(tmp_path, case):
     events = _valid_events()
     if case == "error":
         events.insert(1, {"type": "error", "error": {"message": "upstream 429"}})
-    elif case == "unfinished":
-        events.pop()
+    elif case == "no_start":
+        events = [event for event in events if event["type"] != "step_start"]
     elif case == "empty":
         events[2]["part"]["text"] = " "
     elif case == "synthetic":
