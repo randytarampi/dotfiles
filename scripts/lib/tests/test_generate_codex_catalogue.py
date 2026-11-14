@@ -305,3 +305,129 @@ def test_launch_hosted_rows_are_copied_verbatim_and_fail_closed(tmp_path):
         catalogue.load_launch_hosted_rows(bad)
     with pytest.raises(ValueError):
         catalogue.load_launch_hosted_rows(tmp_path / "absent.json")
+
+@pytest.mark.parametrize(
+    "bad_hosted",
+    [
+        {"slug": "gpt-6-astra", "display_name": "Astra"},
+        {
+            "slug": "gpt-6-astra",
+            "display_name": "Astra",
+            "supported_in_api": None,
+        },
+        {
+            "slug": "gpt-6-astra",
+            "display_name": "Astra",
+            "supported_in_api": "false",
+        },
+        {
+            "slug": "gpt-6-astra",
+            "display_name": "Astra",
+            "supported_in_api": False,
+            "provider": "litellm",
+        },
+        {
+            "slug": "gpt-6-astra",
+            "display_name": "Astra",
+            "supported_in_api": False,
+            "api_key": "synthetic-secret",
+        },
+        {
+            "slug": "unsafe model id",
+            "display_name": "Astra",
+            "supported_in_api": False,
+        },
+        {
+            "slug": "gpt-6-astra",
+            "display_name": "",
+            "supported_in_api": False,
+        },
+    ],
+)
+def test_launch_hosted_requires_explicit_provider_free_identity(tmp_path, bad_hosted):
+    launch = tmp_path / "launch.json"
+    launch.write_text(json.dumps({"models": [bad_hosted]}), encoding="utf-8")
+    with pytest.raises(ValueError):
+        catalogue.load_launch_hosted_rows(launch)
+
+
+def test_launch_hosted_rejects_duplicate_and_zero_hosted_candidates(tmp_path):
+    launch = tmp_path / "launch.json"
+    hosted = {
+        "slug": "gpt-6-astra",
+        "display_name": "Astra",
+        "supported_in_api": False,
+    }
+    launch.write_text(
+        json.dumps({"models": [hosted, hosted]}), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="duplicate"):
+        catalogue.load_launch_hosted_rows(launch)
+    launch.write_text(
+        json.dumps(
+            {
+                "models": [
+                    {
+                        "slug": "ollama/remote",
+                        "display_name": "Remote",
+                        "supported_in_api": True,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="no explicitly hosted"):
+        catalogue.load_launch_hosted_rows(launch)
+
+
+def test_launch_catalogue_source_is_bounded_and_not_symlinked(tmp_path):
+    launch = tmp_path / "launch.json"
+    launch.write_bytes(b"x" * (catalogue.LAUNCH_CATALOGUE_LIMIT + 1))
+    with pytest.raises(ValueError, match="safe owner file"):
+        catalogue.load_launch_hosted_rows(launch)
+    launch.write_text('{"models":[]}', encoding="utf-8")
+    link = tmp_path / "link.json"
+    link.symlink_to(launch)
+    with pytest.raises(ValueError, match="symlink"):
+        catalogue.load_launch_hosted_rows(link)
+    launch.chmod(0o666)
+    with pytest.raises(ValueError, match="safe owner file"):
+        catalogue.load_launch_hosted_rows(launch)
+
+
+def test_combined_catalogue_prevents_gateway_spoof_and_overflow():
+    result = catalogue.generate_catalogue(
+        SERVED, ["ollama/glm-5.3-flash:cloud"], 65536
+    )
+    hosted = [
+        {
+            "slug": "gpt-6-astra",
+            "display_name": "Astra",
+            "supported_in_api": False,
+        }
+    ]
+    merged = catalogue.append_launch_hosted_rows(result, hosted)
+    assert [entry["slug"] for entry in merged["models"]] == [
+        "ollama/glm-5.3-flash:cloud",
+        "gpt-6-astra",
+    ]
+    assert len(result["models"]) == 1
+    with pytest.raises(ValueError, match="overlap"):
+        catalogue.append_launch_hosted_rows(
+            result, [{**hosted[0], "slug": "ollama/glm-5.3-flash:cloud"}]
+        )
+    with pytest.raises(ValueError, match="duplicate"):
+        catalogue.append_launch_hosted_rows(result, hosted * 2)
+    with pytest.raises(ValueError, match="forty"):
+        catalogue.append_launch_hosted_rows(
+            result,
+            [
+                {
+                    **hosted[0],
+                    "slug": f"gpt-hosted-{index}",
+                }
+                for index in range(40)
+            ],
+        )
+
