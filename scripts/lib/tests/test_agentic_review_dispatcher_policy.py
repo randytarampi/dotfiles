@@ -65,7 +65,7 @@ def _parse(tmp_path, event):
         ("OWNER", "review-junie", "junie"),
         ("OWNER", "review-copilot", "copilot"),
         ("CONTRIBUTOR", "review-all", "junie,copilot"),
-        ("OWNER", "review-opencode", ""),
+        ("OWNER", "review-opencode", "opencode"),
     ],
 )
 def test_actual_label_parser_selects_only_eligible_reviewers(
