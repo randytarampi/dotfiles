@@ -67,7 +67,7 @@ def _provenance_report(config):
     return {"status": status, "reason": "config-provenance" if override else None}
 
 
-def _adoption_report(config, receipt, config_error, receipt_error):
+def _adoption_report(config, receipt_error):
     """Never authorize adoption from ledger presence or unverified hints.
 
     H1 cannot prove collection/index emptiness or untouched configuration,
@@ -107,7 +107,7 @@ def collect_inventory(config_provider, receipt_reader, *, now=None):
         if config is None
         else _provenance_report(config)
     )
-    report["adoption"] = _adoption_report(config, receipt, config_error, receipt_error)
+    report["adoption"] = _adoption_report(config, receipt_error)
     report["collected_at"] = timestamp
     report["collections"] = {
         "count": "UNKNOWN",
