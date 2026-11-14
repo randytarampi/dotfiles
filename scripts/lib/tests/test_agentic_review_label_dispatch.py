@@ -85,7 +85,7 @@ def _parse(event, tmp_path, **host):
         ("review-gemini", "gemini"),
         ("review-copilot", "copilot"),
         ("review-all", "junie,copilot"),
-        ("review-opencode", ""),  # Deliberately comment-only (issue #289).
+        ("review-opencode", "opencode"),  # A real v2 reviewer job.
         ("unrelated", ""),
     ],
 )
