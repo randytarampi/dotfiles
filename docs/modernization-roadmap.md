@@ -183,7 +183,7 @@ Original September phase decisions and dated source observations remain recovera
 - [#271](https://github.com/randytarampi/dotfiles/issues/271): core deploy and optional Codex/Poetry dependency.
 - [#272](https://github.com/randytarampi/dotfiles/issues/272): Homebrew first-install path and Linux package eligibility.
 - [#273](https://github.com/randytarampi/dotfiles/issues/273): Ubuntu 24.04/26.04 amd64/arm64 smoke evidence.
-- [#274](https://github.com/randytarampi/dotfiles/issues/274): native Windows/macOS VM bootstrap and legacy support boundaries.
+- [#274](https://github.com/randytarampi/dotfiles/issues/274): native Windows 11 ARM64, Windows Server x64, macOS 15 Intel and macOS 26 Apple Silicon CI deployment/architecture matrix; actual owner-machine package/GUI provisioning and legacy macOS support remain distinct.
 - [#275](https://github.com/randytarampi/dotfiles/issues/275): headless/embedded and other-architecture qualification; first bounded source slice is a [read-only host capability report](bootstrap-host-capabilities.md) that never claims operational acceptance. Physical Raspberry Pi/Pine64 and POWER/ARM32 decisions require later device receipts.
 - [#276](https://github.com/randytarampi/dotfiles/issues/276): evidence-based CI/DX optimisation, coordinated with governance #267 and nightly #212.
 - [#281](https://github.com/randytarampi/dotfiles/issues/281): existing required networkless Docker runtime, with a bounded follow-up to match the four native Ubuntu 24.04/26.04 x64/ARM64 OS/CPU rows and assert IPv4 **and IPv6** socket denial. Host hardware and live service isolation remain different acceptance boundaries; #276 tracks matrix runtime/cost.
