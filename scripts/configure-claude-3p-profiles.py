@@ -42,22 +42,44 @@ MODEL_ROLES = tuple(role for role, _ in CLAUDE_TIERS)
 
 
 def read_private_key(path):
-    """Read an owner-only, single-link regular file without following links."""
-    if path.is_symlink() or not path.is_file():
+    """Read a dedicated, owner-controlled Desktop bearer without following links."""
+    path = Path(path)
+    if os.name != "posix" or not hasattr(os, "O_NOFOLLOW"):
+        raise ValueError("Claude-3p private credential reader requires POSIX")
+    _checked_path(path)
+    if not path.is_file():
         raise ValueError("Claude-3p scoped key file missing or unsafe")
-    info = path.stat()
+    parent = path.parent.stat()
+    if parent.st_uid != os.getuid() or parent.st_mode & 0o022:
+        raise ValueError("Claude-3p credential directory is not owner-controlled")
+    expected = path.stat()
     if (
-        info.st_uid != os.getuid()
-        or info.st_nlink != 1
-        or not stat.S_ISREG(info.st_mode)
-        or stat.S_IMODE(info.st_mode) != 0o600
+        expected.st_uid != os.getuid()
+        or expected.st_nlink != 1
+        or not stat.S_ISREG(expected.st_mode)
+        or stat.S_IMODE(expected.st_mode) != 0o600
     ):
         raise ValueError("Claude-3p scoped key must be owner-only mode 0600")
-    value = path.read_text(encoding="utf-8").strip()
-    if not value or any(char.isspace() for char in value):
+    flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NONBLOCK", 0)
+    fd = os.open(path, flags)
+    with os.fdopen(fd, "rb") as source:
+        actual = os.fstat(source.fileno())
+        if (
+            actual.st_uid != os.getuid()
+            or actual.st_nlink != 1
+            or not stat.S_ISREG(actual.st_mode)
+            or stat.S_IMODE(actual.st_mode) != 0o600
+            or (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino)
+        ):
+            raise ValueError("Claude-3p scoped key changed during read")
+        raw = source.read(4097)
+    if len(raw) > 4096:
+        raise ValueError("Claude-3p scoped key exceeds size limit")
+    token = raw.removesuffix(b"\n")
+    if not token or any(byte < 33 or byte > 126 for byte in token):
         raise ValueError("Claude-3p scoped key is malformed")
-    return value
-
+    return token.decode("ascii")
 
 def build_profiles(registry, served_ids, api_key=""):
     profiles = {}
@@ -188,7 +210,7 @@ def _validate_owned_profile(path, entry):
         raise ValueError("existing profile is not a recognised managed profile")
 
 
-def _merge_app_owned_fields(path, generated):
+def _merge_app_owned_fields(path, generated, *, replace_credential=False):
     """Preserve an existing applied app-sealed key and app metadata by default."""
     if not path.exists():
         return generated
@@ -196,9 +218,10 @@ def _merge_app_owned_fields(path, generated):
     existing = json.loads(path.read_text(encoding="utf-8"))
     merged = dict(existing)
     merged.update(generated)
-    # The merged key-file default writes the current scoped bearer so profiles
-    # apply without manual key entry; an already working app-sealed bearer on
-    # an existing entry is preserved when regeneration writes no new key.
+    # Applying a file in the app seals the bearer. Default regeneration must
+    # not downgrade an already applied credential or rotate it implicitly.
+    if existing.get("inferenceGatewayApiKey") and not replace_credential:
+        merged["inferenceGatewayApiKey"] = existing["inferenceGatewayApiKey"]
     return merged
 
 
@@ -292,7 +315,15 @@ def main(argv=None):
         help="Accept skipping additional unserved profiles by this exact name;"
         " every other skip still fails (exit 1).",
     )
+    parser.add_argument(
+        "--replace-credential",
+        action="store_true",
+        help="Explicitly replace existing managed profile credentials using the "
+        "dedicated Desktop key (private backups enabled by default).",
+    )
     args = parser.parse_args(argv)
+    if args.replace_credential and args.api_key_source != "key-file":
+        parser.error("--replace-credential requires --api-key-source key-file")
     load_env()
     if os.environ.get("DOTFILES_RUN_OPENCODE_SETUP", "0") != "1":
         logger.info(
@@ -305,7 +336,7 @@ def main(argv=None):
         key = ""
         if args.api_key_source == "key-file":
             key = read_private_key(
-                Path.home() / ".local/share/litellm/clients/claude.key"
+                Path.home() / ".local/share/litellm/clients/claude-desktop.key"
             )
         profiles = {}
         missing_profiles = []
@@ -366,7 +397,9 @@ def main(argv=None):
                 source
                 / f"{uuid.uuid5(uuid.NAMESPACE_URL, 'dotfiles-claude-3p-' + preset)}.json"
             )
-            entry = _merge_app_owned_fields(path, entry)
+            entry = _merge_app_owned_fields(
+                path, entry, replace_credential=args.replace_credential
+            )
             content = json.dumps(entry, indent=2, sort_keys=True) + "\n"
             _preflight_write(path, content, backup=not args.no_backup)
             planned.append((preset, path, content))
