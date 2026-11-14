@@ -172,7 +172,7 @@ jobs:
                 if (.issue.pull_request != null) and ((.comment.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) or (.repository.owner.login == .comment.user.login) or (.repository.owner.login == .sender.login)) then
                   .comment.body as $body |
                   [
-                    (if ($body | test("(^|[^[:alnum:]_])/opencode([^[:alnum:]_]|$)")) or ($body | test("(^|[^[:alnum:]_])@opencode([^[:alnum:]_]|$)")) then "opencode" else empty end),
+                    (if ($body | test("(^|[^[:alnum:]_])/opencode([^[:alnum:]_]|$)")) or ($body | test("(^|[^[:alnum:]_])@opencode([^[:alnum:]_/@]|$)")) then "opencode" else empty end),
                     (if ($body | test("(^|[^[:alnum:]_])/oc([^[:alnum:]_]|$)")) or ($body | test("(^|[^[:alnum:]_])@oc([^[:alnum:]_]|$)")) then "opencode" else empty end),
                     (if ($body | test("(^|[^[:alnum:]_])@junie-agent([^[:alnum:]_]|$)")) then "junie" else empty end),
                     (if ($body | test("(^|[^[:alnum:]_])@gemini-cli([^[:alnum:]_]|$)")) then "gemini" else empty end),
@@ -183,7 +183,7 @@ jobs:
                 elif (.issue == null) and ((.comment.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) or (.repository.owner.login == .comment.user.login) or (.repository.owner.login == .sender.login)) then
                   .comment.body as $body |
                   [
-                    (if ($body | test("(^|[^[:alnum:]_])/opencode([^[:alnum:]_]|$)")) or ($body | test("(^|[^[:alnum:]_])@opencode([^[:alnum:]_]|$)")) then "opencode" else empty end),
+                    (if ($body | test("(^|[^[:alnum:]_])/opencode([^[:alnum:]_]|$)")) or ($body | test("(^|[^[:alnum:]_])@opencode([^[:alnum:]_/@]|$)")) then "opencode" else empty end),
                     (if ($body | test("(^|[^[:alnum:]_])/oc([^[:alnum:]_]|$)")) or ($body | test("(^|[^[:alnum:]_])@oc([^[:alnum:]_]|$)")) then "opencode" else empty end),
                     (if ($body | test("(^|[^[:alnum:]_])@junie-agent([^[:alnum:]_]|$)")) then "junie" else empty end),
                     (if ($body | test("(^|[^[:alnum:]_])@gemini-cli([^[:alnum:]_]|$)")) then "gemini" else empty end),
@@ -214,7 +214,7 @@ jobs:
                 (if test("(^|[^[:alnum:]_])@junie-agent([^[:alnum:]_]|$)") then "@junie-agent" else empty end),
                 (if test("(^|[^[:alnum:]_])@junie([^[:alnum:]_]|$)") then "@junie" else empty end),
                 (if test("(^|[^[:alnum:]_])/opencode([^[:alnum:]_]|$)") then "/opencode" else empty end),
-                (if test("(^|[^[:alnum:]_])@opencode([^[:alnum:]_]|$)") then "@opencode" else empty end),
+                (if test("(^|[^[:alnum:]_])@opencode([^[:alnum:]_/@]|$)") then "@opencode" else empty end),
                 (if test("(^|[^[:alnum:]_])/oc([^[:alnum:]_]|$)") then "/oc" else empty end),
                 (if test("(^|[^[:alnum:]_])@oc([^[:alnum:]_]|$)") then "@oc" else empty end),
                 (if test("(^|[^[:alnum:]_])@gemini-cli([^[:alnum:]_]|$)") then "@gemini-cli" else empty end),
