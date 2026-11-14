@@ -83,6 +83,7 @@ def _adoption_report(config, receipt, config_error, receipt_error):
         "reason": receipt_error or "authoritative empty-index proof unavailable",
     }
 
+
 def custom_provenance(config):
     """True only for an explicit pinned user override on the config."""
     return config.get("provenance") == "override" or config.get("customized") is True
