@@ -8,7 +8,9 @@ on:
     types: [created]
   pull_request_review_comment:
     types: [created]
-  pull_request:
+  # A base-context label event retains publisher secrets for fork PRs.
+  # Never run fork-authored code in the privileged dispatcher.
+  pull_request_target:
     types: [labeled]
 
 permissions:
