@@ -118,3 +118,30 @@ def test_authorised_opencode_comment_does_not_trigger_gemini(tmp_path):
     assert result.returncode == 0, result.stderr
     assert outputs["agents"] == "opencode"
     assert outputs["inference_provider"] == "free"
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("@junie-agent Review dependency @opencode/cli@2.3.0", "junie"),
+        ("@junie-agent Review docs mentioning @opencode/plugin", "junie"),
+        ("@opencode Review this PR", "opencode"),
+    ],
+)
+def test_scoped_dependency_name_does_not_dispatch_an_extra_reviewer(
+    tmp_path, body, expected
+):
+    event = {
+        "issue": {"number": 99, "pull_request": {"url": "https://example.invalid"}},
+        "comment": {
+            "body": body,
+            "author_association": "OWNER",
+            "user": {"login": "maintainer"},
+        },
+        "repository": {"owner": {"login": "maintainer"}},
+        "sender": {"login": "maintainer", "type": "User"},
+    }
+    result, outputs = _parse(tmp_path, event)
+    assert result.returncode == 0, result.stderr
+    assert outputs["agents"] == expected
+    if expected == "junie":
+        assert "@opencode" not in outputs["tokens"]
