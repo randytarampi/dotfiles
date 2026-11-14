@@ -43,7 +43,9 @@ def test_scheduled_runs_derive_a_nonempty_trusted_ref_from_the_commit_sha():
 
 def test_manifest_verification_precedes_codegraph_execution():
     workflow = read(".github/workflows/agentic-review.yml")
-    assert workflow.index("verify-ci-assets.py") < workflow.index("opencode run --standalone")
+    assert workflow.index("verify-ci-assets.py") < workflow.index(
+        "opencode run --standalone"
+    )
 
 
 def test_read_only_generation_and_scoped_publication():
