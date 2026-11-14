@@ -151,7 +151,10 @@ def test_opencode_v2_labels_comments_and_isolated_app_publication():
     assert "persist-credentials: false" in opencode
     assert "path: review-source" in opencode
     assert "Verify exact PR head" in opencode
-    assert "npm install --global --allow-scripts=@opencode/cli @opencode/cli@2.3.0" in opencode
+    assert (
+        "npm install --global --allow-scripts=@opencode/cli @opencode/cli@2.3.0"
+        in opencode
+    )
     assert "--dangerously-allow-all-scripts" not in opencode
     assert "npm config set allow-scripts" not in opencode
     # Install before exporting the ephemeral LiteLLM bearer to GITHUB_ENV.
