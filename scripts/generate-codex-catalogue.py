@@ -118,7 +118,7 @@ def generate_catalogue(payload, model_ids, context_window):
             {
                 "slug": model_id,
                 "display_name": model_id,
-                "description": "LiteLLM served candidate; Responses acceptance not run",
+                "description": "LiteLLM model",
                 "visibility": "list",
                 "supported_in_api": True,
                 "priority": 50 + index,
