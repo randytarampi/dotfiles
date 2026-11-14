@@ -38,6 +38,7 @@ def _label_event(label="review-junie"):
             "number": 295,
             "author_association": "CONTRIBUTOR",
             "user": {"login": "woofbot-randytarampi-ca[bot]"},
+            "head": {"repo": {"full_name": "randytarampi/dotfiles"}},
         },
         "label": {"name": label},
     }
@@ -103,6 +104,22 @@ def test_fork_label_uses_base_event_and_external_pr_author(tmp_path):
     event["pull_request"]["author_association"] = "FIRST_TIME_CONTRIBUTOR"
     event["pull_request"]["user"] = {"login": "external-user"}
     assert _parse(event, tmp_path, LABEL_EVENT_NAME="review-opencode") == "opencode"
+
+
+@pytest.mark.parametrize(
+    ("label", "expected"),
+    [
+        ("review-opencode", "opencode"),
+        ("review-copilot", "copilot"),
+        ("review-junie", ""),
+        ("review-gemini", ""),
+        ("review-all", ""),
+    ],
+)
+def test_fork_label_only_dispatches_safe_reviewers(tmp_path, label, expected):
+    event = _label_event(label=label)
+    event["pull_request"]["head"]["repo"]["full_name"] = "outside/repo"
+    assert _parse(event, tmp_path, LABEL_EVENT_NAME=label) == expected
 
 
 def test_external_pr_author_is_not_the_review_requester(tmp_path):
