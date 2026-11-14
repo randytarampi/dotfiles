@@ -76,7 +76,11 @@ def test_actual_label_parser_selects_only_eligible_reviewers(
     event = {
         "action": "labeled",
         "label": {"name": requested_label},
-        "pull_request": {"number": 42, "author_association": association},
+        "pull_request": {
+            "number": 42,
+            "author_association": association,
+            "head": {"repo": {"full_name": "randytarampi/dotfiles"}},
+        },
         "repository": {"full_name": "randytarampi/dotfiles"},
         "sender": {"login": "maintainer", "type": "User"},
     }
