@@ -115,7 +115,9 @@ def test_read_only_generation_and_scoped_publication():
 def test_opencode_v2_labels_comments_and_isolated_app_publication():
     workflow = read(".github/workflows/agentic-review.yml")
     opencode = re.search(r"(?ms)^  opencode:$(.*?)(?=^  \\w)", workflow).group(1)
-    publisher = re.search(r"(?ms)^  opencode_publish:$(.*?)(?=^  \\w)", workflow).group(1)
+    publisher = re.search(
+        r"(?ms)^  opencode_publish:$(.*?)(?=^  \\w)", workflow
+    ).group(1)
     assert "contents: read" in opencode
     assert "contents: write" not in opencode
     assert "id-token: write" not in opencode
