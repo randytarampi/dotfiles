@@ -14,6 +14,7 @@ from embedding_inventory import (
     NO_AUTHORITATIVE_INTERFACE,
     NO_AUTHORITATIVE_PROBE,
     build_inventory,
+    collect_inventory,
     read_state,
 )
 from embedding_representation import compare_representations
@@ -131,3 +132,55 @@ def test_comparator_still_proves_same_width_representation_mismatch():
     assert compare_representations(expected, same_width)["different_fields"] == [
         "fixed_vector_sha256"
     ]
+
+
+def test_collector_preserves_route_and_reports_unavailable_listing():
+    report = collect_inventory(
+        lambda: dict(CONFIG, customized=False),
+        lambda: {"state": "present", "index_empty": True},
+        now="fixed",
+    )
+    assert report["collected_at"] == "fixed"
+    assert report["collections"]["routes"] == [
+        {
+            "route_id": "embedding",
+            "status": "UNAVAILABLE",
+            "reason": "no authoritative read-only collection listing on this build",
+        }
+    ]
+    assert report["adoption"]["status"] == "PERMITTED"
+    assert report["writes"] == "none"
+
+
+def test_collector_unknown_receipt_and_override_refuse_adoption():
+    unknown = collect_inventory(lambda: dict(CONFIG, customized=False), None)
+    assert unknown["adoption"]["status"] == "UNKNOWN"
+    override = collect_inventory(
+        lambda: dict(CONFIG, customized=True), lambda: {"state": "absent"}
+    )
+    assert override["config_provenance"]["status"] == "OVERRIDE"
+    assert override["adoption"]["status"] == "REFUSED"
+
+
+def test_cli_gate_off_and_on_use_only_injected_dependencies(capsys, tmp_path):
+    import importlib.util
+    from pathlib import Path
+
+    script = Path(__file__).parents[2] / "detect-embedding-inventory.py"
+    spec = importlib.util.spec_from_file_location("detect_inventory", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.main(environ={}) == 0
+    assert "disabled" in capsys.readouterr().out
+    assert (
+        module.main(
+            ["--dry-run"],
+            config_provider=lambda: dict(CONFIG, customized=False),
+            receipt_reader=lambda: {"state": "present", "index_empty": True},
+            environ={"DOTFILES_RUN_OPENWEBUI_EMBEDDING_INVENTORY": "1"},
+        )
+        == 0
+    )
+    output = capsys.readouterr().out
+    assert '"status": "UNAVAILABLE"' in output
+    assert "secret" not in output

@@ -246,6 +246,8 @@ The new [`embedding_representation.py`](../scripts/lib/embedding_representation.
 
 ### Open WebUI retrieval embeddings (H1a identity and safety)
 
+**H1 inventory acceptance:** `scripts/detect-embedding-inventory.py` is an opt-in, read-only report gated by `DOTFILES_RUN_OPENWEBUI_EMBEDDING_INVENTORY=1`; `--dry-run` computes and prints the same report. Config getters are authoritative only for config-side representation and provenance, while the file-backed ledger/receipt is read-only evidence for index state. Collection enumeration is not implemented in H1; no authoritative read-only listing exists on this build. The report preserves the owned route ID and marks collection status `UNAVAILABLE`; unknown ledger evidence or user overrides never permit auto-adoption.
+
 **Historical embedding gateway incident (22 October 2026):** A scoped key successfully retrieved `GET /v1/models` while the namespaced Ollama embedding call through LiteLLM failed with HTTP 500 and a missing `api_key` error; the same embedding model succeeded directly against Ollama. After correcting the gateway entry and restarting LiteLLM, the owner-reported embedding probe returned HTTP 200 and a second provisioning apply converged. **Open WebUI still refused to switch its embedding engine to the gateway without the required acknowledgement; it made no embedding-setting writes and preserved managed settings.** The owner must independently authorise any subsequent engine switch and data-migration steps. This is dated diagnosis and reported remediation, not a current-host health claim. When diagnosing recurrence, distinguish HTTP authentication/proxy configuration errors from network timeouts and never reset a vector store as a speculative fix.
 
 
