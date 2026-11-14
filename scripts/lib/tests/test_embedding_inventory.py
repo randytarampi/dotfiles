@@ -42,6 +42,18 @@ def test_symlinked_state_refuses(tmp_path):
         read_state(link)
 
 
+def test_symlinked_parent_state_refuses(tmp_path):
+    true_dir = tmp_path / "owned"
+    true_dir.mkdir()
+    ledger = true_dir / "state.json"
+    ledger.write_text("{}", encoding="utf-8")
+    ledger.chmod(0o600)
+    fake_parent = tmp_path / "redirect"
+    fake_parent.symlink_to(true_dir, target_is_directory=True)
+    with pytest.raises(ValueError, match="parent path is a symlink"):
+        read_state(fake_parent / "state.json")
+
+
 def test_corrupt_state_refuses(tmp_path):
     path = tmp_path / "state.json"
     path.write_text("{not json", encoding="utf-8")
@@ -148,7 +160,8 @@ def test_collector_preserves_route_and_reports_unavailable_listing():
             "reason": "no authoritative read-only collection listing on this build",
         }
     ]
-    assert report["adoption"]["status"] == "PERMITTED"
+    assert report["adoption"]["status"] == "UNKNOWN"
+    assert "empty-index" in report["adoption"]["reason"]
     assert report["writes"] == "none"
 
 
