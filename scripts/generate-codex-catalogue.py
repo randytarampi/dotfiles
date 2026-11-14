@@ -241,15 +241,15 @@ def load_launch_hosted_rows(path):
     rows = payload.get("models") if isinstance(payload, dict) else None
     if not isinstance(rows, list):
         raise ValueError("launch catalogue has no model list")
-    hosted = [
-        row
-        for row in rows
-        if isinstance(row, dict)
-        and row.get("supported_in_api") is False
-        and isinstance(row.get("slug"), str)
-    ]
-    if not all(isinstance(row.get("display_name"), str) for row in hosted):
-        raise ValueError("launch hosted row has unusable display metadata")
+    hosted = []
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("slug"), str):
+            raise ValueError("launch catalogue row has no usable slug")
+        if row.get("supported_in_api") is True:
+            continue
+        if not isinstance(row.get("display_name"), str):
+            raise ValueError("launch hosted row has unusable display metadata")
+        hosted.append(row)
     return hosted
 
 
