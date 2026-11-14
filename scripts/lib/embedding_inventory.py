@@ -13,6 +13,7 @@ performed here.
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import stat as stat_module
@@ -22,6 +23,107 @@ from embedding_representation import REQUIRED_FIELDS
 
 NO_AUTHORITATIVE_INTERFACE = "no-authoritative-interface"
 NO_AUTHORITATIVE_PROBE = "no-authoritative-probe-contract"
+NO_COLLECTION_LISTING = "no authoritative read-only collection listing on this build"
+
+
+def collect_inventory(config_provider, receipt_reader, *, now=None):
+    """Collect config and receipt evidence without probing or mutating services."""
+    timestamp = now or datetime.datetime.now(datetime.timezone.utc).isoformat()
+    config = None
+    config_error = None
+    if callable(config_provider):
+        try:
+            config = config_provider()
+            if not isinstance(config, dict):
+                config_error = "config getter returned an unhealthy shape"
+                config = None
+        except Exception:
+            config_error = "config getter unavailable"
+    else:
+        config_error = "config getter unavailable"
+
+    receipt = None
+    receipt_error = None
+    if callable(receipt_reader):
+        try:
+            receipt = receipt_reader()
+            if not isinstance(receipt, dict) or receipt.get("state") not in {
+                "absent",
+                "present",
+            }:
+                receipt_error = "receipt reader returned an unhealthy shape"
+                receipt = None
+            elif receipt.get("state") == "present":
+                receipt = dict(receipt)
+                receipt["state"] = "present"
+        except Exception:
+            receipt_error = "receipt unavailable or invalid"
+    else:
+        receipt_error = "receipt unavailable"
+
+    if config is None:
+        report = build_inventory(
+            {},
+            state=(
+                receipt
+                if receipt and receipt.get("state") in {"absent", "present"}
+                else None
+            ),
+        )
+        report["webui_config_identity"] = {"status": "UNKNOWN", "reason": config_error}
+        report["config_provenance"] = {"status": "UNKNOWN", "reason": config_error}
+        report["adoption"] = {
+            "status": "UNKNOWN",
+            "reason": "config evidence unavailable",
+        }
+    else:
+        report = build_inventory(
+            config,
+            state=(
+                receipt
+                if receipt is not None and receipt.get("state") in {"absent", "present"}
+                else None
+            ),
+        )
+        customized = config.get("customized")
+        override = config.get("provenance") == "override" or customized is True
+        report["config_provenance"] = {
+            "status": (
+                "OVERRIDE"
+                if override
+                else "DEFAULT" if customized is False else "UNKNOWN"
+            ),
+            "reason": "config-provenance" if override else None,
+        }
+        if override:
+            report["adoption"] = {"status": "REFUSED", "reason": "pinned user override"}
+        elif (
+            customized is False
+            and receipt is not None
+            and receipt.get("index_empty") is True
+        ):
+            report["adoption"] = {"status": "PERMITTED", "reason": None}
+        else:
+            report["adoption"] = {
+                "status": "UNKNOWN",
+                "reason": receipt_error or "defaults and empty index not both proven",
+            }
+    report["collected_at"] = timestamp
+    report["collections"] = {
+        "count": "UNKNOWN",
+        "routes": [
+            {
+                "route_id": "embedding",
+                "status": "UNAVAILABLE",
+                "reason": NO_COLLECTION_LISTING,
+            }
+        ],
+        "identity": _collection_identity_report(),
+        "reason": NO_COLLECTION_LISTING,
+    }
+    if receipt_error:
+        report["state"] = {"state": "UNKNOWN", "reason": receipt_error}
+    return report
 
 
 def read_state(path: Path):
