@@ -25,21 +25,18 @@ def registry():
 
 
 def test_profile_mapping_cloud_and_local():
-    desired = profiles.build_profiles(
-        registry(),
-        {
-            *(
-                f"{provider}/{role}"
-                for provider in ("gateway", "ollama")
-                for role in ("oracle", "orchestrator", "designer", "librarian")
-            ),
-            *(
-                f"anthropic/claude-{preset}-{role}"
-                for preset in ("cloud", "local")
-                for role in ("oracle", "orchestrator", "designer", "librarian")
-            ),
-        },
+    roles = ("oracle", "orchestrator", "designer", "librarian")
+    served = {
+        f"{provider}/{role}"
+        for provider in ("gateway", "ollama")
+        for role in roles
+    }
+    served.update(
+        f"anthropic/claude-{preset}-{role}"
+        for preset in ("cloud", "local")
+        for role in roles
     )
+    desired = profiles.build_profiles(registry(), served)
     assert [item["behavesAs"] for item in desired["cloud"]["inferenceModels"]] == [
         "fable",
         "opus",
