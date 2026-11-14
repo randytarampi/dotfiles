@@ -40,6 +40,8 @@ def test_label_dispatch_keeps_fork_secrets_in_trusted_base_context():
     ):
         stub = read(path)
         assert "pull_request_target:" in stub
+        assert "pull_request_target: # zizmor: ignore[dangerous-triggers]" in stub
+        assert "never checks out or executes PR code" in stub
         assert "  pull_request:\n" not in stub
         assert "types: [labeled]" in stub
         assert "secrets: inherit" in stub
@@ -137,10 +139,12 @@ def test_read_only_generation_and_scoped_publication():
 
 def test_opencode_v2_labels_comments_and_isolated_app_publication():
     workflow = read(".github/workflows/agentic-review.yml")
-    opencode = re.search(r"(?ms)^  opencode:$(.*?)(?=^  \w)", workflow).group(1)
-    publisher = re.search(r"(?ms)^  opencode_publish:$(.*?)(?=^  \w)", workflow).group(
-        1
-    )
+    opencode = workflow.split("\n  opencode:\n", 1)[1].split(
+        "\n  opencode_publish:\n", 1
+    )[0]
+    publisher = workflow.split("\n  opencode_publish:\n", 1)[1].split(
+        "\n  junie:\n", 1
+    )[0]
     assert "contents: read" in opencode
     assert "contents: write" not in opencode
     assert "id-token: write" not in opencode
