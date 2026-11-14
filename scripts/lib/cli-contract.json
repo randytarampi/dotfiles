@@ -1451,7 +1451,8 @@
         "--replace",
         "--model",
         "--context-window",
-        "--endpoint"
+        "--endpoint",
+        "--include-launch-hosted"
       ],
       "positional_operand": null,
       "child_scripts": []
