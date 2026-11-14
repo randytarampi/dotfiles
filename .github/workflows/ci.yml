@@ -104,7 +104,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            architecture: x86_64
+          - os: macos-latest
+            architecture: arm64
+          - os: macos-15-intel
+            architecture: x86_64
+            macos_major: "15"
+          - os: macos-26
+            architecture: arm64
+            macos_major: "26"
+          - os: windows-latest
+            architecture: X64
+            windows_caption: Windows Server
+          - os: windows-11-arm
+            architecture: arm64
+            windows_caption: Windows 11
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -115,6 +131,36 @@ jobs:
       POETRY_VIRTUALENVS_IN_PROJECT: "true"
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Assert native Unix CPU and versioned macOS release
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          EXPECTED_ARCH: ${{ matrix.architecture }}
+          EXPECTED_MACOS_MAJOR: ${{ matrix.macos_major }}
+        run: |
+          echo "runner=$RUNNER_OS cpu=$(uname -m)"
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+          if [[ -n "$EXPECTED_MACOS_MAJOR" ]]; then
+            test "$(sw_vers -productVersion | cut -d. -f1)" = "$EXPECTED_MACOS_MAJOR"
+          fi
+      - name: Assert native Windows kernel and CPU
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          EXPECTED_ARCH: ${{ matrix.architecture }}
+          EXPECTED_CAPTION: ${{ matrix.windows_caption }}
+        run: |
+          $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+          if ($arch -ine $env:EXPECTED_ARCH) {
+            throw "Expected native Windows CPU $env:EXPECTED_ARCH, got $arch"
+          }
+          $caption = (Get-CimInstance Win32_OperatingSystem).Caption
+          if (-not $caption.Contains($env:EXPECTED_CAPTION)) {
+            throw "Unexpected Windows release: $caption"
+          }
+          Write-Host "Windows OS: $caption; architecture: $arch"
       - name: Install Poetry (before setup-python)
         shell: bash
         run: |
