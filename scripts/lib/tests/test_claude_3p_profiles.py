@@ -116,7 +116,7 @@ def test_default_key_file_mode_writes_scoped_bearer(monkeypatch, tmp_path):
 
 def test_default_private_key_reader_refuses_unsafe_parent_and_oversize(tmp_path):
     key = tmp_path / "claude-desktop.key"
-    key.write_text("sk-synthetic-only\\n", encoding="utf-8")
+    key.write_text("sk-synthetic-only\n", encoding="utf-8")
     key.chmod(0o600)
     assert profiles.read_private_key(key) == "sk-synthetic-only"
     key.chmod(0o644)
