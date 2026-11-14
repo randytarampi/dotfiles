@@ -196,8 +196,9 @@ def _merge_app_owned_fields(path, generated):
     existing = json.loads(path.read_text(encoding="utf-8"))
     merged = dict(existing)
     merged.update(generated)
-    # The default no-key mode must not silently erase an already working
-    # app-sealed bearer. Explicit --api-key-source key-file is an opt-in change.
+    # The merged key-file default writes the current scoped bearer so profiles
+    # apply without manual key entry; an already working app-sealed bearer on
+    # an existing entry is preserved when regeneration writes no new key.
     return merged
 
 
@@ -281,7 +282,7 @@ def main(argv=None):
         "--source-dir", default="~/Library/Application Support/Claude-3p/configLibrary"
     )
     parser.add_argument(
-        "--api-key-source", choices=("none", "key-file"), default="none"
+        "--api-key-source", choices=("none", "key-file"), default="key-file"
     )
     parser.add_argument(
         "--allow-partial",
