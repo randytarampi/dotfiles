@@ -114,6 +114,71 @@ def test_default_key_file_mode_writes_scoped_bearer(monkeypatch, tmp_path):
     assert entry["inferenceGatewayApiKey"] == "sk-synthetic-bearer"
 
 
+def test_default_private_key_reader_refuses_unsafe_parent_and_oversize(tmp_path):
+    key = tmp_path / "claude-desktop.key"
+    key.write_text("sk-synthetic-only\\n", encoding="utf-8")
+    key.chmod(0o600)
+    assert profiles.read_private_key(key) == "sk-synthetic-only"
+    key.chmod(0o644)
+    with pytest.raises(ValueError, match="mode 0600"):
+        profiles.read_private_key(key)
+    key.chmod(0o600)
+    link = tmp_path / "redirect"
+    link.symlink_to(key)
+    with pytest.raises(ValueError, match="symlink"):
+        profiles.read_private_key(link)
+    key.write_bytes(b"x" * 4097)
+    with pytest.raises(ValueError, match="size limit"):
+        profiles.read_private_key(key)
+
+
+def test_default_missing_desktop_key_fails_without_writing(monkeypatch, tmp_path):
+    def missing_key(path):
+        assert path.name == "claude-desktop.key"
+        raise ValueError("synthetic credential unavailable")
+
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+    monkeypatch.setattr(profiles, "read_private_key", missing_key)
+    monkeypatch.setattr(profiles, "_read_served_ids", lambda _path: {"served"})
+    monkeypatch.setattr(profiles.tier_registry, "load_registry", registry)
+    directory = tmp_path / "profiles"
+    assert profiles.main(["--source-dir", str(directory)]) == 1
+    assert not directory.exists()
+
+
+def test_no_key_opt_out_does_not_read_private_file(monkeypatch, tmp_path):
+    served = {
+        f"{provider}/{role}"
+        for provider in ("gateway", "ollama")
+        for role in ("oracle", "orchestrator", "designer", "librarian")
+    }
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+    monkeypatch.setattr(
+        profiles,
+        "read_private_key",
+        lambda _path: pytest.fail("none mode must not read credentials"),
+    )
+    monkeypatch.setattr(profiles, "_read_served_ids", lambda _path: served)
+    monkeypatch.setattr(profiles.tier_registry, "load_registry", registry)
+    monkeypatch.setattr(profiles, "_local_category_models", lambda *_a: {})
+    assert (
+        profiles.main(
+            [
+                "--source-dir",
+                str(tmp_path / "profiles"),
+                "--api-key-source",
+                "none",
+                "--dry-run",
+                "--allow-partial",
+                "cloud",
+                "--allow-partial",
+                "local",
+            ]
+        )
+        == 0
+    )
+
+
 def test_served_aliases_are_exact_model_names_not_backend_ids(tmp_path):
     path = tmp_path / "litellm.yaml"
     path.write_text(
@@ -135,9 +200,11 @@ def test_served_aliases_are_exact_model_names_not_backend_ids(tmp_path):
 
 def _run_main(monkeypatch, tmp_path, served, argv_extra):
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
-    monkeypatch.setattr(
-        profiles, "read_private_key", lambda _path: "sk-synthetic-bearer"
-    )
+    def dedicated_desktop_key(path):
+        assert path.name == "claude-desktop.key"
+        return "sk-synthetic-bearer"
+
+    monkeypatch.setattr(profiles, "read_private_key", dedicated_desktop_key)
 
     def served_with_bridges(_path):
         selected = set(served)
@@ -296,6 +363,12 @@ def test_regeneration_preserves_app_sealed_key_and_unmanaged_metadata(tmp_path):
         **desired,
         "inferenceGatewayApiKey": "sk-synthetic-replacement",
     }
-    replaced = profiles._merge_app_owned_fields(target, explicitly_rekeyed)
+    default_preserved = profiles._merge_app_owned_fields(
+        target, explicitly_rekeyed
+    )
+    assert default_preserved["inferenceGatewayApiKey"] == "synthetic-app-sealed-blob"
+    replaced = profiles._merge_app_owned_fields(
+        target, explicitly_rekeyed, replace_credential=True
+    )
     assert replaced["inferenceGatewayApiKey"] == "sk-synthetic-replacement"
     assert replaced["appCustomMetadata"] == {"owner": "preserve"}
