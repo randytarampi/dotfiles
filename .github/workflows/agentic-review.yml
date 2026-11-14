@@ -525,7 +525,10 @@ jobs:
       - name: Install pinned OpenCode v2
         run: |
           set -euo pipefail
-          npm install --global @opencode/cli@2.3.0
+          # npm's install-script policy can leave @opencode/cli's launcher as a
+          # nonfunctional placeholder unless its pinned postinstall is allowed.
+          # Permit only this package, never all dependency lifecycle scripts.
+          npm install --global --allow-scripts=@opencode/cli @opencode/cli@2.3.0
           [[ "$(opencode --version)" == 2.3.0 ]]
       - name: Stage PR diff as untrusted review data
         env:
