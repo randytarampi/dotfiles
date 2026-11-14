@@ -50,6 +50,10 @@ def main(argv=None, *, config_provider=None, receipt_reader=None, environ=None):
 
     report = collect_inventory(config_provider, receipt_reader)
     print(json.dumps(report, sort_keys=True))
+    if report.get("webui_config_identity", {}).get("status") == "UNKNOWN":
+        return 1
+    if report.get("state", {}).get("state") == "UNKNOWN":
+        return 1
     return 0
 
 
