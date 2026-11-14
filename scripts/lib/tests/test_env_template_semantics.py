@@ -9,8 +9,10 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # empty DOTFILES_GEMINI_LITELLM_MODEL opt-in on 2026-11-07; refreshed again for
 # the 2026-11-09 reorder that returns the stranded global deployment/Phase 4
 # gate lines to the '== Deployment phases and service gates ==' block.
+# 2026-11-14: new commented, default-off DOTFILES_RUN_OPENWEBUI_EMBEDDING_INVENTORY
+# operator-only read-only inspection gate in the Open WebUI section (#85).
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "05674d43f77c2995b7517f33dec49382bdc978cab8d6945c12d2e4aabed6f8b9"
+    "8a353da0a6ec55e3a7c2a86e6fe7055b6ab2b98004aa9bc3da1f64e526ab49e7"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
