@@ -39,7 +39,16 @@ def test_profile_mapping_cloud_and_local():
         "sonnet",
         "haiku",
     ]
-    assert desired["local"]["inferenceModels"][0]["name"] == "ollama/oracle"
+    local_oracle = next(
+        item
+        for item in desired["local"]["inferenceModels"]
+        if item["behavesAs"] == "fable"
+    )
+    assert local_oracle["name"] == "anthropic/claude-local-oracle"
+    assert desired["cloud"]["inferenceModels"][0]["name"] == (
+        "anthropic/claude-cloud-oracle"
+    )
+    assert desired["cloud"]["inferenceModels"][0]["labelOverride"] == "gateway/oracle"
 
 
 def test_unchanged_profile_is_not_rewritten_and_mode_private(tmp_path):

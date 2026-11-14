@@ -4653,3 +4653,21 @@ def test_base_url_lanes_without_key_env_carry_a_placeholder_credential(monkeypat
         and not entry["litellm_params"].get("api_key")
     )
     assert credless == [], f"api_base lanes without any api_key: {credless}"
+
+
+def test_anthropic_bridges_copy_existing_target_and_refuse_unknown():
+    from litellm_config import apply_anthropic_bridges
+
+    target = {
+        "model_name": "gateway/model",
+        "litellm_params": {"model": "openai/model", "model_info": {"x": 1}},
+    }
+    rows, warnings = apply_anthropic_bridges(
+        [target],
+        {"preset": {"oracle": "gateway/model", "librarian": "missing/model"}},
+    )
+    alias = next(row for row in rows if row["model_name"].startswith("anthropic/"))
+    assert alias["model_name"] == "anthropic/claude-preset-oracle"
+    assert alias["litellm_params"] == target["litellm_params"]
+    assert alias["litellm_params"] is not target["litellm_params"]
+    assert len(warnings) == 1 and "missing/model" in warnings[0]
