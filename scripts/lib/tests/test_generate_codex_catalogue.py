@@ -306,6 +306,7 @@ def test_launch_hosted_rows_are_copied_verbatim_and_fail_closed(tmp_path):
     with pytest.raises(ValueError):
         catalogue.load_launch_hosted_rows(tmp_path / "absent.json")
 
+
 @pytest.mark.parametrize(
     "bad_hosted",
     [
@@ -358,9 +359,7 @@ def test_launch_hosted_rejects_duplicate_and_zero_hosted_candidates(tmp_path):
         "display_name": "Astra",
         "supported_in_api": False,
     }
-    launch.write_text(
-        json.dumps({"models": [hosted, hosted]}), encoding="utf-8"
-    )
+    launch.write_text(json.dumps({"models": [hosted, hosted]}), encoding="utf-8")
     with pytest.raises(ValueError, match="duplicate"):
         catalogue.load_launch_hosted_rows(launch)
     launch.write_text(
