@@ -28,9 +28,16 @@ def test_profile_mapping_cloud_and_local():
     desired = profiles.build_profiles(
         registry(),
         {
-            f"{provider}/{role}"
-            for provider in ("gateway", "ollama")
-            for role in ("oracle", "orchestrator", "designer", "librarian")
+            *(
+                f"{provider}/{role}"
+                for provider in ("gateway", "ollama")
+                for role in ("oracle", "orchestrator", "designer", "librarian")
+            ),
+            *(
+                f"anthropic/claude-{preset}-{role}"
+                for preset in ("cloud", "local")
+                for role in ("oracle", "orchestrator", "designer", "librarian")
+            ),
         },
     )
     assert [item["behavesAs"] for item in desired["cloud"]["inferenceModels"]] == [
@@ -64,6 +71,15 @@ def test_unchanged_profile_is_not_rewritten_and_mode_private(tmp_path):
 def test_unserved_model_refuses_all_profiles():
     result = profiles.build_profiles(registry(), {"gateway/oracle"})
     assert set(result) == set()
+
+
+def test_missing_new_bridge_alias_refuses_even_when_role_targets_are_served():
+    targets = {
+        f"{provider}/{role}"
+        for provider in ("gateway", "ollama")
+        for role in ("oracle", "orchestrator", "designer", "librarian")
+    }
+    assert profiles.build_profiles(registry(), targets) == {}
 
 
 def test_key_file_mode_contains_key_only_in_credential_field(tmp_path):
@@ -103,7 +119,15 @@ def test_served_aliases_are_exact_model_names_not_backend_ids(tmp_path):
 
 def _run_main(monkeypatch, tmp_path, served, argv_extra):
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
-    monkeypatch.setattr(profiles, "_read_served_ids", lambda _path: set(served))
+    def served_with_bridges(_path):
+        selected = set(served)
+        for preset, provider in (("cloud", "gateway"), ("local", "ollama")):
+            for role in ("oracle", "orchestrator", "designer", "librarian"):
+                if f"{provider}/{role}" in selected:
+                    selected.add(f"anthropic/claude-{preset}-{role}")
+        return selected
+
+    monkeypatch.setattr(profiles, "_read_served_ids", served_with_bridges)
     monkeypatch.setattr(profiles, "_local_category_models", lambda *_a, **_k: {})
     monkeypatch.setattr(profiles.tier_registry, "load_registry", registry)
     source = tmp_path / "configLibrary"
