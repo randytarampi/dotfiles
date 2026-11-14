@@ -69,7 +69,6 @@ def test_refs_major_only():
         "coverallsapp/github-action",
         "qltysh/qlty-action",
         "randytarampi/dotfiles",
-        "anomalyco/opencode",
     }
 
 
