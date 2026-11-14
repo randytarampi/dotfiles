@@ -232,25 +232,113 @@ def save_catalogue(path, text, *, replace):
     return True
 
 
+LAUNCH_CATALOGUE_LIMIT = 1048576
+MAX_CATALOGUE_MODELS = 40
+HOSTED_ROUTE_FIELDS = frozenset(
+    {
+        "provider",
+        "provider_id",
+        "provider_name",
+        "model_provider",
+        "model_provider_id",
+        "api_base",
+        "api_url",
+        "base_url",
+        "endpoint",
+        "api_endpoint",
+        "api_key",
+        "authorization",
+        "auth_token",
+        "headers",
+    }
+)
+
+
 def load_launch_hosted_rows(path):
-    """Copy launch-managed hosted rows verbatim; refuse unusable payloads."""
-    path = Path(path)
-    if path.is_symlink() or not path.is_file():
+    """Copy trusted app-hosted rows without inferring hosting from missing data."""
+    path = Path(path).expanduser()
+    if path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
+        raise ValueError("launch catalogue path is symlinked")
+    if not path.is_file():
         raise ValueError("launch catalogue missing or unsafe")
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    parent = path.parent.stat()
+    if parent.st_uid != os.getuid() or parent.st_mode & 0o022:
+        raise ValueError("launch catalogue directory is not owner-controlled")
+    expected = path.stat()
+    if (
+        not stat.S_ISREG(expected.st_mode)
+        or expected.st_uid != os.getuid()
+        or expected.st_nlink != 1
+        or expected.st_mode & 0o022
+        or expected.st_size > LAUNCH_CATALOGUE_LIMIT
+    ):
+        raise ValueError("launch catalogue is not a safe owner file")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    flags |= getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0)
+    descriptor = os.open(path, flags)
+    with os.fdopen(descriptor, "rb") as source:
+        actual = os.fstat(source.fileno())
+        if (
+            not stat.S_ISREG(actual.st_mode)
+            or actual.st_uid != os.getuid()
+            or actual.st_nlink != 1
+            or actual.st_mode & 0o022
+            or (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino)
+        ):
+            raise ValueError("launch catalogue changed during read")
+        raw = source.read(LAUNCH_CATALOGUE_LIMIT + 1)
+    if len(raw) > LAUNCH_CATALOGUE_LIMIT:
+        raise ValueError("launch catalogue exceeds size limit")
+    payload = json.loads(raw)
     rows = payload.get("models") if isinstance(payload, dict) else None
     if not isinstance(rows, list):
         raise ValueError("launch catalogue has no model list")
     hosted = []
+    seen = set()
     for row in rows:
         if not isinstance(row, dict) or not isinstance(row.get("slug"), str):
             raise ValueError("launch catalogue row has no usable slug")
+        slug = row["slug"]
+        if not MODEL_RE.fullmatch(slug):
+            raise ValueError("launch catalogue contains unsafe model slug")
         if row.get("supported_in_api") is True:
             continue
-        if not isinstance(row.get("display_name"), str):
+        if row.get("supported_in_api") is not False:
+            raise ValueError("launch model hosting provenance is missing or invalid")
+        name = row.get("display_name")
+        if (
+            not isinstance(name, str)
+            or not name.strip()
+            or len(name) > 160
+            or any(ord(char) < 32 for char in name)
+        ):
             raise ValueError("launch hosted row has unusable display metadata")
+        if HOSTED_ROUTE_FIELDS.intersection(row):
+            raise ValueError("launch hosted row carries an explicit provider route")
+        if slug in seen:
+            raise ValueError("duplicate launch hosted model")
+        seen.add(slug)
         hosted.append(row)
+    if not hosted:
+        raise ValueError("launch catalogue contains no explicitly hosted models")
+    if len(hosted) > MAX_CATALOGUE_MODELS:
+        raise ValueError("too many hosted models")
     return hosted
+
+
+def append_launch_hosted_rows(result, hosted):
+    """Protect the active gateway catalogue from duplicate and oversized rows."""
+    existing = {row["slug"] for row in result["models"]}
+    requested = [row["slug"] for row in hosted]
+    if (
+        len(existing) != len(result["models"])
+        or len(requested) != len(set(requested))
+        or existing.intersection(requested)
+    ):
+        raise ValueError("launch hosted rows overlap or duplicate served model IDs")
+    if len(existing) + len(requested) > MAX_CATALOGUE_MODELS:
+        raise ValueError("combined Codex model list exceeds forty entries")
+    return {**result, "models": [*result["models"], *hosted]}
 
 
 def main(argv=None):
@@ -278,9 +366,8 @@ def main(argv=None):
         result = generate_catalogue(data, args.models, args.context_window)
         if args.include_launch_hosted:
             host_rows = load_launch_hosted_rows(Path(args.include_launch_hosted))
-            if host_rows:
-                result["models"].extend(host_rows)
-                print("Included launch-managed hosted rows: %d" % len(host_rows))
+            result = append_launch_hosted_rows(result, host_rows)
+            print("Included launch-managed hosted rows: %d" % len(host_rows))
         if args.apply:
             if (
                 os.environ.get("DOTFILES_RUN_CODEX_SETUP") != "1"
