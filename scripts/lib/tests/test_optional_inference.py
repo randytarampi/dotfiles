@@ -133,8 +133,9 @@ def test_review_action_keeps_trusted_model_selection_and_no_push_guards():
     assert "HAS_GROQ_KEY" in workflow
     assert "TRUSTED_DOTFILES" in workflow
     assert "permission" in workflow and '"edit": "deny"' in workflow
-    assert "review-no-push/pre-push" in workflow
-    assert "anomalyco/opencode/github@" in workflow
+    assert 'config["permissions"] = readonly' in workflow
+    assert "opencode run --standalone --archived --format json" in workflow
+    assert "opencode_publish:" in workflow
     assert "NVIDIA NIM review requires explicit development-use approval" in workflow
 
 
@@ -143,9 +144,9 @@ def _run_review_model_setup(tmp_path, **overrides):
     workflow = (ROOT / ".github/workflows/agentic-review.yml").read_text(
         encoding="utf-8"
     )
-    marker = "      - name: Configure read-only OpenCode plan agent"
+    marker = "      - name: Configure read-only OpenCode v2 review agent"
     fragment = workflow.split(marker, 1)[1].split(
-        "      - name: Prepare native OpenCode Git authentication handoff", 1
+        "      - name: Start runner-local LiteLLM native free pool", 1
     )[0]
     match = re.search(
         r"^          python3 - <<'PY'\n(?P<code>.*?)^          PY$",
@@ -331,7 +332,7 @@ def test_review_workflow_starts_local_router_only_for_qualified_free_pool():
     assert 'OPENCODE_DISABLE_PROJECT_CONFIG: "true"' in workflow
 
 
-def test_review_v2_source_stays_canonical_with_v1_native_action_runtime_mirror(
+def test_review_v2_source_and_runtime_are_v2_only(
     tmp_path,
 ):
     fixture = json.loads(
@@ -360,9 +361,12 @@ def test_review_v2_source_stays_canonical_with_v1_native_action_runtime_mirror(
         assert entry["package"] == "aisdk:@ai-sdk/openai-compatible"
         assert entry["settings"]["baseURL"].startswith("http")
         assert "npm" not in entry and "options" not in entry
-        # The native GitHub action still installs v1.19.5 and reads only
-        # provider/npm/options. Keep this compatibility mirror runtime-only.
-        legacy = config["provider"][route]
-        assert legacy["npm"] == "@ai-sdk/openai-compatible"
-        assert legacy["options"] == entry["settings"]
-        assert legacy["models"] == entry["models"]
+        assert "provider" not in config
+        assert "permission" not in config
+        assert "agent" not in config
+        assert config["default_agent"] == "review"
+        assert config["mcp"] == {}
+        assert config["plugins"] == []
+        assert config["permissions"][0] == {
+            "action": "*", "resource": "*", "effect": "deny"
+        }
