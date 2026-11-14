@@ -397,9 +397,7 @@ def test_launch_catalogue_source_is_bounded_and_not_symlinked(tmp_path):
 
 
 def test_combined_catalogue_prevents_gateway_spoof_and_overflow():
-    result = catalogue.generate_catalogue(
-        SERVED, ["ollama/glm-5.3-flash:cloud"], 65536
-    )
+    result = catalogue.generate_catalogue(SERVED, ["ollama/glm-5.3-flash:cloud"], 65536)
     hosted = [
         {
             "slug": "gpt-6-astra",
@@ -430,4 +428,3 @@ def test_combined_catalogue_prevents_gateway_spoof_and_overflow():
                 for index in range(40)
             ],
         )
-
