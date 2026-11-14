@@ -232,6 +232,27 @@ def save_catalogue(path, text, *, replace):
     return True
 
 
+def load_launch_hosted_rows(path):
+    """Copy launch-managed hosted rows verbatim; refuse unusable payloads."""
+    path = Path(path)
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("launch catalogue missing or unsafe")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    rows = payload.get("models") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        raise ValueError("launch catalogue has no model list")
+    hosted = [
+        row
+        for row in rows
+        if isinstance(row, dict)
+        and row.get("supported_in_api") is False
+        and isinstance(row.get("slug"), str)
+    ]
+    if not all(isinstance(row.get("display_name"), str) for row in hosted):
+        raise ValueError("launch hosted row has unusable display metadata")
+    return hosted
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", action="append", required=True, dest="models")
@@ -241,6 +262,12 @@ def main(argv=None):
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--apply", action="store_true")
     parser.add_argument("--replace", action="store_true")
+    parser.add_argument(
+        "--include-launch-hosted",
+        metavar="LAUNCH_CATALOGUE",
+        help="Append the launch-managed catalogue's hosted rows "
+        "(supported_in_api false, app-hosted route) verbatim.",
+    )
     args = parser.parse_args(argv)
     try:
         if args.replace and not args.apply:
@@ -249,6 +276,11 @@ def main(argv=None):
         key_path = Path.home() / ".local/share/litellm/clients/codex.key"
         data = fetch_served(url, read_key(key_path))
         result = generate_catalogue(data, args.models, args.context_window)
+        if args.include_launch_hosted:
+            host_rows = load_launch_hosted_rows(Path(args.include_launch_hosted))
+            if host_rows:
+                result["models"].extend(host_rows)
+                print("Included launch-managed hosted rows: %d" % len(host_rows))
         if args.apply:
             if (
                 os.environ.get("DOTFILES_RUN_CODEX_SETUP") != "1"
