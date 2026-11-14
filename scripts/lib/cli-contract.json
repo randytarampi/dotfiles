@@ -1525,6 +1525,7 @@
       "accepted_flags": [
         "--allow-partial",
         "--api-key-source",
+        "--replace-credential",
         "--dry-run",
         "--help",
         "--no-backup",
