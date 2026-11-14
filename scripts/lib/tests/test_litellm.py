@@ -4671,3 +4671,14 @@ def test_anthropic_bridges_copy_existing_target_and_refuse_unknown():
     assert alias["litellm_params"] == target["litellm_params"]
     assert alias["litellm_params"] is not target["litellm_params"]
     assert len(warnings) == 1 and "missing/model" in warnings[0]
+
+    conflicting = {
+        "model_name": "anthropic/claude-preset-oracle",
+        "litellm_params": {"model": "openai/different-backend"},
+    }
+    with pytest.raises(ValueError, match="collides with a different route"):
+        apply_anthropic_bridges(
+            [target, conflicting], {"preset": {"oracle": "gateway/model"}}
+        )
+    assert conflicting["litellm_params"]["model"] == "openai/different-backend"
+
