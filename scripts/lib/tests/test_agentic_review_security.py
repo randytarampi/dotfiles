@@ -33,6 +33,24 @@ def test_normal_lanes_pin_and_verify_trusted_assets_without_workspace_checkout()
     assert "Configure git identity" not in workflow
 
 
+def test_label_dispatch_keeps_fork_secrets_in_trusted_base_context():
+    for path in (
+        ".github/workflows/agent-review.yml",
+        "configs/review/dispatcher-stub.yml",
+    ):
+        stub = read(path)
+        assert "pull_request_target:" in stub
+        assert "  pull_request:\n" not in stub
+        assert "types: [labeled]" in stub
+        assert "secrets: inherit" in stub
+        assert "actions/checkout@" not in stub
+    reviewer = read(".github/workflows/agentic-review.yml")
+    assert '$event_name == "pull_request_target"' in reviewer
+    lint = read(".github/actionlint.yaml")
+    assert ".github/workflows/agentic-review.yml:" in lint
+    assert 'input "client-id" is not defined' in lint
+
+
 def test_scheduled_runs_derive_a_nonempty_trusted_ref_from_the_commit_sha():
     workflow = read(".github/workflows/agentic-review.yml")
     assert workflow.count("TRUSTED_REF: ${{ inputs.trusted_ref }}") == 3
