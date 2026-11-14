@@ -149,7 +149,14 @@ jobs:
                     and (.label.name == $actual_label)
                     and ((.pull_request.number | tostring) == $actual_pr)
                   then
-                    if .label.name == "review-all" then "junie,copilot"
+                    # Only the isolated v2 OpenCode lane (and token-free Copilot
+                    # request) may run on fork labels in privileged base context.
+                    # Junie/Gemini must not receive provider secrets while
+                    # processing fork-authored content from a label event.
+                    if (.pull_request.head.repo.full_name != $repo)
+                       and (.label.name != "review-opencode")
+                       and (.label.name != "review-copilot") then ""
+                    elif .label.name == "review-all" then "junie,copilot"
                     elif .label.name == "review-opencode" then "opencode"
                     elif .label.name == "review-junie" then "junie"
                     elif .label.name == "review-gemini" then "gemini"
