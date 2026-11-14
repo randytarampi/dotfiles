@@ -38,17 +38,26 @@ def test_slugs_match_registered_gateway_ids_exactly_not_ollama_shorthand():
 
 
 def test_desktop_schema_fields_are_present_without_unqualified_capabilities():
-    model = catalogue.generate_catalogue(
-        SERVED, ["gemma4:12b-mxfp8"], 65536
-    )["models"][0]
+    result = catalogue.generate_catalogue(SERVED, ["gemma4:12b-mxfp8"], 65536)
+    model = result["models"][0]
     required = {
-        "support_verbosity", "default_verbosity", "default_reasoning_summary",
-        "supports_reasoning_summary_parameter", "supports_search_tool",
-        "web_search_tool_type", "apply_patch_tool_type",
-        "auto_compact_token_limit", "base_instructions", "model_messages",
-        "effective_context_window_percent", "truncation_policy",
-        "service_tiers", "default_service_tier", "additional_speed_tiers",
-        "availability_nux", "experimental_supported_tools",
+        "support_verbosity",
+        "default_verbosity",
+        "default_reasoning_summary",
+        "supports_reasoning_summary_parameter",
+        "supports_search_tool",
+        "web_search_tool_type",
+        "apply_patch_tool_type",
+        "auto_compact_token_limit",
+        "base_instructions",
+        "model_messages",
+        "effective_context_window_percent",
+        "truncation_policy",
+        "service_tiers",
+        "default_service_tier",
+        "additional_speed_tiers",
+        "availability_nux",
+        "experimental_supported_tools",
         "include_apps_usage_instructions",
         "include_plugin_usage_instructions",
         "include_skills_usage_instructions",
