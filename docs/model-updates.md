@@ -146,8 +146,12 @@ The `publish` job authenticates with a GitHub App, not the workflow's read-only 
     ID** (not its numeric App ID).
 3. Under **Settings → Secrets and variables → Actions → Secrets**, create
     the **repository Actions secret** `WOOFBOT_GITHUB_APP_PRIVATE_KEY` from
-    the complete PEM private key. Both publisher jobs use this repository secret;
-    no per-environment secret copies are required. Do not commit the key or
+    the complete PEM private key. Only the **model-catalogue** publisher uses this
+    Woofbot secret; the OpenCode manual fix and review publishers use the separate
+    `OPENCODE_GITHUB_APP_ID`, `OPENCODE_GITHUB_CLIENT_ID` and
+    `OPENCODE_GITHUB_APP_PRIVATE_KEY` configuration documented in
+    [agentic-review.md](agentic-review.md#secrets). No per-environment secret
+    copies are required. Do not commit the key or
     copy it into ordinary Actions variables.
 4. The publisher jobs still name the `model-catalogue-publish` and
     `agentic-review-fix` environments, respectively. Configure required
@@ -158,9 +162,9 @@ The `publish` job authenticates with a GitHub App, not the workflow's read-only 
     branch. Re-running a previous failed attempt does not automatically
     incorporate subsequent workflow changes.
 
-Repository-scoped secrets can be referenced by **other workflows in the same repository**, not only these two publisher jobs. The generator does not pass the Woofbot secret to its commands, but this is not an environment-level secret-isolation guarantee. Restrict and review workflow changes and keep GitHub App installation permissions minimal; the named environments control deployment admission only if protection rules are configured. Existing deprecated Actions credentials may remain provisioned for a separately authorized clean-up; active publishers use only the new names.
+Repository-scoped secrets can be referenced by **other workflows in the same repository**. The catalogue generator does not pass the Woofbot secret to its commands; the OpenCode fix generator does not receive the OpenCode App key. This is not an environment-level secret-isolation guarantee. Restrict and review workflow changes and keep GitHub App installation permissions minimal; the named environments control deployment admission only if protection rules are configured. Existing deprecated Actions credentials may remain provisioned for a separately authorized clean-up; active publishers use only the new names.
 
-When publishing, both the catalogue and agentic-review fix workflows pass the WOOFBOT installation token to GitHub CLI as `GH_TOKEN` and use the scoped `gh auth git-credential` helper for Git-over-HTTPS pushes. This avoids a raw `Authorization: Bearer` Git header (which previously failed at push time), keeps the token out of Git command arguments and persistent checkout credentials, and disables interactive credential prompts. No additional WOOFBOT permissions or secret copies are required. A successful token mint does not prove the bot branch push or draft PR creation worked; inspect both operations in Actions.
+When publishing, the catalogue uses a Woofbot installation token and the agentic-review fix workflow uses a dedicated OpenCode App installation token. Both pass their respective tokens to GitHub CLI as `GH_TOKEN` and use the scoped `gh auth git-credential` helper for Git-over-HTTPS pushes. This avoids a raw `Authorization: Bearer` Git header (which previously failed at push time), keeps the token out of Git command arguments and persistent checkout credentials, and disables interactive credential prompts. No additional Woofbot permissions or cross-App secret copies are required. A successful token mint does not prove the bot branch push or draft PR creation worked; inspect both operations in Actions.
 
 If either credential is unavailable, the publisher now fails with an explicit preflight error without printing either secret. The refresh job remains read-only and its uploaded inventory artifact remains available for inspection. A successful refresh does not mean a draft PR was published.
 
