@@ -286,10 +286,11 @@ def test_opencode_review_runner_attaches_diff_and_rubric_as_text():
     check = next(
         step["run"]
         for step in publisher
-        if step.get("name") == "Verify exact head and nonempty review before minting App token"
+        if step.get("name")
+        == "Verify exact head and nonempty review before minting App token"
     )
     assert 'grep -Fxq "## ' in check
-    assert 'review/opencode-review.md' in check
+    assert "review/opencode-review.md" in check
     assert "for heading in Verdict Findings Evidence" in check
 
 
@@ -347,7 +348,9 @@ def test_opencode_review_validator_rejects_nonreviews(
     if kind != "no_start":
         events.append({"type": "step_start"})
     if kind == "event_error":
-        events.append({"type": "error", "error": {"message": "provider rejected request"}})
+        events.append(
+            {"type": "error", "error": {"message": "provider rejected request"}}
+        )
     if kind == "disallowed_tool":
         events.append({"type": "tool_use", "part": {"tool": "bash"}})
     events.append(
