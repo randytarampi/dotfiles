@@ -271,6 +271,110 @@ def test_opencode_pinned_installer_accepts_only_expected_version(
         assert "Unexpected OpenCode CLI version" in result.stderr
 
 
+
+def test_opencode_review_runner_attaches_diff_and_rubric_as_text():
+    """OpenCode v2 --file imports text files into the model input."""
+    workflow = yaml.safe_load(read(".github/workflows/agentic-review.yml"))
+    runner = next(
+        step["run"]
+        for step in workflow["jobs"]["opencode"]["steps"]
+        if step.get("name") == "Execute isolated read-only OpenCode v2"
+    )
+    assert "--file review-diff.patch --file review-rubric.md" in runner
+    assert "The full diff and trusted rubric are attached as text" in runner
+    assert "Do NOT output tool requests" in runner
+    publisher = workflow["jobs"]["opencode_publish"]["steps"]
+    check = next(
+        step["run"]
+        for step in publisher
+        if step.get("name") == "Verify exact head and nonempty review before minting App token"
+    )
+    assert 'grep -Fxq "## <HEADING>" review/opencode-review.md'.replace("<HEADING>", "$" + "{heading}") in check
+    assert "for heading in Verdict Findings Evidence" in check
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected_success", "expected_error"),
+    [
+        ("complete", True, ""),
+        ("tool_json", False, "textual tool request"),
+        ("no_headings", False, "structured review"),
+        ("no_evidence", False, "Evidence"),
+        ("disallowed_tool", False, "disallowed review tool"),
+        ("event_error", False, "inference error"),
+        ("no_start", False, "Missing, incomplete"),
+        ("synthetic_only", False, "Missing, incomplete"),
+    ],
+)
+def test_opencode_review_validator_rejects_nonreviews(
+    tmp_path, kind, expected_success, expected_error
+):
+    """Exercise the actual inline output validator, not a reimplementation."""
+    workflow = yaml.safe_load(read(".github/workflows/agentic-review.yml"))
+    runner = next(
+        step["run"]
+        for step in workflow["jobs"]["opencode"]["steps"]
+        if step.get("name") == "Execute isolated read-only OpenCode v2"
+    )
+    code = runner.split("python3 - <<'PY'\n", 1)[1].split("\nPY", 1)[0]
+    good = (
+        "## Verdict\n"
+        "INCONCLUSIVE: the selected hunks need a downstream consumer check.\n\n"
+        "## Findings\n"
+        "- No verified blocking issue; test a real consumer before merging.\n\n"
+        "## Evidence\n"
+        "- Examined the supplied review-diff.patch and review-rubric.md; no host validation.\n"
+    )
+    if kind == "tool_json":
+        text = json.dumps(
+            {
+                "name": "read",
+                "parameters": {
+                    "path": "review-diff.patch",
+                    "offset": 1,
+                    "limit": 2000,
+                    "explanation": "Please read this file before I can make a decision.",
+                },
+            }
+        )
+    elif kind == "no_headings":
+        text = "This is a preliminary step and I need to read the diff. " * 4
+    elif kind == "no_evidence":
+        text = good.split("## Evidence", 1)[0]
+    else:
+        text = good
+    events = []
+    if kind != "no_start":
+        events.append({"type": "step_start"})
+    if kind == "event_error":
+        events.append({"type": "error", "error": {"message": "provider rejected request"}})
+    if kind == "disallowed_tool":
+        events.append({"type": "tool_use", "part": {"tool": "bash"}})
+    events.append(
+        {"type": "text", "part": {"text": text, "synthetic": kind == "synthetic_only"}}
+    )
+    (tmp_path / "opencode-review.jsonl").write_text(
+        "\n".join(json.dumps(event) for event in events) + "\n",
+        encoding="utf-8",
+    )
+    env = {**os.environ, "RUNNER_TEMP": str(tmp_path), "REVIEWED_HEAD": "e" * 40}
+    result = subprocess.run(
+        ["python3", "-c", code],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert (result.returncode == 0) is expected_success, result.stderr
+    if expected_success:
+        assert (tmp_path / "opencode-review.md").read_text() == good.strip() + "\n"
+        assert (tmp_path / "opencode-review-head.txt").read_text() == "e" * 40 + "\n"
+    else:
+        assert expected_error in result.stderr
+        assert not (tmp_path / "opencode-review.md").exists()
+
+
 def test_ci_opencode_custom_provider_packages_match_v2_contract():
     """V2 accepts aisdk: AI SDK locators; the legacy internal path hides models."""
     config = json.loads(read("configs/opencode/ci/opencode.json"))
