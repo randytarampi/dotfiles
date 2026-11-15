@@ -2198,10 +2198,9 @@ def apply_anthropic_bridges(model_list_rows, bridges):
                 candidate["model_info"] = model_info
             if alias in by_name:
                 existing = by_name[alias]
-                if (
-                    existing.get("litellm_params") != candidate.get("litellm_params")
-                    or existing.get("model_info") != candidate.get("model_info")
-                ):
+                if existing.get("litellm_params") != candidate.get(
+                    "litellm_params"
+                ) or existing.get("model_info") != candidate.get("model_info"):
                     raise ValueError(
                         f"Claude bridge alias {alias} collides with a different route"
                     )
