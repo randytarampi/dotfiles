@@ -600,15 +600,23 @@ def main():
                 )
 
         previous_sidecars = _read_v2_manifest(config_dir) if profiles_v2 else {}
+        if profiles_v2:
+            # Preflight *all* profile ownership checks before touching even the
+            # managed root block. Dry-run must perform the same refusal checks.
+            _reconcile_v2_profiles(config_dir, sidecars, previous_sidecars, True)
+        desired_digests = {
+            name: hashlib.sha256(content.encode("utf-8")).hexdigest()
+            for name, content in sidecars.items()
+        }
         sidecar_changed = profiles_v2 and (
-            set(previous_sidecars) != set(sidecars)
+            previous_sidecars != desired_digests
             or any(
-                not (Path(config_dir) / f"{name}.config.toml").exists()
+                not (Path(config_dir) / f"{name}.config.toml").is_file()
                 or hashlib.sha256(
                     (Path(config_dir) / f"{name}.config.toml").read_bytes()
                 ).hexdigest()
-                != previous_sidecars.get(name)
-                for name in sidecars
+                != digest
+                for name, digest in desired_digests.items()
             )
         )
         if new_content == original_content and not sidecar_changed:
@@ -617,12 +625,13 @@ def main():
             logger.info(f"Would configure providers in {config_path}")
         else:
             os.makedirs(config_dir, exist_ok=True)
-            if os.path.exists(config_path) and not args.no_backup:
-                backup_path = backup_file(config_path, enabled=True)
-                if backup_path:
-                    logger.info(f"Backed up existing config.toml to {backup_path}")
-            write_text_file(config_path, new_content, backup=False)
-            if profiles_v2:
+            if new_content != original_content:
+                if os.path.exists(config_path) and not args.no_backup:
+                    backup_path = backup_file(config_path, enabled=True)
+                    if backup_path:
+                        logger.info(f"Backed up existing config.toml to {backup_path}")
+                write_text_file(config_path, new_content, backup=False)
+            if profiles_v2 and sidecar_changed:
                 _reconcile_v2_profiles(config_dir, sidecars, previous_sidecars, False)
             logger.info(f"Codex configuration written to {config_path}")
     except (OSError, ValueError) as exc:
