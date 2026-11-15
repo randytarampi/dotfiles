@@ -196,9 +196,13 @@ def test_opencode_v2_labels_comments_and_isolated_app_publication():
     assert "permission-contents: write" not in publisher
     assert "Require OpenCode App publisher configuration" in publisher
     assert 'actual_id="$(gh api "/apps/${APP_SLUG}" --jq .id)"' in publisher
-    assert 'actual_client_id="$(gh api "/apps/${APP_SLUG}" --jq .client_id)"' in publisher
+    assert (
+        'actual_client_id="$(gh api "/apps/${APP_SLUG}" --jq .client_id)"' in publisher
+    )
     assert "needs.opencode.outputs.head" in publisher
-    assert "agent-review:opencode:v2 publisher=opencode-randytarampi-ca head=" in publisher
+    assert (
+        "agent-review:opencode:v2 publisher=opencode-randytarampi-ca head=" in publisher
+    )
     assert "gh api --paginate" in publisher
     assert "gh api --method PATCH" in publisher
     assert "gh api --method POST" in publisher
@@ -544,12 +548,17 @@ def test_manual_fix_uses_opencode_app_publisher_credentials():
     assert "Unexpected OpenCode App slug for manual fix publisher" in publish
     assert "Require OpenCode App fix publisher configuration" in publish
     assert 'actual_id="$(gh api "/apps/${PUBLISH_APP_SLUG}" --jq .id)"' in publish
-    assert 'actual_client_id="$(gh api "/apps/${PUBLISH_APP_SLUG}" --jq .client_id)"' in publish
+    assert (
+        'actual_client_id="$(gh api "/apps/${PUBLISH_APP_SLUG}" --jq .client_id)"'
+        in publish
+    )
     assert 'bot_id="$(gh api "/users/${PUBLISH_APP_SLUG}[bot]" --jq .id)"' in publish
     assert '[[ "${bot_id}" =~ ^[1-9][0-9]*$ ]]' in publish
     assert 'publisher_login="${PUBLISH_APP_SLUG}[bot]"' in publish
     assert 'git config user.name "${publisher_login}"' in publish
-    assert "${OPENCODE_BOT_USER_ID}+${publisher_login}@users.noreply.github.com" in publish
+    assert (
+        "${OPENCODE_BOT_USER_ID}+${publisher_login}@users.noreply.github.com" in publish
+    )
     assert "353209076" not in publish
     assert "agentic-review-bot[bot]@users.noreply.github.com" not in publish
 
