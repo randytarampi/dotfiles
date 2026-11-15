@@ -117,6 +117,12 @@ def build_profiles(registry, served_ids, api_key=""):
                 missing.append(f"{role} model {model} is not served")
             elif served_ids is not None and alias not in served_ids:
                 missing.append(f"{role} bridge alias {alias} is not served")
+            elif getattr(served_ids, "routes", None) is not None and (
+                served_ids.routes.get(alias) != served_ids.routes.get(served_model)
+            ):
+                missing.append(
+                    f"{role} bridge alias {alias} differs from served model {served_model}"
+                )
             if isinstance(label, str) and label in used_labels:
                 label = f"{label} ({role})"
             if isinstance(label, str):
@@ -248,6 +254,14 @@ def _merge_app_owned_fields(path, generated, *, replace_credential=False):
     return merged
 
 
+class ServedInventory(set):
+    """Exact served aliases plus their generated backend routes."""
+
+    def __init__(self, ids, routes):
+        super().__init__(ids)
+        self.routes = routes
+
+
 def _read_served_ids(config_path):
     """Return exact *served* LiteLLM model_name aliases, never backend IDs."""
     if config_path.is_symlink() or not config_path.is_file():
@@ -259,14 +273,19 @@ def _read_served_ids(config_path):
     if not isinstance(rows, list) or not rows:
         raise ValueError("LiteLLM registry has no model_list")
     result = set()
+    routes = {}
     for row in rows:
         if not isinstance(row, dict) or not isinstance(row.get("model_name"), str):
             raise ValueError("LiteLLM registry contains invalid model row")
         alias = row["model_name"]
         if not alias or alias != alias.strip():
             raise ValueError("LiteLLM registry contains an unsafe model alias")
+        params = row.get("litellm_params")
+        if not isinstance(params, dict) or not isinstance(params.get("model"), str):
+            raise ValueError("LiteLLM registry contains invalid route parameters")
         result.add(alias)
-    return result
+        routes.setdefault(alias, []).append(params)
+    return ServedInventory(result, routes)
 
 
 def _local_category_models(registry, preset):
