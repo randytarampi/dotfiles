@@ -41,7 +41,10 @@ from provider_endpoints import (
     provider_models,
 )
 from litellm_routing import routing_entries_are_safe
-from litellm_aliases import canonical_allowlist_key  # noqa: E402 -- lib sibling import.
+from litellm_aliases import (  # noqa: E402 -- lib sibling import.
+    canonical_allowlist_key,
+    resolve_canonical_identity,
+)
 from model_catalogues import open_same_origin
 
 import models_dev  # noqa: E402 -- lib sibling import.
@@ -2173,6 +2176,18 @@ def apply_anthropic_bridges(model_list_rows, bridges):
     for preset, roles in sorted(bridges.items()):
         for role, wire_model in sorted(roles.items()):
             target = by_name.get(wire_model)
+            canonical = None
+            if target is None:
+                identity = resolve_canonical_identity(wire_model, True)
+                if identity and identity.startswith("anthropic/"):
+                    canonical = "meridian/" + identity[len("anthropic/") :]
+                elif identity and identity.startswith("google/"):
+                    model_id = identity[len("google/") :]
+                    canonical = "google/models/" + model_id.removeprefix("models/")
+                else:
+                    canonical = identity
+                if canonical:
+                    target = by_name.get(canonical)
             if target is None:
                 warnings.append(
                     f"anthropic bridge {preset}/{role} withheld: target {wire_model!r} is not generated"
@@ -2187,6 +2202,12 @@ def apply_anthropic_bridges(model_list_rows, bridges):
                 continue
             row = copy.deepcopy(target)
             row["model_name"] = alias
+            if canonical and canonical != wire_model:
+                row["litellm_params"] = dict(row.get("litellm_params", {}))
+                row["litellm_params"]["metadata"] = dict(
+                    row["litellm_params"].get("metadata", {}),
+                    canonical_bridge_source=wire_model,
+                )
             additions.append(row)
             by_name[alias] = row
     rows.extend(additions)

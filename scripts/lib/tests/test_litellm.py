@@ -4681,3 +4681,24 @@ def test_anthropic_bridges_copy_existing_target_and_refuse_unknown():
             [target, conflicting], {"preset": {"oracle": "gateway/model"}}
         )
     assert conflicting["litellm_params"]["model"] == "openai/different-backend"
+
+
+def test_anthropic_bridge_uses_served_canonical_target():
+    from litellm_config import apply_anthropic_bridges
+
+    canonical = {
+        "model_name": "meridian/claude-sonnet-5-5",
+        "litellm_params": {"model": "openai/served"},
+    }
+    rows, warnings = apply_anthropic_bridges(
+        [canonical], {"preset": {"oracle": "anthropic/claude-sonnet-5-5"}}
+    )
+    alias = next(
+        row for row in rows if row["model_name"] == "anthropic/claude-preset-oracle"
+    )
+    assert alias["litellm_params"]["model"] == "openai/served"
+    assert (
+        alias["litellm_params"]["metadata"]["canonical_bridge_source"]
+        == "anthropic/claude-sonnet-5-5"
+    )
+    assert warnings == []
