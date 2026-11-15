@@ -43,7 +43,7 @@ from provider_endpoints import (
 from litellm_routing import routing_entries_are_safe
 from litellm_aliases import (  # noqa: E402 -- lib sibling import.
     canonical_allowlist_key,
-    resolve_canonical_identity,
+    canonical_served_bridge_target,
 )
 from model_catalogues import open_same_origin
 
@@ -2168,7 +2168,7 @@ def compute_model_list(environ=None, previous_entries=None, *, anthropic_bridges
 
 
 def apply_anthropic_bridges(model_list_rows, bridges):
-    """Bind Claude-3p aliases only to wire models already present in rows."""
+    """Bind Claude-3p aliases to exact or explicitly canonical served rows."""
     rows = list(model_list_rows)
     by_name = {row.get("model_name"): row for row in rows if isinstance(row, dict)}
     additions = []
@@ -2178,15 +2178,8 @@ def apply_anthropic_bridges(model_list_rows, bridges):
             target = by_name.get(wire_model)
             canonical = None
             if target is None:
-                identity = resolve_canonical_identity(wire_model, True)
-                if identity and identity.startswith("anthropic/"):
-                    canonical = "meridian/" + identity[len("anthropic/") :]
-                elif identity and identity.startswith("google/"):
-                    model_id = identity[len("google/") :]
-                    canonical = "google/models/" + model_id.removeprefix("models/")
-                else:
-                    canonical = identity
-                if canonical:
+                canonical = canonical_served_bridge_target(wire_model)
+                if canonical is not None:
                     target = by_name.get(canonical)
             if target is None:
                 warnings.append(
@@ -2194,22 +2187,24 @@ def apply_anthropic_bridges(model_list_rows, bridges):
                 )
                 continue
             alias = f"anthropic/claude-{preset}-{role}"
+            candidate = copy.deepcopy(target)
+            candidate["model_name"] = alias
+            if canonical and canonical != wire_model:
+                params = candidate["litellm_params"]
+                params["metadata"] = dict(
+                    params.get("metadata", {}),
+                    canonical_bridge_source=wire_model,
+                )
             if alias in by_name:
-                if by_name[alias].get("litellm_params") != target.get("litellm_params"):
+                if by_name[alias].get("litellm_params") != candidate.get(
+                    "litellm_params"
+                ):
                     raise ValueError(
                         f"Claude bridge alias {alias} collides with a different route"
                     )
                 continue
-            row = copy.deepcopy(target)
-            row["model_name"] = alias
-            if canonical and canonical != wire_model:
-                row["litellm_params"] = dict(row.get("litellm_params", {}))
-                row["litellm_params"]["metadata"] = dict(
-                    row["litellm_params"].get("metadata", {}),
-                    canonical_bridge_source=wire_model,
-                )
-            additions.append(row)
-            by_name[alias] = row
+            additions.append(candidate)
+            by_name[alias] = candidate
     rows.extend(additions)
     return sorted(rows, key=lambda item: item["model_name"]), warnings
 
