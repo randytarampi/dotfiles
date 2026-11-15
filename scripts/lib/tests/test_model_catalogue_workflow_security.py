@@ -143,7 +143,7 @@ def test_publication_credentials_preflight_fails_closed_without_values():
             )
 
 
-def test_actionlint_woofbot_client_id_compatibility_is_scoped():
+def test_actionlint_app_client_id_compatibility_is_scoped():
     import yaml
 
     config = yaml.safe_load(read(".github/actionlint.yaml"))
@@ -160,9 +160,6 @@ def test_actionlint_woofbot_client_id_compatibility_is_scoped():
         '"actions/create-github-app-token@v3"',
     ]
     assert set(config) == {"paths"}
-    # Pinned actionlint 1.7.12 does not know the two current Ubuntu 26.04
-    # hosted runner labels. Keep their exception narrowly scoped to CI:
-    # an arbitrary new label or an expanded ignore is a regression.
     assert set(paths) == allowed | {".github/workflows/ci.yml"}
     assert paths[".github/workflows/ci.yml"]["ignore"] == [
         'label "ubuntu-26\\.04(-arm)?" is unknown'
@@ -170,15 +167,22 @@ def test_actionlint_woofbot_client_id_compatibility_is_scoped():
     for path in allowed:
         assert paths[path]["ignore"] == known_false_positives
         workflow = read(path)
-        # The agentic-review workflow also has independent Junie and Gemini
-        # App publishers that correctly use numeric app-id. Restrict this
-        # client-id check to the Woofbot publisher rather than the whole file.
         if path == ".github/workflows/agentic-review.yml":
-            workflow = workflow.split("  opencode_publish:\n", 1)[1].split(
-                "\n  junie:\n", 1
+            workflow = workflow.split("  opencode_publish:\\n", 1)[1].split(
+                "\\n  junie:\\n", 1
             )[0]
-        assert "client-id: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID }}" in workflow
-        assert "private-key: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY }}" in workflow
+        client_variable = (
+            "WOOFBOT_GITHUB_APP_CLIENT_ID"
+            if path == ".github/workflows/refresh-model-catalogues.yml"
+            else "OPENCODE_GITHUB_CLIENT_ID"
+        )
+        key_secret = (
+            "WOOFBOT_GITHUB_APP_PRIVATE_KEY"
+            if path == ".github/workflows/refresh-model-catalogues.yml"
+            else "OPENCODE_GITHUB_APP_PRIVATE_KEY"
+        )
+        assert f"client-id: ${{{{ vars.{client_variable} }}}}" in workflow
+        assert f"private-key: ${{{{ secrets.{key_secret} }}}}" in workflow
         assert "app-id:" not in workflow
 
 
