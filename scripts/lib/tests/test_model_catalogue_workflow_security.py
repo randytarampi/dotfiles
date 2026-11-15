@@ -850,7 +850,9 @@ def test_woofbot_credentials_document_repository_scope_not_environment_only():
     review_docs = (ROOT / "docs/agentic-review.md").read_text(encoding="utf-8")
     assert "as a repository Actions secret for the Woofbot publisher" in workflow
     assert "repository Actions secret" in docs
-    assert "no per-environment secret copies are required" in docs.lower()
+    assert "no per-environment secret copies are required" in " ".join(
+        docs.lower().split()
+    )
     assert "WOOFBOT_GITHUB_APP_PRIVATE_KEY" in docs
     assert "OPENCODE_GITHUB_APP_PRIVATE_KEY" in review_docs
     assert "model-catalogue publisher **continues using Woofbot**" in review_docs
