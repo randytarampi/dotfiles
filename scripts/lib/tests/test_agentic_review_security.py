@@ -1,6 +1,11 @@
 import json
+import os
 import re
+import subprocess
 from pathlib import Path
+
+import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -196,6 +201,75 @@ def test_opencode_v2_labels_comments_and_isolated_app_publication():
     assert 'review-gemini" then "gemini"' in workflow
     fix = read(".github/workflows/agentic-review-fix.yml")
     assert 'OPENCODE_VERSION: "2.2.5"' in fix
+
+
+
+@pytest.mark.parametrize(
+    ("reported", "npm_exit", "expected_success"),
+    [
+        ("2.3.0", 0, True),
+        ("v2.3.0", 0, True),
+        ("opencode 2.3.0", 0, True),
+        ("opencode v2.3.0", 0, True),
+        ("opencode v2.2.7", 0, False),
+        ("opencode v2.3.1", 0, False),
+        ("opencode v1.19.5", 0, False),
+        ("", 0, False),
+        ("opencode v2.3.0", 1, False),
+    ],
+)
+def test_opencode_pinned_installer_accepts_only_expected_version(
+    tmp_path, reported, npm_exit, expected_success
+):
+    """Exercise the actual Actions install step with isolated CLI stubs."""
+    workflow = yaml.safe_load(read(".github/workflows/agentic-review.yml"))
+    install = next(
+        step["run"]
+        for step in workflow["jobs"]["opencode"]["steps"]
+        if step.get("name") == "Install pinned OpenCode v2"
+    )
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    npm = bindir / "npm"
+    npm.write_text(
+        '#!/bin/sh\\nprintf "%s\\\\n" "$@" > "$INSTALL_ARGS_FILE"\\n'
+        'exit "$MOCK_NPM_EXIT"\\n',
+        encoding="utf-8",
+    )
+    npm.chmod(0o755)
+    cli = bindir / "opencode"
+    cli.write_text(
+        '#!/bin/sh\\n[ "$1" = "--version" ] || exit 64\\n'
+        'printf "%s\\\\n" "$MOCK_OPENCODE_VERSION"\\n',
+        encoding="utf-8",
+    )
+    cli.chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": str(bindir) + os.pathsep + os.environ.get("PATH", ""),
+        "INSTALL_ARGS_FILE": str(tmp_path / "npm-args"),
+        "MOCK_NPM_EXIT": str(npm_exit),
+        "MOCK_OPENCODE_VERSION": reported,
+    }
+    result = subprocess.run(
+        ["bash", "-c", install],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert (result.returncode == 0) is expected_success, result.stderr + result.stdout
+    assert (tmp_path / "npm-args").read_text().splitlines() == [
+        "install",
+        "--global",
+        "--allow-scripts=@opencode/cli",
+        "@opencode/cli@2.3.0",
+    ]
+    if npm_exit == 0:
+        assert "Installed OpenCode CLI version:" in result.stdout
+    if npm_exit == 0 and not expected_success:
+        assert "Unexpected OpenCode CLI version" in result.stderr
 
 
 def test_ci_opencode_custom_provider_packages_match_v2_contract():
