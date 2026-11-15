@@ -10,9 +10,14 @@ desktop settings, MCP servers). Switch providers at runtime with:
 """
 
 import argparse
+import hashlib
+import json
 import os
 import re
+import stat
 import sys
+import tempfile
+from pathlib import Path
 
 try:
     import tomllib
@@ -41,6 +46,7 @@ from local_engines import (
 PROFILES_START = "# BEGIN DOTFILES MANAGED PROFILES"
 PROFILES_END = "# END DOTFILES MANAGED PROFILES"
 DEFAULT_OLLAMA_CLOUD_MODEL = "glm-5.3-flash"
+V2_MANIFEST = ".dotfiles-codex-profiles.json"
 
 BASE_PROVIDER_CONFIG = """[model_providers.meridian]
 name = "Meridian"
@@ -113,6 +119,152 @@ model = "copilot-model-id"
 model_provider = "github-copilot"
 {local_profile}# END DOTFILES MANAGED PROFILES
 """
+
+
+def build_v2_profiles(ollama_model, local_model=""):
+    provider, model = _model_parts(local_model) if local_model else ("ollama", "local")
+    engine = resolve_engine(provider)
+    profiles = {
+        "meridian": 'model = "claude-sonnet-5-5"\nmodel_provider = "meridian"\nmodel_reasoning_effort = "high"\n',
+        "ollama-cloud": f'model = "ollama-cloud/{ollama_model}"\nmodel_provider = "ollama-cloud"\n',
+        "copilot": 'model = "copilot-model-id"\nmodel_provider = "github-copilot"\n',
+        "local": f'model = "{model}"\nmodel_provider = "{engine["profile_provider"] if engine else "ollama"}"\n',
+    }
+    litellm_model = selected_litellm_profile_model()
+    if litellm_model:
+        profiles["litellm"] = f'model = "{litellm_model}"\nmodel_provider = "litellm"\n'
+    return profiles
+
+
+def _atomic_private_write(path, content):
+    path = Path(path)
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as output:
+            os.fchmod(output.fileno(), 0o600)
+            output.write(content)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def _read_v2_manifest(config_dir):
+    path = Path(config_dir) / V2_MANIFEST
+    if path.is_symlink():
+        raise ValueError(f"refusing symlink Codex profile manifest: {path}")
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return {}
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or info.st_uid != os.getuid()
+        or stat.S_IMODE(info.st_mode) != 0o600
+        or info.st_nlink != 1
+    ):
+        raise ValueError(f"refusing unsafe Codex profile manifest: {path}")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("schema") != 1 or not isinstance(data.get("profiles"), dict):
+        raise ValueError("invalid Codex profile ownership manifest")
+    profiles = data["profiles"]
+    if any(
+        not re.fullmatch(r"[a-z][a-z0-9-]*", name)
+        or not isinstance(digest, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", digest)
+        for name, digest in profiles.items()
+    ):
+        raise ValueError("invalid Codex profile ownership entries")
+    return profiles
+
+
+def _write_v2_profile(path, content):
+    path = Path(path)
+    if path.is_symlink():
+        raise ValueError(f"refusing symlink Codex profile: {path}")
+    if path.exists():
+        info = path.lstat()
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.getuid()
+            or info.st_nlink != 1
+        ):
+            raise ValueError(f"refusing unsafe Codex profile: {path}")
+        if path.read_text(encoding="utf-8") != content:
+            raise ValueError(f"refusing to overwrite foreign Codex profile: {path}")
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd, temporary = tempfile.mkstemp(prefix=".dotfiles-codex-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            os.fchmod(output.fileno(), 0o600)
+            output.write(content)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+    return True
+
+
+def _reconcile_v2_profiles(config_dir, sidecars, previous, dry_run):
+    import hashlib
+    from datetime import datetime, timezone
+
+    directory = Path(config_dir)
+    current = {}
+    for name, content in sidecars.items():
+        path = directory / f"{name}.config.toml"
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        if path.exists() or path.is_symlink():
+            if path.is_symlink() or not path.is_file():
+                raise ValueError(f"refusing unsafe Codex profile: {path}")
+            info = path.lstat()
+            if info.st_uid != os.getuid() or info.st_nlink != 1:
+                raise ValueError(f"refusing unsafe Codex profile: {path}")
+            old_digest = previous.get(name)
+            actual = hashlib.sha256(path.read_bytes()).hexdigest()
+            if old_digest != actual:
+                raise ValueError(f"refusing to overwrite foreign Codex profile: {path}")
+            if actual != digest and not dry_run:
+                backup = path.with_name(
+                    f".{path.name}.backup-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+                )
+                _atomic_private_write(backup, path.read_bytes())
+                _atomic_private_write(path, content.encode("utf-8"))
+        elif not dry_run:
+            _write_v2_profile(path, content)
+        current[name] = digest
+
+    for name, digest in previous.items():
+        if name in current:
+            continue
+        path = directory / f"{name}.config.toml"
+        if not path.exists() and not path.is_symlink():
+            continue
+        if (
+            path.is_symlink()
+            or not path.is_file()
+            or hashlib.sha256(path.read_bytes()).hexdigest() != digest
+        ):
+            raise ValueError(f"refusing to remove modified Codex profile: {path}")
+        if not dry_run:
+            backup = path.with_name(
+                f".{path.name}.backup-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+            )
+            _atomic_private_write(backup, path.read_bytes())
+            path.unlink()
+    if not dry_run:
+        payload = (
+            json.dumps(
+                {"schema": 1, "profiles": current}, sort_keys=True, indent=2
+            ).encode()
+            + b"\n"
+        )
+        _atomic_private_write(directory / V2_MANIFEST, payload)
 
 
 def resolve_ollama_cloud_model():
@@ -363,6 +515,7 @@ def main():
         content = strip_owned_block(
             content, provider_start, provider_end, "model_providers"
         )
+        profiles_v2 = os.environ.get("DOTFILES_CODEX_PROFILES_V2", "0") == "1"
         content = strip_managed_profiles(content)
         new_content = content.rstrip()
         if new_content:
@@ -375,8 +528,12 @@ def main():
             new_content = content.rstrip()
             if new_content:
                 new_content += "\n\n"
-        generated_profiles = build_profiles_config(
-            ollama_cloud_model, local_model, preserved_litellm_profile
+        generated_profiles = (
+            ""
+            if profiles_v2
+            else build_profiles_config(
+                ollama_cloud_model, local_model, preserved_litellm_profile
+            )
         )
         existing = tomllib.loads(content)
         for table, generated in (
@@ -396,10 +553,31 @@ def main():
                 )
         new_content += f"{provider_start}\n{base_providers.rstrip()}\n{provider_end}"
         # Provider composition appends LiteLLM once, after legacy cleanup.
-        new_content += "\n\n" + generated_profiles.rstrip()
+        if generated_profiles:
+            new_content += "\n\n" + generated_profiles.rstrip()
         tomllib.loads(new_content)
 
-        if new_content == original_content:
+        sidecars = {}
+        if profiles_v2:
+            sidecars = build_v2_profiles(ollama_cloud_model, local_model)
+            for name, values in sidecars.items():
+                sidecars[name] = (
+                    f"# Generated by configure-codex.py\n[profiles.{name}]\n{values}"
+                )
+
+        previous_sidecars = _read_v2_manifest(config_dir) if profiles_v2 else {}
+        sidecar_changed = profiles_v2 and (
+            set(previous_sidecars) != set(sidecars)
+            or any(
+                not (Path(config_dir) / f"{name}.config.toml").exists()
+                or hashlib.sha256(
+                    (Path(config_dir) / f"{name}.config.toml").read_bytes()
+                ).hexdigest()
+                != previous_sidecars.get(name)
+                for name in sidecars
+            )
+        )
+        if new_content == original_content and not sidecar_changed:
             logger.info(f"Providers already configured in {config_path}")
         elif args.dry_run:
             logger.info(f"Would configure providers in {config_path}")
@@ -410,6 +588,8 @@ def main():
                 if backup_path:
                     logger.info(f"Backed up existing config.toml to {backup_path}")
             write_text_file(config_path, new_content, backup=False)
+            if profiles_v2:
+                _reconcile_v2_profiles(config_dir, sidecars, previous_sidecars, False)
             logger.info(f"Codex configuration written to {config_path}")
     except (OSError, ValueError) as exc:
         logger.critical(f"Failed to update Codex configuration: {exc}")
