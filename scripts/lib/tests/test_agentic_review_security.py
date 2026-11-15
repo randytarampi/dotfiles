@@ -180,19 +180,25 @@ def test_opencode_v2_labels_comments_and_isolated_app_publication():
     assert "OPENCODE_CONFIG_DIR=" in opencode
     assert "XDG_CONFIG_HOME=" in opencode
     assert "anomalyco/opencode/github@" not in opencode
-    assert "WOOFBOT_GITHUB_APP_PRIVATE_KEY" not in opencode
+    assert "OPENCODE_GITHUB_APP_PRIVATE_KEY" not in opencode
     assert "actions/upload-artifact@v7" in opencode
     assert "contents: read" in publisher
     assert "actions/checkout@" not in publisher
     assert "OPENCODE_API_KEY" not in publisher
     assert "actions/create-github-app-token@v3" in publisher
-    assert "vars.WOOFBOT_GITHUB_APP_CLIENT_ID" in publisher
-    assert "client-id: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID }}" in publisher
-    assert "secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY" in publisher
+    assert "vars.OPENCODE_GITHUB_CLIENT_ID" in publisher
+    assert "vars.OPENCODE_GITHUB_APP_ID" in publisher
+    assert "client-id: ${{ vars.OPENCODE_GITHUB_CLIENT_ID }}" in publisher
+    assert "secrets.OPENCODE_GITHUB_APP_PRIVATE_KEY" in publisher
     assert "permission-pull-requests: write" in publisher
-    assert "woofbot-randytarampi-ca" in publisher
+    assert "opencode-randytarampi-ca" in publisher
+    assert "app-id:" not in publisher
+    assert "permission-contents: write" not in publisher
+    assert "Require OpenCode App publisher configuration" in publisher
+    assert 'actual_id="$(gh api "/apps/${APP_SLUG}" --jq .id)"' in publisher
+    assert 'actual_client_id="$(gh api "/apps/${APP_SLUG}" --jq .client_id)"' in publisher
     assert "needs.opencode.outputs.head" in publisher
-    assert "agent-review:opencode:v2 head=" in publisher
+    assert "agent-review:opencode:v2 publisher=opencode-randytarampi-ca head=" in publisher
     assert "gh api --paginate" in publisher
     assert "gh api --method PATCH" in publisher
     assert "gh api --method POST" in publisher
@@ -520,26 +526,31 @@ def test_generated_companion_passes_the_same_immutable_sha_to_the_reusable_workf
     assert pin != trusted
 
 
-def test_manual_fix_uses_woofbot_app_publisher_credentials():
+def test_manual_fix_uses_opencode_app_publisher_credentials():
     workflow = read(".github/workflows/agentic-review-fix.yml")
     generate, publish = workflow.split("  publish:\n", 1)
-    assert "WOOFBOT_GITHUB_APP_CLIENT_ID" not in generate
-    assert "WOOFBOT_GITHUB_APP_PRIVATE_KEY" not in generate
+    assert "OPENCODE_GITHUB_CLIENT_ID" not in generate
+    assert "OPENCODE_GITHUB_APP_PRIVATE_KEY" not in generate
     assert "environment: agentic-review-fix" in publish
-    assert "client-id: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID }}" in publish
-    assert "private-key: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY }}" in publish
+    assert "client-id: ${{ vars.OPENCODE_GITHUB_CLIENT_ID }}" in publish
+    assert "vars.OPENCODE_GITHUB_APP_ID" in publish
+    assert "private-key: ${{ secrets.OPENCODE_GITHUB_APP_PRIVATE_KEY }}" in publish
     assert "app-id:" not in publish
     assert "secrets.APP_ID" not in publish
     assert "permission-contents: write" in publish
     assert "permission-pull-requests: write" in publish
     assert "GH_TOKEN: ${{ steps.publish.outputs.token }}" in publish
     assert "PUBLISH_APP_SLUG: ${{ steps.publish.outputs.app-slug }}" in publish
-    assert "Unexpected GitHub App slug for manual fix publisher" in publish
+    assert "Unexpected OpenCode App slug for manual fix publisher" in publish
+    assert "Require OpenCode App fix publisher configuration" in publish
+    assert 'actual_id="$(gh api "/apps/${PUBLISH_APP_SLUG}" --jq .id)"' in publish
+    assert 'actual_client_id="$(gh api "/apps/${PUBLISH_APP_SLUG}" --jq .client_id)"' in publish
     assert 'bot_id="$(gh api "/users/${PUBLISH_APP_SLUG}[bot]" --jq .id)"' in publish
-    assert '"${bot_id}" != "353209076"' in publish
+    assert '[[ "${bot_id}" =~ ^[1-9][0-9]*$ ]]' in publish
     assert 'publisher_login="${PUBLISH_APP_SLUG}[bot]"' in publish
     assert 'git config user.name "${publisher_login}"' in publish
-    assert "353209076+${publisher_login}@users.noreply.github.com" in publish
+    assert "${OPENCODE_BOT_USER_ID}+${publisher_login}@users.noreply.github.com" in publish
+    assert "353209076" not in publish
     assert "agentic-review-bot[bot]@users.noreply.github.com" not in publish
 
 
