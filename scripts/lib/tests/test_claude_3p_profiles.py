@@ -151,9 +151,7 @@ def test_unserved_canonical_target_is_not_qualified_by_bridge_alias_alone():
             }
         }
     }
-    aliases = {
-        f"anthropic/claude-canonical-{role}" for role in profiles.MODEL_ROLES
-    }
+    aliases = {f"anthropic/claude-canonical-{role}" for role in profiles.MODEL_ROLES}
     assert profiles.build_profiles(data, aliases) == {}
 
 
