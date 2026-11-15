@@ -680,7 +680,7 @@ jobs:
           test -s review/opencode-review.md
           # An artifact is untrusted model output, not proof of a completed review.
           for heading in Verdict Findings Evidence; do
-            grep -Fxq "## ${heading}" review/opencode-review.md || exit 1
+            grep -Eq "^## ${heading}[[:blank:]]*$" review/opencode-review.md || exit 1
           done
           current="$(gh api "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
           [[ "${current}" == "${EXPECTED_HEAD}" ]] || exit 1
