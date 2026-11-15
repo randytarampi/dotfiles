@@ -155,7 +155,23 @@ def _atomic_private_write(path, content, *, create_only=False):
             os.unlink(temporary)
 
 
+def _check_v2_directory(directory):
+    """Refuse unsafe Codex-home paths before reading/writing owned sidecars."""
+    directory = Path(directory)
+    if directory.is_symlink() or any(parent.is_symlink() for parent in directory.parents):
+        raise ValueError("refusing symlinked Codex profile directory")
+    if directory.exists():
+        info = directory.stat()
+        if (
+            not stat.S_ISDIR(info.st_mode)
+            or info.st_uid != os.getuid()
+            or info.st_mode & 0o022
+        ):
+            raise ValueError("refusing unsafe Codex profile directory")
+
+
 def _read_v2_manifest(config_dir):
+    _check_v2_directory(config_dir)
     path = Path(config_dir) / V2_MANIFEST
     if path.is_symlink():
         raise ValueError(f"refusing symlink Codex profile manifest: {path}")
@@ -170,7 +186,11 @@ def _read_v2_manifest(config_dir):
         or info.st_nlink != 1
     ):
         raise ValueError(f"refusing unsafe Codex profile manifest: {path}")
+    if info.st_size > 65536:
+        raise ValueError("oversize Codex profile ownership manifest")
     data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("invalid Codex profile ownership manifest")
     if data.get("schema") != 1 or not isinstance(data.get("profiles"), dict):
         raise ValueError("invalid Codex profile ownership manifest")
     profiles = data["profiles"]
@@ -194,6 +214,7 @@ def _write_v2_profile(path, content):
             not stat.S_ISREG(info.st_mode)
             or info.st_uid != os.getuid()
             or info.st_nlink != 1
+            or stat.S_IMODE(info.st_mode) != 0o600
         ):
             raise ValueError(f"refusing unsafe Codex profile: {path}")
         if path.read_text(encoding="utf-8") != content:
@@ -219,6 +240,7 @@ def _reconcile_v2_profiles(config_dir, sidecars, previous, dry_run):
     from datetime import datetime, timezone
 
     directory = Path(config_dir)
+    _check_v2_directory(directory)
     current = {}
     for name, content in sidecars.items():
         path = directory / f"{name}.config.toml"
@@ -227,7 +249,11 @@ def _reconcile_v2_profiles(config_dir, sidecars, previous, dry_run):
             if path.is_symlink() or not path.is_file():
                 raise ValueError(f"refusing unsafe Codex profile: {path}")
             info = path.lstat()
-            if info.st_uid != os.getuid() or info.st_nlink != 1:
+            if (
+                info.st_uid != os.getuid()
+                or info.st_nlink != 1
+                or stat.S_IMODE(info.st_mode) != 0o600
+            ):
                 raise ValueError(f"refusing unsafe Codex profile: {path}")
             old_digest = previous.get(name)
             actual = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -249,9 +275,13 @@ def _reconcile_v2_profiles(config_dir, sidecars, previous, dry_run):
         path = directory / f"{name}.config.toml"
         if not path.exists() and not path.is_symlink():
             continue
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"refusing to remove modified Codex profile: {path}")
+        info = path.lstat()
         if (
-            path.is_symlink()
-            or not path.is_file()
+            info.st_uid != os.getuid()
+            or info.st_nlink != 1
+            or stat.S_IMODE(info.st_mode) != 0o600
             or hashlib.sha256(path.read_bytes()).hexdigest() != digest
         ):
             raise ValueError(f"refusing to remove modified Codex profile: {path}")
