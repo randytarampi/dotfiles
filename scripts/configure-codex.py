@@ -136,7 +136,8 @@ def build_v2_profiles(ollama_model, local_model=""):
     return profiles
 
 
-def _atomic_private_write(path, content):
+def _atomic_private_write(path, content, *, create_only=False):
+    """Write private data atomically, refusing to clobber any existing backup."""
     path = Path(path)
     fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
@@ -145,7 +146,10 @@ def _atomic_private_write(path, content):
             output.write(content)
             output.flush()
             os.fsync(output.fileno())
-        os.replace(temporary, path)
+        if create_only:
+            os.link(temporary, path)
+        else:
+            os.replace(temporary, path)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -203,7 +207,7 @@ def _write_v2_profile(path, content):
             output.write(content)
             output.flush()
             os.fsync(output.fileno())
-        os.replace(temporary, path)
+        os.link(temporary, path)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -233,7 +237,7 @@ def _reconcile_v2_profiles(config_dir, sidecars, previous, dry_run):
                 backup = path.with_name(
                     f".{path.name}.backup-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
                 )
-                _atomic_private_write(backup, path.read_bytes())
+                _atomic_private_write(backup, path.read_bytes(), create_only=True)
                 _atomic_private_write(path, content.encode("utf-8"))
         elif not dry_run:
             _write_v2_profile(path, content)
@@ -255,7 +259,7 @@ def _reconcile_v2_profiles(config_dir, sidecars, previous, dry_run):
             backup = path.with_name(
                 f".{path.name}.backup-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
             )
-            _atomic_private_write(backup, path.read_bytes())
+            _atomic_private_write(backup, path.read_bytes(), create_only=True)
             path.unlink()
     if not dry_run:
         payload = (
