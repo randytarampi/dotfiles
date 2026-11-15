@@ -2190,14 +2190,17 @@ def apply_anthropic_bridges(model_list_rows, bridges):
             candidate = copy.deepcopy(target)
             candidate["model_name"] = alias
             if canonical and canonical != wire_model:
-                params = candidate["litellm_params"]
-                params["metadata"] = dict(
-                    params.get("metadata", {}),
-                    canonical_bridge_source=wire_model,
-                )
+                # Audit provenance belongs to the deployment's model_info,
+                # not litellm_params, which the router forwards to providers.
+                model_info = dict(candidate.get("model_info") or {})
+                model_info.pop("id", None)
+                model_info["canonical_bridge_source"] = wire_model
+                candidate["model_info"] = model_info
             if alias in by_name:
-                if by_name[alias].get("litellm_params") != candidate.get(
-                    "litellm_params"
+                existing = by_name[alias]
+                if (
+                    existing.get("litellm_params") != candidate.get("litellm_params")
+                    or existing.get("model_info") != candidate.get("model_info")
                 ):
                     raise ValueError(
                         f"Claude bridge alias {alias} collides with a different route"
@@ -2241,6 +2244,8 @@ def render_config(environ=None, entries=None):
                 lines.append(f"      {key}: {json.dumps(value)}")
         if routed_poolside_info is not None:
             lines.append(f"    model_info: {json.dumps(routed_poolside_info)}")
+        elif entry.get("model_info") is not None:
+            lines.append(f"    model_info: {json.dumps(entry['model_info'])}")
     lines.extend(
         [
             "litellm_settings:",
