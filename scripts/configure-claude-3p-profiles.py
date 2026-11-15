@@ -97,6 +97,9 @@ def build_profiles(registry, served_ids, api_key=""):
             model = role_models.get(role)
             if isinstance(model, str) and model in selected:
                 candidates = tier_registry.materialize_role_models(registry, preset, {})
+                candidate = candidates.get(role)
+                if isinstance(candidate, str) and candidate not in selected:
+                    model = candidate
                 alternative_categories = _local_category_models(
                     registry, preset, excluded=selected
                 )
