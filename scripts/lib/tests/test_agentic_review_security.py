@@ -271,7 +271,6 @@ def test_opencode_pinned_installer_accepts_only_expected_version(
         assert "Unexpected OpenCode CLI version" in result.stderr
 
 
-
 def test_opencode_review_runner_attaches_diff_and_rubric_as_text():
     """OpenCode v2 --file imports text files into the model input."""
     workflow = yaml.safe_load(read(".github/workflows/agentic-review.yml"))
