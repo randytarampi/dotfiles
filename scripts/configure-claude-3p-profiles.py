@@ -20,7 +20,7 @@ sys.path.insert(0, str(LIB_DIR))
 
 import logger  # noqa: E402
 import tier_registry  # noqa: E402
-from litellm_aliases import resolve_canonical_identity  # noqa: E402
+from litellm_aliases import canonical_served_bridge_target  # noqa: E402
 from cli_helpers import add_common_args  # noqa: E402
 from env import load_env  # noqa: E402
 
@@ -84,49 +84,30 @@ def read_private_key(path):
 
 
 def build_profiles(registry, served_ids, api_key=""):
+    """Build labels from the same role models as the gateway bridge producer.
+
+    Do not reselect a model while constructing display labels: doing so would
+    advertise a backend that the pre-generated route alias does not use.
+    """
     profiles = {}
     for preset in registry["presets"]:
         role_models = tier_registry.materialize_role_models(registry, preset, {})
-        local_categories = _local_category_models(registry, preset)
-        selected = set()
+        used_labels = set()
         models = []
         missing = []
         family_tiers = dict(CLAUDE_TIERS)
         for role in MODEL_ROLES:
             family = family_tiers[role]
             model = role_models.get(role)
-            if isinstance(model, str) and model in selected:
-                candidates = tier_registry.materialize_role_models(registry, preset, {})
-                candidate = candidates.get(role)
-                if isinstance(candidate, str) and candidate not in selected:
-                    model = candidate
-                alternative_categories = _local_category_models(
-                    registry, preset, excluded=selected
-                )
-                candidates.update(
-                    tier_registry.materialize_role_models(
-                        registry, preset, alternative_categories
-                    )
-                )
-                candidate = candidates.get(role)
-                if isinstance(candidate, str) and candidate not in selected:
-                    model = candidate
-            if isinstance(model, str):
-                label = model
-                if model in selected:
-                    label = f"{model} ({role})"
-                selected.add(model)
-            else:
-                label = model
             alias = f"anthropic/claude-{preset}-{role}"
             served_model = model
-            canonical = None
+            label = model
             if (
                 served_ids is not None
                 and isinstance(model, str)
                 and model not in served_ids
             ):
-                canonical = _canonical_served_target(model)
+                canonical = canonical_served_bridge_target(model)
                 if canonical in served_ids:
                     served_model = canonical
                     label = f"{model} -> {canonical}"
@@ -136,6 +117,10 @@ def build_profiles(registry, served_ids, api_key=""):
                 missing.append(f"{role} model {model} is not served")
             elif served_ids is not None and alias not in served_ids:
                 missing.append(f"{role} bridge alias {alias} is not served")
+            if isinstance(label, str) and label in used_labels:
+                label = f"{label} ({role})"
+            if isinstance(label, str):
+                used_labels.add(label)
             models.append(
                 {
                     "name": alias,
@@ -160,18 +145,6 @@ def build_profiles(registry, served_ids, api_key=""):
             entry["inferenceGatewayApiKey"] = api_key
         profiles[preset] = entry
     return profiles
-
-
-def _canonical_served_target(model):
-    identity = resolve_canonical_identity(model, True)
-    if not identity:
-        return None
-    if identity.startswith("anthropic/"):
-        return "meridian/" + identity[len("anthropic/") :]
-    if identity.startswith("google/"):
-        model_id = identity[len("google/") :]
-        return "google/models/" + model_id.removeprefix("models/")
-    return identity
 
 
 def _checked_path(path):
@@ -296,14 +269,14 @@ def _read_served_ids(config_path):
     return result
 
 
-def _local_category_models(registry, preset, excluded=()):
+def _local_category_models(registry, preset):
     """Resolve local role categories through the shared tier classifier."""
     from discover_models import list_local_ollama_models
 
     models = list_local_ollama_models()
     if models and isinstance(models[0], dict):
         models = [item.get("name") for item in models if isinstance(item, dict)]
-    models = [model for model in models if model and model not in excluded]
+    models = [model for model in models if model]
     if not models:
         return {}
     return tier_registry.classify_models_for_preset(
