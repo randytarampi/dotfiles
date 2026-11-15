@@ -106,3 +106,20 @@ def canonical_allowlist_key(model_id):
     if isinstance(model_id, str) and model_id.startswith("models/"):
         return model_id[len("models/") :]
     return model_id
+
+
+def canonical_served_bridge_target(client_reference):
+    """Return the candidate served alias for a registry bridge target.
+
+    The caller still must verify this *exact* alias is served. This mapping
+    contains no model substitution or implicit upstream provider fallback.
+    """
+    identity = resolve_canonical_identity(client_reference, True)
+    if identity is None:
+        return None
+    if identity.startswith("anthropic/"):
+        return "meridian/" + identity[len("anthropic/") :]
+    if identity.startswith("google/"):
+        model_id = identity[len("google/") :]
+        return "google/models/" + model_id.removeprefix("models/")
+    return identity
