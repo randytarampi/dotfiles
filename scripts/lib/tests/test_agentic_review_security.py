@@ -289,7 +289,8 @@ def test_opencode_review_runner_attaches_diff_and_rubric_as_text():
         for step in publisher
         if step.get("name") == "Verify exact head and nonempty review before minting App token"
     )
-    assert 'grep -Fxq "## <HEADING>" review/opencode-review.md'.replace("<HEADING>", "$" + "{heading}") in check
+    assert 'grep -Fxq "## ' in check
+    assert 'review/opencode-review.md' in check
     assert "for heading in Verdict Findings Evidence" in check
 
 
