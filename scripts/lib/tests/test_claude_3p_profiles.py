@@ -113,6 +113,50 @@ def test_profile_served_check_accepts_canonical_target():
     )
 
 
+def test_canonical_role_duplicates_remain_label_unique_and_route_stable(monkeypatch):
+    data = {
+        "presets": {
+            "canonical": {
+                role: {"model": "anthropic/claude-sonnet-5-5"}
+                for role in profiles.MODEL_ROLES
+            }
+        }
+    }
+    served = {
+        "meridian/claude-sonnet-5-5",
+        *(f"anthropic/claude-canonical-{role}" for role in profiles.MODEL_ROLES),
+    }
+    monkeypatch.setattr(
+        profiles,
+        "_local_category_models",
+        lambda *_args, **_kwargs: pytest.fail(
+            "profile rendering must not rediscover or reselect local models"
+        ),
+    )
+    result = profiles.build_profiles(data, served)["canonical"]["inferenceModels"]
+    assert [model["name"] for model in result] == [
+        f"anthropic/claude-canonical-{role}" for role in profiles.MODEL_ROLES
+    ]
+    labels = [model["labelOverride"] for model in result]
+    assert len(set(labels)) == len(labels) == len(profiles.MODEL_ROLES)
+    assert labels[0] == "anthropic/claude-sonnet-5-5 -> meridian/claude-sonnet-5-5"
+
+
+def test_unserved_canonical_target_is_not_qualified_by_bridge_alias_alone():
+    data = {
+        "presets": {
+            "canonical": {
+                role: {"model": "anthropic/claude-sonnet-5-5"}
+                for role in profiles.MODEL_ROLES
+            }
+        }
+    }
+    aliases = {
+        f"anthropic/claude-canonical-{role}" for role in profiles.MODEL_ROLES
+    }
+    assert profiles.build_profiles(data, aliases) == {}
+
+
 def test_key_file_mode_contains_key_only_in_credential_field(tmp_path):
     key = tmp_path / "key"
     key.write_text("sk-synthetic-only\n", encoding="utf-8")
