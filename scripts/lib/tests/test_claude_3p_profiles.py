@@ -76,6 +76,43 @@ def test_missing_new_bridge_alias_refuses_even_when_role_targets_are_served():
     assert profiles.build_profiles(registry(), targets) == {}
 
 
+def test_reused_role_models_have_distinct_labels():
+    data = {
+        "presets": {
+            "shared": {
+                role: {"model": "provider/shared"} for role in profiles.MODEL_ROLES
+            }
+        }
+    }
+    served = {
+        "provider/shared",
+        *(f"anthropic/claude-shared-{role}" for role in profiles.MODEL_ROLES),
+    }
+    models = profiles.build_profiles(data, served)["shared"]["inferenceModels"]
+    labels = [model["labelOverride"] for model in models]
+    assert len(labels) == len(set(labels)) == len(profiles.MODEL_ROLES)
+
+
+def test_profile_served_check_accepts_canonical_target():
+    data = {
+        "presets": {
+            "canonical": {
+                role: {"model": "anthropic/claude-sonnet-5-5"}
+                for role in profiles.MODEL_ROLES
+            }
+        }
+    }
+    served = {
+        "meridian/claude-sonnet-5-5",
+        *(f"anthropic/claude-canonical-{role}" for role in profiles.MODEL_ROLES),
+    }
+    result = profiles.build_profiles(data, served)
+    assert (
+        result["canonical"]["inferenceModels"][0]["labelOverride"]
+        == "anthropic/claude-sonnet-5-5 -> meridian/claude-sonnet-5-5"
+    )
+
+
 def test_key_file_mode_contains_key_only_in_credential_field(tmp_path):
     key = tmp_path / "key"
     key.write_text("sk-synthetic-only\n", encoding="utf-8")
