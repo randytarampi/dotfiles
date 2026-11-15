@@ -574,7 +574,7 @@ def main():
         existing = tomllib.loads(content)
         if profiles_v2 and (
             existing.get("profile") is not None
-            or existing.get("profiles")
+            or "profiles" in existing
         ):
             raise ValueError(
                 "Codex v2 cannot use unmanaged legacy profile selectors or "
