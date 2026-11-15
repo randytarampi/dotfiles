@@ -157,6 +157,45 @@ def test_unserved_canonical_target_is_not_qualified_by_bridge_alias_alone():
     assert profiles.build_profiles(data, aliases) == {}
 
 
+def test_real_yaml_route_inventory_refuses_stale_or_misbound_bridge(tmp_path):
+    data = {
+        "presets": {
+            "canonical": {
+                role: {"model": "anthropic/claude-sonnet-5-5"}
+                for role in profiles.MODEL_ROLES
+            }
+        }
+    }
+    config = tmp_path / "config.yaml"
+    entries = [
+        "model_list:",
+        "  - model_name: meridian/claude-sonnet-5-5",
+        "    litellm_params:",
+        "      model: openai/canonical",
+    ]
+    for role in profiles.MODEL_ROLES:
+        entries.extend(
+            [
+                f"  - model_name: anthropic/claude-canonical-{role}",
+                "    litellm_params:",
+                "      model: openai/canonical",
+            ]
+        )
+    config.write_text("\n".join(entries) + "\n", encoding="utf-8")
+    served = profiles._read_served_ids(config)
+    assert profiles.build_profiles(data, served)["canonical"]["inferenceModels"]
+    config.write_text(
+        config.read_text().replace(
+            "model: openai/canonical",
+            "model: openai/different",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    mismatch = profiles._read_served_ids(config)
+    assert profiles.build_profiles(data, mismatch) == {}
+
+
 def test_key_file_mode_contains_key_only_in_credential_field(tmp_path):
     key = tmp_path / "key"
     key.write_text("sk-synthetic-only\n", encoding="utf-8")
