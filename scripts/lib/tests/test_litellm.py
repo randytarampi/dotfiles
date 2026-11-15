@@ -4683,6 +4683,36 @@ def test_anthropic_bridges_copy_existing_target_and_refuse_unknown():
     assert conflicting["litellm_params"]["model"] == "openai/different-backend"
 
 
+def test_canonical_bridge_regeneration_is_idempotent_and_collision_safe():
+    from litellm_config import apply_anthropic_bridges
+
+    canonical = {
+        "model_name": "meridian/claude-sonnet-5-5",
+        "litellm_params": {"model": "openai/served"},
+    }
+    bridges = {"preset": {"oracle": "anthropic/claude-sonnet-5-5"}}
+    once, warnings = apply_anthropic_bridges([canonical], bridges)
+    twice, next_warnings = apply_anthropic_bridges(once, bridges)
+    assert warnings == next_warnings == []
+    assert twice == once
+    assert (
+        len([item for item in twice if item["model_name"] == "anthropic/claude-preset-oracle"])
+        == 1
+    )
+    alias = next(
+        item for item in once if item["model_name"] == "anthropic/claude-preset-oracle"
+    )
+    assert alias["litellm_params"]["metadata"]["canonical_bridge_source"] == (
+        "anthropic/claude-sonnet-5-5"
+    )
+    conflicting = {
+        "model_name": "anthropic/claude-preset-oracle",
+        "litellm_params": {"model": "openai/different"},
+    }
+    with pytest.raises(ValueError, match="collides"):
+        apply_anthropic_bridges([canonical, conflicting], bridges)
+
+
 def test_anthropic_bridge_uses_served_canonical_target():
     from litellm_config import apply_anthropic_bridges
 
