@@ -633,7 +633,7 @@ jobs:
           if not started or len(body) < 80 or len(body.encode()) > 45000:
               raise SystemExit("Missing, incomplete or oversized OpenCode review")
           for heading in ("Verdict", "Findings", "Evidence"):
-              if not re.search(r"(?m)^## " + heading + r"\\s*$", body):
+              if not re.search(r"(?m)^## " + heading + r"\s*$", body):
                   raise SystemExit("OpenCode did not complete a structured review: " + heading)
           (tmp / "opencode-review.md").write_text(body + "\n")
           (tmp / "opencode-review-head.txt").write_text(os.environ["REVIEWED_HEAD"] + "\n")
