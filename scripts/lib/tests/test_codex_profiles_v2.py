@@ -116,7 +116,6 @@ def test_v2_modified_stale_sidecar_is_preserved(tmp_path):
     assert stale.read_text() == "manual edit"
 
 
-
 def test_v2_foreign_sidecar_rejects_before_root_or_other_profile_changes(
     tmp_path, monkeypatch
 ):
@@ -232,8 +231,6 @@ def test_v2_private_backup_refuses_existing_destination(tmp_path):
     target = tmp_path / ".sidecar.backup"
     target.write_text("unmanaged backup")
     with pytest.raises(FileExistsError):
-        configure_codex._atomic_private_write(
-            target, b"replacement", create_only=True
-        )
+        configure_codex._atomic_private_write(target, b"replacement", create_only=True)
     assert target.read_text() == "unmanaged backup"
     assert list(tmp_path.glob("..sidecar.backup.*")) == []
