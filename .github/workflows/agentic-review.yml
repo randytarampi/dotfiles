@@ -61,7 +61,7 @@ on:
     secrets:
       OPENCODE_API_KEY:
         required: false
-      WOOFBOT_GITHUB_APP_PRIVATE_KEY:
+      OPENCODE_GITHUB_APP_PRIVATE_KEY:
         required: false
       JUNIE_API_KEY:
         required: false
@@ -684,12 +684,23 @@ jobs:
           done
           current="$(gh api "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
           [[ "${current}" == "${EXPECTED_HEAD}" ]] || exit 1
-      - name: Mint Woofbot publication token
+      - name: Require OpenCode App publisher configuration
+        env:
+          EXPECTED_APP_ID: ${{ vars.OPENCODE_GITHUB_APP_ID }}
+          EXPECTED_CLIENT_ID: ${{ vars.OPENCODE_GITHUB_CLIENT_ID }}
+          HAS_APP_PRIVATE_KEY: ${{ secrets.OPENCODE_GITHUB_APP_PRIVATE_KEY != '' }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${EXPECTED_APP_ID}" =~ ^[1-9][0-9]*$ || -z "${EXPECTED_CLIENT_ID}" || "${HAS_APP_PRIVATE_KEY}" != "true" ]]; then
+            echo "::error title=Missing OpenCode App publisher configuration::Set OPENCODE_GITHUB_APP_ID and OPENCODE_GITHUB_CLIENT_ID as Actions variables and OPENCODE_GITHUB_APP_PRIVATE_KEY as an Actions secret in this calling repository." >&2
+            exit 1
+          fi
+      - name: Mint OpenCode App publication token
         uses: actions/create-github-app-token@v3
         id: publisher
         with:
-          client-id: ${{ vars.WOOFBOT_GITHUB_APP_CLIENT_ID }}
-          private-key: ${{ secrets.WOOFBOT_GITHUB_APP_PRIVATE_KEY }}
+          client-id: ${{ vars.OPENCODE_GITHUB_CLIENT_ID }}
+          private-key: ${{ secrets.OPENCODE_GITHUB_APP_PRIVATE_KEY }}
           permission-pull-requests: write
       - name: Publish one head-specific OpenCode review
         env:
@@ -697,9 +708,416 @@ jobs:
           APP_SLUG: ${{ steps.publisher.outputs.app-slug }}
           PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
           EXPECTED_HEAD: ${{ needs.opencode.outputs.head }}
+          EXPECTED_APP_ID: ${{ vars.OPENCODE_GITHUB_APP_ID }}
+          EXPECTED_CLIENT_ID: ${{ vars.OPENCODE_GITHUB_CLIENT_ID }}
         run: |
           set -euo pipefail
-          [[ "${APP_SLUG}" == woofbot-randytarampi-ca ]] || { echo "Incorrect review publisher App" >&2; exit 1; }
+          [[ "${APP_SLUG}" == opencode-randytarampi-ca ]] || { echo "Incorrect OpenCode review publisher App" >&2; exit 1; }
+          app_identity="$(gh api "/apps/${APP_SLUG}" --jq '[.id | tostring, .client_id] | @tsv')"
+          IFS=
+          current="$(gh api "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          [[ "${current}" == "${EXPECTED_HEAD}" ]] || exit 1
+          # New App-qualified marker prevents historical Woofbot comments from blocking cutover.
+          marker="<!-- agent-review:opencode:v2 publisher=opencode-randytarampi-ca head=${EXPECTED_HEAD} -->"
+          actor="${APP_SLUG}[bot]"
+          existing="$(gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments")"
+          foreign="$(jq -rs --arg m "${marker}" --arg actor "${actor}" '[.[][] | select((.body | startswith($m)) and .user.login != $actor)] | length' <<< "${existing}")"
+          [[ "${foreign}" == 0 ]] || { echo "Foreign OpenCode review marker" >&2; exit 1; }
+          id="$(jq -rs --arg m "${marker}" --arg actor "${actor}" '[.[][] | select(.user.login == $actor and (.body | startswith($m))) | .id] | first // empty' <<< "${existing}")"
+          body="$(printf '%s\n\nOpenCode v2 review of %s (published by OpenCode App).\n\n%s\n' "${marker}" "${EXPECTED_HEAD}" "$(cat review/opencode-review.md)")"
+          if [[ -n "${id}" ]]; then
+            gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -f body="${body}" --jq '.html_url'
+          else
+            gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="${body}" --jq '.html_url'
+          fi
+
+
+  junie:
+    outputs:
+      review: ${{ steps.junie_review.outputs.review }}
+    needs: parse
+    if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',junie,')
+    runs-on: ubuntu-latest
+    # The review agent receives a read-only GitHub token. Publication is handled
+    # by the separate notify job using a job-scoped GitHub token.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ github.token }}
+          persist-credentials: false
+          fetch-depth: 1
+          ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/head', needs.parse.outputs.pr_number)) || '' }}
+      - name: Verify exact requested PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          [[ "${PR_NUMBER}" =~ ^[0-9]+$ ]]
+          expected="$(gh api "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          actual="$(git rev-parse HEAD)"
+          [[ "${expected}" =~ ^[0-9a-f]{40}$ && "${actual}" == "${expected}" ]] || { echo "Stale PR head" >&2; exit 1; }
+      - name: Stage and verify trusted review assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TRUSTED_REF: ${{ inputs.trusted_ref }}
+        run: |
+          set -euo pipefail
+          trusted_root="${RUNNER_TEMP}/trusted-dotfiles"
+          trusted_sha="${TRUSTED_REF:-${GITHUB_SHA}}"
+          [[ "${trusted_sha}" =~ ^[0-9a-f]{40}$ ]]
+          rm -rf "${trusted_root}"
+          mkdir -p "${trusted_root}"
+          git -C "${trusted_root}" init --quiet
+          git_auth="$(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 | tr -d '\r\n')"
+          printf '::add-mask::%s\n' "${git_auth}"
+          unset GITHUB_TOKEN GIT_CONFIG_PARAMETERS
+          GIT_CONFIG_NOSYSTEM=1 \
+            GIT_CONFIG_GLOBAL=/dev/null \
+            GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+            GIT_CONFIG_VALUE_0="Authorization: Basic ${git_auth}" \
+            GIT_TERMINAL_PROMPT=0 \
+            git -C "${trusted_root}" fetch --depth=1 https://github.com/randytarampi/dotfiles.git "${trusted_sha}"
+          git -C "${trusted_root}" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "${trusted_root}" rev-parse HEAD)" = "${trusted_sha}"
+          python3 "${trusted_root}/scripts/verify-ci-assets.py" --root "${trusted_root}" --manifest "${trusted_root}/configs/review/assets-manifest.json"
+          printf 'TRUSTED_DOTFILES=%s\n' "${trusted_root}" >> "${GITHUB_ENV}"
+      - name: Load review prompt
+        run: |
+          prompt_file="${TRUSTED_DOTFILES}/configs/review/code-review-prompt.md"
+          delim=""
+          for _ in {1..5}; do
+            delim="REVIEW_PROMPT_$(openssl rand -hex 8)"
+            if ! grep -Fq -- "$delim" "$prompt_file"; then break; fi
+            delim=""
+          done
+          if [[ -z "$delim" ]]; then exit 1; fi
+          {
+            printf 'CODE_REVIEW_PROMPT<<%s\n' "$delim"
+            cat "$prompt_file"
+            # Keep the closer on its own line even if the prompt lacks a trailing newline.
+            printf '\n%s\n' "$delim"
+          } >> "$GITHUB_ENV"
+      - id: junie
+        uses: JetBrains/junie-github-action@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          # Env indirection keeps event-derived prompt interpolation out of the
+          # action input expression (zizmor template-injection).
+          EVENT_PROMPT: ${{ needs.parse.outputs.prompt || '' }}
+        with:
+          junie_api_key: ${{ secrets.JUNIE_API_KEY }}
+          prompt: ${{ env.EVENT_PROMPT != '' && env.EVENT_PROMPT || env.CODE_REVIEW_PROMPT }}
+          attach_github_context_to_custom_prompt: "true"
+          silent_mode: "true"
+      - name: Save Junie review
+        id: junie_review
+        if: always()
+        env:
+          JUNIE_REVIEW: ${{ steps.junie.outputs.junie_summary }}
+          REVIEW_FILE: ${{ runner.temp }}/junie-review.md
+        run: |
+          set -euo pipefail
+          printf '%s' "${JUNIE_REVIEW}" >"${REVIEW_FILE}"
+          delim="JUNIE_REVIEW_$(openssl rand -hex 8)"
+          {
+            printf 'review<<%s\n' "${delim}"
+            cat "${REVIEW_FILE}"
+            # Keep the closer on its own line even if the review body lacks a trailing newline.
+            printf '\n%s\n' "${delim}"
+          } >>"${GITHUB_OUTPUT}"
+      - name: Upload Junie review
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: junie-review-${{ github.run_id }}
+          path: ${{ runner.temp }}/junie-review.md
+          if-no-files-found: ignore
+
+  gemini:
+    outputs:
+      review: ${{ steps.gemini_review.outputs.review }}
+    needs: parse
+    if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',gemini,')
+    runs-on: ubuntu-latest
+    # The review agent receives a read-only GitHub token. Publication is handled
+    # by the separate notify job using a job-scoped GitHub token.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ github.token }}
+          persist-credentials: false
+          fetch-depth: 1
+          ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/head', needs.parse.outputs.pr_number)) || '' }}
+      - name: Verify exact requested PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          [[ "${PR_NUMBER}" =~ ^[0-9]+$ ]]
+          expected="$(gh api "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          actual="$(git rev-parse HEAD)"
+          [[ "${expected}" =~ ^[0-9a-f]{40}$ && "${actual}" == "${expected}" ]] || { echo "Stale PR head" >&2; exit 1; }
+      - name: Stage and verify trusted review assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TRUSTED_REF: ${{ inputs.trusted_ref }}
+        run: |
+          set -euo pipefail
+          trusted_root="${RUNNER_TEMP}/trusted-dotfiles"
+          trusted_sha="${TRUSTED_REF:-${GITHUB_SHA}}"
+          [[ "${trusted_sha}" =~ ^[0-9a-f]{40}$ ]]
+          rm -rf "${trusted_root}"
+          mkdir -p "${trusted_root}"
+          git -C "${trusted_root}" init --quiet
+          git_auth="$(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 | tr -d '\r\n')"
+          printf '::add-mask::%s\n' "${git_auth}"
+          unset GITHUB_TOKEN GIT_CONFIG_PARAMETERS
+          GIT_CONFIG_NOSYSTEM=1 \
+            GIT_CONFIG_GLOBAL=/dev/null \
+            GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+            GIT_CONFIG_VALUE_0="Authorization: Basic ${git_auth}" \
+            GIT_TERMINAL_PROMPT=0 \
+            git -C "${trusted_root}" fetch --depth=1 https://github.com/randytarampi/dotfiles.git "${trusted_sha}"
+          git -C "${trusted_root}" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "${trusted_root}" rev-parse HEAD)" = "${trusted_sha}"
+          python3 "${trusted_root}/scripts/verify-ci-assets.py" --root "${trusted_root}" --manifest "${trusted_root}/configs/review/assets-manifest.json"
+          printf 'TRUSTED_DOTFILES=%s\n' "${trusted_root}" >> "${GITHUB_ENV}"
+      - name: Load review prompt
+        run: |
+          prompt_file="${TRUSTED_DOTFILES}/configs/review/code-review-prompt.md"
+          delim=""
+          for _ in {1..5}; do
+            delim="REVIEW_PROMPT_$(openssl rand -hex 8)"
+            if ! grep -Fq -- "$delim" "$prompt_file"; then
+              break
+            fi
+            delim=""
+          done
+          if [[ -z "$delim" ]]; then
+            echo "Unable to select a safe review prompt delimiter." >&2
+            exit 1
+          fi
+          {
+            printf 'CODE_REVIEW_PROMPT<<%s\n' "$delim"
+            cat "$prompt_file"
+            # Keep the closer on its own line even if the prompt lacks a trailing newline.
+            printf '\n%s\n' "$delim"
+          } >> "$GITHUB_ENV"
+      - name: Install trusted Gemini system policy
+        env:
+          SYSTEM_POLICY: '{"tools":{"core":["ReadFileTool","GlobTool"],"exclude":["run_shell_command","write_file","replace","web_fetch"]},"hooksConfig":{"enabled":false},"security":{"blockGitExtensions":true}}'
+        run: |
+          set -euo pipefail
+          umask 077
+          policy_path="${RUNNER_TEMP}/gemini-system-settings.json"
+          printf '%s\n' "${SYSTEM_POLICY}" > "${policy_path}"
+          jq -e 'type == "object" and .hooksConfig.enabled == false and .security.blockGitExtensions == true' "${policy_path}" >/dev/null
+          echo "GEMINI_CLI_SYSTEM_SETTINGS_PATH=${policy_path}" >> "${GITHUB_ENV}"
+      # GEMINI_CLI_TRUST_WORKSPACE bypasses the workspace-trust prompt; the action's --yolo covers tool approvals (docs: run-gemini-cli trust-guidance.md).
+      - id: gemini
+        uses: google-github-actions/run-gemini-cli@v0
+        env:
+          GEMINI_CLI_TRUST_WORKSPACE: "true"
+          # Env indirection keeps event-derived prompt interpolation out of the
+          # action input expression (zizmor template-injection). \n escapes keep
+          # the env value a single line; format() renders the literal newline.
+          GEMINI_EFFECTIVE_PROMPT: ${{ needs.parse.outputs.prompt != '' && format('{0}\n\n---\n\n{1}', needs.parse.outputs.prompt, env.CODE_REVIEW_PROMPT) || env.CODE_REVIEW_PROMPT }}
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          # Pin the CLI separately from the @v0 action and let repo owners
+          # override the model through an Actions VARIABLE, not a secret.
+          # No model is immune to per-project daily quota exhaustion.
+          gemini_cli_version: "0.66.0"
+          gemini_model: ${{ vars.GEMINI_REVIEW_MODEL || 'gemini-3.5-flash-lite' }}
+          # Upstream action invokes --yolo; explicitly constrain the tools
+          # it can discover while reviewing code from an untrusted PR.
+          # These names are from the Gemini CLI built-in tool vocabulary.
+          settings: '{"tools":{"core":["ReadFileTool","GlobTool"],"exclude":["run_shell_command","write_file","replace","web_fetch"]},"hooksConfig":{"enabled":false},"security":{"blockGitExtensions":true}}'
+          prompt: ${{ env.GEMINI_EFFECTIVE_PROMPT }}
+      - name: Save Gemini review
+        id: gemini_review
+        if: always()
+        env:
+          GEMINI_SUMMARY: ${{ steps.gemini.outputs.summary }}
+          REVIEW_FILE: ${{ runner.temp }}/gemini-review.md
+        run: |
+          set -euo pipefail
+          printf '%s' "${GEMINI_SUMMARY}" >"${REVIEW_FILE}"
+          delim="GEMINI_REVIEW_$(openssl rand -hex 8)"
+          {
+            printf 'review<<%s\n' "${delim}"
+            cat "${REVIEW_FILE}"
+            # Keep the closer on its own line even if the review body lacks a trailing newline.
+            printf '\n%s\n' "${delim}"
+          } >>"${GITHUB_OUTPUT}"
+      - name: Upload Gemini review
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gemini-review-${{ github.run_id }}
+          path: ${{ runner.temp }}/gemini-review.md
+          if-no-files-found: ignore
+  copilot:
+    needs: parse
+    if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',copilot,')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Request Copilot review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${PR_NUMBER}" ]]; then
+            echo "Cannot request Copilot review: PR number is empty." >&2
+            exit 1
+          fi
+          response_file="${RUNNER_TEMP}/copilot-review-response.txt"
+          if ! gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
+            -f 'reviewers[]=copilot-pull-request-reviewer[bot]' >"${response_file}" 2>&1; then
+            response="$(<"${response_file}")"
+            if grep -Eiq 'already[[:space:]]+(been[[:space:]]+)?requested|reviewer[^[:cntrl:]]*already' <<<"${response}"; then
+              echo "Copilot review was already requested; continuing."
+            else
+              printf '%s\n' "${response}" >&2
+              exit 1
+            fi
+          fi
+
+  notify:
+    if: ${{ always() && needs.parse.result == 'success' && (contains(format(',{0},', needs.parse.outputs.agents), ',junie,') || contains(format(',{0},', needs.parse.outputs.agents), ',gemini,')) }}
+    needs: [parse, opencode, junie, gemini, copilot]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # Apps only authenticate the publisher, never the read-only model jobs.
+      # Installation tokens are restricted to PR comments, not code contents.
+      - name: Create Junie publisher token
+        id: junie_app
+        if: ${{ contains(format(',{0},', needs.parse.outputs.agents), ',junie,') && needs.junie.result == 'success' }}
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.JUNIE_GITHUB_APP_ID }}
+          private-key: ${{ secrets.JUNIE_GITHUB_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+      - name: Create Gemini publisher token
+        id: gemini_app
+        if: ${{ contains(format(',{0},', needs.parse.outputs.agents), ',gemini,') && needs.gemini.result == 'success' }}
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.GEMINI_GITHUB_APP_ID }}
+          private-key: ${{ secrets.GEMINI_GITHUB_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+      - name: Download review bodies
+        if: always()
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "*-review-${{ github.run_id }}"
+          path: reviews
+          merge-multiple: true
+      - name: Publish review bodies
+        env:
+          JUNIE_APP_TOKEN: ${{ steps.junie_app.outputs.token }}
+          JUNIE_APP_SLUG: ${{ steps.junie_app.outputs.app-slug }}
+          GEMINI_APP_TOKEN: ${{ steps.gemini_app.outputs.token }}
+          GEMINI_APP_SLUG: ${{ steps.gemini_app.outputs.app-slug }}
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+          AGENTS: ${{ needs.parse.outputs.agents }}
+          TOKENS: ${{ needs.parse.outputs.tokens }}
+          OPCODE_RESULT: ${{ needs.opencode.result }}
+          JUNIE_RESULT: ${{ needs.junie.result }}
+          GEMINI_RESULT: ${{ needs.gemini.result }}
+          COPILOT_RESULT: ${{ needs.copilot.result }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${PR_NUMBER}" || -z "${AGENTS}" ]]; then
+            echo "Requested review publication requires a PR number and selected agents." >&2
+            exit 1
+          fi
+          IFS=',' read -ra agents <<<"${AGENTS}"
+          # Fail before publishing anything if requested review results are incomplete.
+          # Copilot is a request-for-review action, not a generated review body.
+          for agent in "${agents[@]}"; do
+            case "${agent}" in
+              opencode) result="${OPCODE_RESULT}" ;;
+              junie) result="${JUNIE_RESULT}" ;;
+              gemini) result="${GEMINI_RESULT}" ;;
+              copilot) result="${COPILOT_RESULT}" ;;
+              *) echo "Unknown reviewer: ${agent}" >&2; exit 1 ;;
+            esac
+            if [[ "${result}" != success ]]; then
+              echo "Requested ${agent} reviewer did not succeed: ${result}." >&2
+              exit 1
+            fi
+            if [[ "${agent}" != copilot && "${agent}" != opencode ]] && { [[ ! -s "reviews/${agent}-review.md" ]] || ! grep -q '[^[:space:]]' "reviews/${agent}-review.md"; }; then
+              echo "INCOMPLETE: requested ${agent} reviewer returned no review body." >&2
+              exit 1
+            fi
+          done
+          IFS=',' read -ra tokens <<<"${TOKENS:-}"
+          for i in "${!agents[@]}"; do
+            agent="${agents[$i]}"
+            token=""
+            case "${agent}" in
+              junie) token="$(printf '%s\n' "${tokens[@]}" | grep -E '^@junie(-agent)?$' | sort -r | head -n 1 || true)" ;;
+              opencode) token="$(printf '%s\n' "${tokens[@]}" | grep -E '^(/opencode|@opencode|/oc|@oc)$' | head -n 1 || true)" ;;
+              gemini) token="$(printf '%s\n' "${tokens[@]}" | grep -E '^@gemini(-cli)?$' | sort -r | head -n 1 || true)" ;;
+              copilot) token="$(printf '%s\n' "${tokens[@]}" | grep '^@copilot$' | head -n 1 || true)" ;;
+            esac
+            token="${token:-@${agent}}"
+            case "${agent}" in
+              opencode) result="${OPCODE_RESULT}" ;;
+              junie) result="${JUNIE_RESULT}" ;;
+              gemini) result="${GEMINI_RESULT}" ;;
+              copilot) result="${COPILOT_RESULT}" ;;
+              *) continue ;;
+            esac
+            marker="<!-- agent-review:${agent} -->"
+            # Copilot's native reviewer and OpenCode's official App publish
+            # directly; do not create duplicate review comments.
+            if [[ "${agent}" == copilot || "${agent}" == opencode ]]; then
+              continue
+            fi
+            case "${agent}" in
+              junie) poster_token="${JUNIE_APP_TOKEN:-}"; app_slug="${JUNIE_APP_SLUG:-}" ;;
+              gemini) poster_token="${GEMINI_APP_TOKEN:-}"; app_slug="${GEMINI_APP_SLUG:-}" ;;
+            esac
+            if [[ -z "${poster_token}" || -z "${app_slug}" ]]; then
+              echo "Missing configured ${agent} GitHub App installation token or app slug." >&2
+              exit 1
+            fi
+            review_file="reviews/${agent}-review.md"
+            body="$(printf '%s\n\n%s' "${marker}" "$(<"${review_file}")")"
+            # The App can edit only its own comments. A pre-existing foreign
+            # marker must fail rather than silently create a duplicate.
+            existing="$(GH_TOKEN="${poster_token}" gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments")"
+            comment_id="$(jq -rs --arg marker "${marker}" --arg actor "${app_slug}[bot]" '[.[][] | select(.user.login == $actor and (.body | startswith($marker))) | .id] | first // empty' <<<"${existing}")"
+            foreign="$(jq -rs --arg marker "${marker}" --arg actor "${app_slug}[bot]" '[.[][] | select(.user.login != $actor and (.body | startswith($marker)))] | length' <<<"${existing}")"
+            if [[ "${foreign}" != 0 ]]; then
+              echo "Existing ${agent} marker is owned by another account; manual cutover required." >&2
+              exit 1
+            fi
+            if [[ -n "${comment_id}" ]]; then
+              GH_TOKEN="${poster_token}" gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="${body}" --jq '.html_url'
+            else
+              GH_TOKEN="${poster_token}" gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="${body}" --jq '.html_url'
+            fi
+          done
+\t' read -r actual_id actual_client_id <<< "${app_identity}"
+          [[ "${actual_id}" == "${EXPECTED_APP_ID}" && "${actual_client_id}" == "${EXPECTED_CLIENT_ID}" ]] || { echo "OpenCode publisher App ID/client ID mismatch" >&2; exit 1; }
           current="$(gh api "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
           [[ "${current}" == "${EXPECTED_HEAD}" ]] || exit 1
           marker="<!-- agent-review:opencode:v2 head=${EXPECTED_HEAD} -->"
