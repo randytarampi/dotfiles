@@ -36,7 +36,7 @@ def test_gate_off_keeps_legacy_block(tmp_path, monkeypatch):
 def test_v2_sidecars_keep_unowned_config_unchanged(tmp_path, monkeypatch):
     config_dir = tmp_path / ".codex"
     config_dir.mkdir()
-    original = 'model = "owner-model"\nmodel_provider = "owner-provider"\n[profiles.mine]\nmodel = "keep"\n'
+    original = 'model = "owner-model"\nmodel_provider = "owner-provider"\n[mcp_servers.mine]\ncommand = "keep"\n'
     (config_dir / "config.toml").write_text(original)
     invoke(tmp_path, monkeypatch, True)
     monkeypatch.setattr("sys.argv", ["configure-codex.py"])
@@ -45,10 +45,33 @@ def test_v2_sidecars_keep_unowned_config_unchanged(tmp_path, monkeypatch):
     assert original in updated
     assert "DOTFILES MANAGED PROFILES" not in updated
     assert (config_dir / "meridian.config.toml").stat().st_mode & 0o777 == 0o600
+    meridian = configure_codex.tomllib.loads(
+        (config_dir / "meridian.config.toml").read_text()
+    )
+    assert meridian["model_provider"] == "meridian"
+    assert meridian["model"] == "claude-sonnet-5-5"
+    assert "profiles" not in meridian
+    assert "profiles.meridian" not in (config_dir / "meridian.config.toml").read_text()
     assert (
         'model_reasoning_effort = "high"'
         in (config_dir / "meridian.config.toml").read_text()
     )
+
+
+def test_v2_refuses_unowned_legacy_profile_tables_without_touching_root(
+    tmp_path, monkeypatch
+):
+    config_dir = tmp_path / ".codex"
+    config_dir.mkdir()
+    root = config_dir / "config.toml"
+    root.write_text('[profiles.mine]\nmodel = "owner-kept"\n')
+    original_root = root.read_bytes()
+    invoke(tmp_path, monkeypatch, True)
+    monkeypatch.setattr("sys.argv", ["configure-codex.py"])
+    with pytest.raises(SystemExit):
+        configure_codex.main()
+    assert root.read_bytes() == original_root
+    assert not (config_dir / configure_codex.V2_MANIFEST).exists()
 
 
 def test_v2_refuses_foreign_sidecar(tmp_path, monkeypatch):
