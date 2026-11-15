@@ -294,7 +294,17 @@ jobs:
           # nonfunctional placeholder unless its pinned postinstall is allowed.
           # Permit only this package, never all dependency lifecycle scripts.
           npm install --global --allow-scripts=@opencode/cli @opencode/cli@2.3.0
-          [[ "$(opencode --version)" == 2.3.0 ]]
+          # OpenCode v2 may prefix its reported version with the command name
+          # and "v". Check the exact release, not a raw string format.
+          installed_version="$(opencode --version)"
+          printf 'Installed OpenCode CLI version: %s\n' "${installed_version}"
+          case "${installed_version}" in
+            2.3.0|"v2.3.0"|"opencode 2.3.0"|"opencode v2.3.0") ;;
+            *)
+              echo "Unexpected OpenCode CLI version (expected 2.3.0)" >&2
+              exit 1
+              ;;
+          esac
       - uses: actions/checkout@v7
         with:
           token: ${{ github.token }}
