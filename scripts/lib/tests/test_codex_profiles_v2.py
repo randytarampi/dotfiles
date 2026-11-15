@@ -74,6 +74,26 @@ def test_v2_refuses_unowned_legacy_profile_tables_without_touching_root(
     assert not (config_dir / configure_codex.V2_MANIFEST).exists()
 
 
+def test_v2_invalid_generated_toml_never_writes_root(tmp_path, monkeypatch):
+    directory = tmp_path / ".codex"
+    directory.mkdir()
+    root = directory / "config.toml"
+    root.write_text('model = "owner-kept"\n')
+    before = root.read_bytes()
+    invoke(tmp_path, monkeypatch, True)
+    monkeypatch.setattr(
+        configure_codex,
+        "resolve_ollama_cloud_model",
+        lambda: ('malformed"\nowner_override = true', "test"),
+    )
+    monkeypatch.setattr("sys.argv", ["configure-codex.py"])
+    with pytest.raises(SystemExit):
+        configure_codex.main()
+    assert root.read_bytes() == before
+    assert not (directory / configure_codex.V2_MANIFEST).exists()
+    assert not (directory / "ollama-cloud.config.toml").exists()
+
+
 def test_v2_refuses_foreign_sidecar(tmp_path, monkeypatch):
     config_dir = tmp_path / ".codex"
     config_dir.mkdir()
