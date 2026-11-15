@@ -158,7 +158,9 @@ def _atomic_private_write(path, content, *, create_only=False):
 def _check_v2_directory(directory):
     """Refuse unsafe Codex-home paths before reading/writing owned sidecars."""
     directory = Path(directory)
-    if directory.is_symlink() or any(parent.is_symlink() for parent in directory.parents):
+    if directory.is_symlink() or any(
+        parent.is_symlink() for parent in directory.parents
+    ):
         raise ValueError("refusing symlinked Codex profile directory")
     if directory.exists():
         info = directory.stat()
