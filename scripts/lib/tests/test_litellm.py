@@ -4696,7 +4696,13 @@ def test_canonical_bridge_regeneration_is_idempotent_and_collision_safe():
     assert warnings == next_warnings == []
     assert twice == once
     assert (
-        len([item for item in twice if item["model_name"] == "anthropic/claude-preset-oracle"])
+        len(
+            [
+                item
+                for item in twice
+                if item["model_name"] == "anthropic/claude-preset-oracle"
+            ]
+        )
         == 1
     )
     alias = next(
@@ -4728,8 +4734,7 @@ def test_anthropic_bridge_uses_served_canonical_target():
     )
     assert alias["litellm_params"]["model"] == "openai/served"
     assert (
-        alias["model_info"]["canonical_bridge_source"]
-        == "anthropic/claude-sonnet-5-5"
+        alias["model_info"]["canonical_bridge_source"] == "anthropic/claude-sonnet-5-5"
     )
     rendered = litellm_config.render_config(environ={}, entries=rows)
     assert "model_info:" in rendered
