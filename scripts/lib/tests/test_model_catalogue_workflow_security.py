@@ -168,8 +168,8 @@ def test_actionlint_app_client_id_compatibility_is_scoped():
         assert paths[path]["ignore"] == known_false_positives
         workflow = read(path)
         if path == ".github/workflows/agentic-review.yml":
-            workflow = workflow.split("  opencode_publish:\\n", 1)[1].split(
-                "\\n  junie:\\n", 1
+            workflow = workflow.split("  opencode_publish:\n", 1)[1].split(
+                "\n  junie:\n", 1
             )[0]
         client_variable = (
             "WOOFBOT_GITHUB_APP_CLIENT_ID"
