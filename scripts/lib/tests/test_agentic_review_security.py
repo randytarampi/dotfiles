@@ -203,7 +203,6 @@ def test_opencode_v2_labels_comments_and_isolated_app_publication():
     assert 'OPENCODE_VERSION: "2.2.5"' in fix
 
 
-
 @pytest.mark.parametrize(
     ("reported", "npm_exit", "expected_success"),
     [
@@ -232,15 +231,15 @@ def test_opencode_pinned_installer_accepts_only_expected_version(
     bindir.mkdir()
     npm = bindir / "npm"
     npm.write_text(
-        '#!/bin/sh\\nprintf "%s\\\\n" "$@" > "$INSTALL_ARGS_FILE"\\n'
-        'exit "$MOCK_NPM_EXIT"\\n',
+        '#!/bin/sh\nprintf "%s\\n" "$@" > "$INSTALL_ARGS_FILE"\n'
+        'exit "$MOCK_NPM_EXIT"\n',
         encoding="utf-8",
     )
     npm.chmod(0o755)
     cli = bindir / "opencode"
     cli.write_text(
-        '#!/bin/sh\\n[ "$1" = "--version" ] || exit 64\\n'
-        'printf "%s\\\\n" "$MOCK_OPENCODE_VERSION"\\n',
+        '#!/bin/sh\n[ "$1" = "--version" ] || exit 64\n'
+        'printf "%s\\n" "$MOCK_OPENCODE_VERSION"\n',
         encoding="utf-8",
     )
     cli.chmod(0o755)
