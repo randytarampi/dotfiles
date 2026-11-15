@@ -55,8 +55,15 @@ def _valid_events():
             "type": "text",
             "part": {
                 "type": "text",
-                "text": "Blocker: source.py:42 dereferences an unchecked optional value. "
-                "Guard the absent case and exercise it in the unit test.",
+                "text": (
+                    "## Verdict\n"
+                    "NOT READY: an unchecked optional value can fail at runtime.\n\n"
+                    "## Findings\n"
+                    "- Blocker: source.py:42 dereferences an unchecked optional value.\n"
+                    "  Guard the absent case and exercise it in the unit test.\n\n"
+                    "## Evidence\n"
+                    "- Inspected changed source and test path; no host validation.\n"
+                ),
             },
         },
         {"type": "step_finish", "part": {"type": "step-finish"}},
