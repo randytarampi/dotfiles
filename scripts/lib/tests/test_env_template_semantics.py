@@ -11,8 +11,10 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # gate lines to the '== Deployment phases and service gates ==' block.
 # 2026-11-14: new commented, default-off DOTFILES_RUN_OPENWEBUI_EMBEDDING_INVENTORY
 # operator-only read-only inspection gate in the Open WebUI section (#85).
+# 2026-11-15: commented, default-off DOTFILES_CODEX_PROFILES_V2 gate (#216);
+# retain exact ordering and defaults in the protected assignment fingerprint.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "8a353da0a6ec55e3a7c2a86e6fe7055b6ab2b98004aa9bc3da1f64e526ab49e7"
+    "bbf72b24aab639f0f3fc52f46989801808257d926764f99280a66a7aa446e5b9"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
