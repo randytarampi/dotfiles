@@ -473,6 +473,70 @@ class TierRegistryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             tier_registry.materialize_role_models(registry(), "pro", {}, ["bad"])
 
+    def test_scoped_role_overrides_match_tier_glob(self):
+        data = registry()
+        for tier in ("local", "local-loud", "local-quiet", "local-solo"):
+            with self.subTest(tier=tier):
+                roles = tier_registry.materialize_role_models(
+                    data, tier, {}, ["orchestrator@local*=ollama/scoped"]
+                )
+                self.assertEqual(roles["orchestrator"], "ollama/scoped")
+        roles = tier_registry.materialize_role_models(
+            data, "pro", {}, ["orchestrator@local*=ollama/scoped"]
+        )
+        self.assertNotEqual(roles["orchestrator"], "ollama/scoped")
+
+    def test_scoped_and_unscoped_role_overrides_mix(self):
+        roles = tier_registry.materialize_role_models(
+            registry(),
+            "local",
+            {},
+            ["orchestrator@local*=ollama/scoped", "observer=ollama/global"],
+        )
+        self.assertEqual(roles["orchestrator"], "ollama/scoped")
+        self.assertEqual(roles["observer"], "ollama/global")
+
+    def test_filter_role_overrides_uses_requested_tier(self):
+        scoped = "orchestrator@local*=ollama/scoped"
+        legacy = "observer=ollama/global"
+        self.assertEqual(
+            tier_registry.filter_role_overrides([scoped, legacy], "pro"), [legacy]
+        )
+        self.assertEqual(
+            tier_registry.filter_role_overrides([scoped, legacy], "local-solo"),
+            [scoped, legacy],
+        )
+        local_mapping = tier_registry.materialize_role_models(
+            registry(),
+            "local",
+            {"code-gen": "ollama/discovered", "reasoning": "ollama/reasoning"},
+            tier_registry.filter_role_overrides([scoped], "pro"),
+        )
+        self.assertNotEqual(local_mapping["orchestrator"], "ollama/scoped")
+        roles = tier_registry.materialize_role_models(
+            registry(), "pro", {}, tier_registry.filter_role_overrides([scoped], "pro")
+        )
+        self.assertNotEqual(roles["orchestrator"], "ollama/scoped")
+
+    def test_filter_role_overrides_rejects_malformed_scoped_entries(self):
+        for override in ("@local*=x", "orchestrator@=x", "orchestrator@local*"):
+            with self.subTest(override=override), self.assertRaises(ValueError):
+                tier_registry.filter_role_overrides([override], "pro")
+
+    def test_malformed_scoped_role_overrides_raise(self):
+        for override in ("@local*=x", "orchestrator@=x", "orchestrator@local*"):
+            with self.subTest(override=override), self.assertRaises(ValueError):
+                tier_registry.materialize_role_models(
+                    registry(), "local", {}, [override]
+                )
+
+    def test_unmatched_scoped_unknown_role_override_does_not_warn(self):
+        with patch.object(tier_registry.logger, "warning") as warning:
+            tier_registry.materialize_role_models(
+                registry(), "pro", {}, ["observer@local*=ollama/scoped"]
+            )
+        warning.assert_not_called()
+
     def test_positional_style_conflict_is_not_registry_concern(self):
         self.assertEqual(
             tier_registry.collect_placeholder_categories("_local:audio"), "audio"

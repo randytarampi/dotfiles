@@ -444,7 +444,9 @@ Use `--role-model` to replace the primary model for a specific agent role. This 
 scripts/configure-opencode-tier.py --role-model observer=ollama/qwen3.5:9b-mlx --preset pro-plus
 ```
 
-Format: `--role-model <role>=<model>` where role is one of `orchestrator`, `oracle`, `librarian`, `explorer`, `fixer`, `designer`, `observer`.
+Format: `--role-model <role>=<model>` or `--role-model <role>@<pattern>=<model>` where role is one of `orchestrator`, `oracle`, `librarian`, `explorer`, `fixer`, `designer`, `observer`; patterns are tier-name globs matched against the requested `--preset`, such as `orchestrator@local*=ollama/model`. Unscoped entries continue to apply to every preset.
+
+When switching to a cloud preset, local-role diagnostics and fallback chains show the unmodified local discovery mapping if a scoped override does not match the requested preset.
 
 Role and category overrides set the role's primary model; local fallback appending then adds alternatives.
 
@@ -465,7 +467,7 @@ When local models are appended to fallback chains, all indexed variants matching
 The OpenCode configure script forwards these env vars to `configure-opencode.py`:
 - `DOTFILES_LOCAL_FALLBACK_PRESET` → `--local-fallback-preset`
 - `DOTFILES_CATEGORY_MODELS` → comma-separated `--category-model` args (e.g. `reasoning=code-gen,vision=lightweight`)
-- `DOTFILES_ROLE_MODELS` → comma-separated `--role-model` args (e.g. `observer=ollama/qwen3.5:9b-mlx`)
+- `DOTFILES_ROLE_MODELS` → comma-separated `--role-model` args (e.g. `observer=ollama/qwen3.5:9b-mlx` or `orchestrator@local*=ollama/model`, matched against the requested `--preset`); unscoped entries apply to every preset.
 
 ---
 

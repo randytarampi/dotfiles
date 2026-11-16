@@ -13,8 +13,10 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # operator-only read-only inspection gate in the Open WebUI section (#85).
 # 2026-11-15: commented, default-off DOTFILES_CODEX_PROFILES_V2 gate (#216);
 # retain exact ordering and defaults in the protected assignment fingerprint.
+# 2026-11-16: DOTFILES_ROLE_MODELS comment updated to document the
+# role@pattern=model scoped role-model override syntax.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "bbf72b24aab639f0f3fc52f46989801808257d926764f99280a66a7aa446e5b9"
+    "649cf5d4a821c65d744c6c41b0ba28ade503101f781dda0c13a90d8d6a2486c2"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
