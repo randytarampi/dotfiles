@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate Pi agent configuration from the shared OpenCode tier registry."""
 
-import argparse, copy, fnmatch, json, os, shlex, shutil, subprocess, sys
+import argparse, copy, json, os, shlex, shutil, subprocess, sys
 from pathlib import Path
 import stat
 import tempfile
@@ -849,11 +849,17 @@ def main():
                 "No local Ollama models found; local model fallbacks are unavailable"
             )
     tier_registry.apply_placeholder_overrides(category_models, args.category_models)
+    # The requested preset owns the scope decision, even if a local fallback
+    # resolves with another preset's role mapping.
+    matched_overrides = tier_registry.filter_role_overrides(args.role_models, preset)
+    effective_overrides = tier_registry.effective_role_overrides(
+        args.role_models, preset
+    )
     role_models = tier_registry.materialize_role_models(
         registry,
         resolution_preset if local_preset else preset,
         category_models,
-        args.role_models,
+        effective_overrides,
     )
     if preset in DYNAMIC_FREE_PRESETS and dynamic_audit:
         role_models = {
@@ -901,22 +907,16 @@ def main():
     if category_models:
         logger.info(f"Classified local models: {json.dumps(category_models, indent=2)}")
     if args.role_models:
-        overrides = {}
+        applied = {}
         skipped_scoped = []
+        matched = set(matched_overrides)
         for item in args.role_models:
-            if "=" in item:
-                selector, model = item.split("=", 1)
-                role, pattern = (
-                    selector.split("@", 1) if "@" in selector else (selector, None)
-                )
-                if pattern is not None:
-                    if role_models.get(role) == model:
-                        overrides[role] = model
-                    else:
-                        skipped_scoped.append(selector)
-                elif role_models.get(role) == model:
-                    overrides[role] = model
-        applied = {role: model for role, model in overrides.items()}
+            selector, model = item.split("=", 1)
+            role = selector.split("@", 1)[0]
+            if "@" in selector and item not in matched:
+                skipped_scoped.append(selector)
+            elif role_models.get(role) == model:
+                applied[role] = model
         if applied:
             logger.info(
                 "Applied role-model overrides: %s",
