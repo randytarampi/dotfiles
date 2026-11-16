@@ -167,7 +167,7 @@ Repository-scoped secrets can be referenced by **other workflows in the same rep
 
 When publishing, the catalogue uses a Woofbot installation token and the agentic-review fix workflow uses a dedicated OpenCode App installation token. Both pass their respective tokens to GitHub CLI as `GH_TOKEN` and use the scoped `gh auth git-credential` helper for Git-over-HTTPS pushes. This avoids a raw `Authorization: Bearer` Git header (which previously failed at push time), keeps the token out of Git command arguments and persistent checkout credentials, and disables interactive credential prompts. No additional Woofbot permissions or cross-App secret copies are required. A successful token mint does not prove the bot branch push or draft PR creation worked; inspect both operations in Actions.
 
-If either credential is unavailable, the publisher now fails with an explicit preflight error without printing either secret. The refresh job remains read-only and its uploaded inventory artifact remains available for inspection. A successful refresh does not mean a draft PR was published.
+If either **Woofbot catalogue** credential is unavailable, the catalogue publisher fails its explicit preflight without printing the secret. The **OpenCode** review and manual-fix publishers have no analogous credential preflight: they rely on `actions/create-github-app-token@v3` to fail when the configured client ID or private key cannot mint an installation token. The catalogue refresh job remains read-only and its uploaded inventory artifact remains available for inspection. A successful refresh does not mean a draft PR was published.
 
 ## 2026-09-12: Ollama Cloud + OpenAI catalogue refresh
 
