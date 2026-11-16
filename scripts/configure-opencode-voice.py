@@ -737,6 +737,9 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
     resolution_preset = local_fallback_preset or (
         tier if tier_registry.uses_local_placeholders(registry, tier) else "local"
     )
+    # Role scopes match the requested tier, not the local fallback preset
+    # used to select the voice candidate.
+    role_models = tier_registry.effective_role_overrides(role_models, tier)
 
     # Determine Meridian proxy usage for Anthropic tiers
     use_meridian = is_meridian_configured()
