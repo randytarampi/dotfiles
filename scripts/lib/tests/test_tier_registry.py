@@ -518,6 +518,46 @@ class TierRegistryTests(unittest.TestCase):
         )
         self.assertNotEqual(roles["orchestrator"], "ollama/scoped")
 
+    def test_effective_overrides_are_scoped_once_to_requested_tier(self):
+        source = [
+            "orchestrator@local-solo=omlx/solo-override",
+            "orchestrator@pro=meridian/pro-override",
+            "observer=ollama/global",
+        ]
+        local_effective = tier_registry.effective_role_overrides(source, "local-solo")
+        self.assertEqual(
+            local_effective,
+            ["orchestrator=omlx/solo-override", "observer=ollama/global"],
+        )
+        # Pi and voice may materialize a different local fallback preset.
+        local_roles = tier_registry.materialize_role_models(
+            registry(), "local", {}, local_effective
+        )
+        self.assertEqual(local_roles["orchestrator"], "omlx/solo-override")
+        pro_effective = tier_registry.effective_role_overrides(source, "pro")
+        self.assertEqual(
+            pro_effective,
+            ["orchestrator=meridian/pro-override", "observer=ollama/global"],
+        )
+        pro_roles_via_fallback = tier_registry.materialize_role_models(
+            registry(), "local-solo", {}, pro_effective
+        )
+        self.assertEqual(
+            pro_roles_via_fallback["orchestrator"], "meridian/pro-override"
+        )
+        self.assertEqual(
+            tier_registry.effective_role_overrides(
+                ["orchestrator@local-solo=omlx/solo-override"], "pro"
+            ),
+            [],
+        )
+
+    def test_effective_override_validates_malformed_scopes_before_fallback(self):
+        for invalid in ("orchestrator@=omlx/model", "@local*=omlx/model", "orchestrator@local*"):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                tier_registry.effective_role_overrides([invalid], "pro")
+
+
     def test_filter_role_overrides_rejects_malformed_scoped_entries(self):
         for override in ("@local*=x", "orchestrator@=x", "orchestrator@local*"):
             with self.subTest(override=override), self.assertRaises(ValueError):
