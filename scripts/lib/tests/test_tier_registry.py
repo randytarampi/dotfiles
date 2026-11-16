@@ -561,7 +561,6 @@ class TierRegistryTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 tier_registry.effective_role_overrides([invalid], "pro")
 
-
     def test_filter_role_overrides_rejects_malformed_scoped_entries(self):
         for override in ("@local*=x", "orchestrator@=x", "orchestrator@local*"):
             with self.subTest(override=override), self.assertRaises(ValueError):
