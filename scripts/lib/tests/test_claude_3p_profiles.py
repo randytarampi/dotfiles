@@ -108,9 +108,7 @@ def test_provider_preserving_classifier_uses_omlx_metadata_and_route(monkeypatch
 
 def test_claude_main_cannot_import_operator_env_into_other_tests(tmp_path, monkeypatch):
     """The main entrypoint must not leak ~/.env gate values across pytest modules."""
-    (tmp_path / ".env").write_text(
-        "DOTFILES_CODEX_PROFILES_V2='1'\n", encoding="utf-8"
-    )
+    (tmp_path / ".env").write_text("DOTFILES_CODEX_PROFILES_V2='1'\n", encoding="utf-8")
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "0")
     monkeypatch.delenv("DOTFILES_CODEX_PROFILES_V2", raising=False)
