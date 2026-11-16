@@ -77,6 +77,46 @@ def test_local_category_models_preserves_provider_for_classification(monkeypatch
     assert classify.call_args.args[0] == [{"name": "ornith-local", "provider": "omlx"}]
 
 
+def test_provider_preserving_classifier_uses_omlx_metadata_and_route(monkeypatch):
+    """Exercise the actual classifier, not a mock that echoes its input."""
+    import tier_resolve
+
+    models = [
+        {"name": "ornith-local", "provider": "omlx", "size_gb": 25.0},
+        {"name": "other-coder", "provider": "ollama", "size_gb": 12.0},
+    ]
+    metadata_calls = []
+
+    def metadata(model, provider="ollama"):
+        metadata_calls.append((model, provider))
+        return {
+            "param_count": 35 if model == "ornith-local" else 12,
+            "capabilities": ["completion", "thinking", "tools"],
+            "is_moe": False,
+        }
+
+    with (
+        patch("discover_models.list_local_ollama_models", return_value=models),
+        patch.object(tier_resolve, "get_model_details", side_effect=metadata),
+    ):
+        selected = profiles._local_category_models(registry(), "local")
+    assert selected["code-gen"] == "omlx/ornith-local"
+    assert ("ornith-local", "omlx") in metadata_calls
+    assert ("other-coder", "ollama") in metadata_calls
+
+
+def test_claude_main_cannot_import_operator_env_into_other_tests(tmp_path, monkeypatch):
+    """The main entrypoint must not leak ~/.env gate values across pytest modules."""
+    (tmp_path / ".env").write_text(
+        "DOTFILES_CODEX_PROFILES_V2='1'\n", encoding="utf-8"
+    )
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "0")
+    monkeypatch.delenv("DOTFILES_CODEX_PROFILES_V2", raising=False)
+    assert profiles.main(["--dry-run"]) == 0
+    assert "DOTFILES_CODEX_PROFILES_V2" not in __import__("os").environ
+
+
 def test_unchanged_profile_is_not_rewritten_and_mode_private(tmp_path):
     target = tmp_path / "profile.json"
     content = '{"ok": true}\n'
