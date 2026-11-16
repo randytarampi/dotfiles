@@ -12,8 +12,11 @@ WORKFLOW = ROOT / ".github/workflows/ci.yml"
 def test_make_has_separate_quoted_chezmoi_config_argument():
     source = MAKEFILE.read_text(encoding="utf-8")
     assert "CHEZMOI_CONFIG ?=" in source
-    assert 'CHEZMOI_CONFIG_ARG = $(if $(strip $(CHEZMOI_CONFIG)),--config "$(CHEZMOI_CONFIG)")' in source
-    assert source.count('$(CHEZMOI) $(CHEZMOI_CONFIG_ARG) --source') == 3
+    assert (
+        'CHEZMOI_CONFIG_ARG = $(if $(strip $(CHEZMOI_CONFIG)),--config "$(CHEZMOI_CONFIG)")'
+        in source
+    )
+    assert source.count("$(CHEZMOI) $(CHEZMOI_CONFIG_ARG) --source") == 3
     assert '$(CHEZMOI) --source "$(CHEZMOI_SOURCE)" apply' not in source
 
 
@@ -42,7 +45,10 @@ def test_ci_actually_deploys_and_checks_windows_spaces_without_skipping_rows():
     assert 'echo "CHEZMOI_CONFIG=$cz_config" >> "$GITHUB_ENV"' in deploy
     assert 'chezmoi_args+=(--config "$CHEZMOI_CONFIG")' in deploy
     assert 'chezmoi "${chezmoi_args[@]}" --source "$GITHUB_WORKSPACE" verify' in deploy
-    assert 'diff_output="$(chezmoi "${chezmoi_args[@]}" --source "$GITHUB_WORKSPACE" diff)"' in deploy
+    assert (
+        'diff_output="$(chezmoi "${chezmoi_args[@]}" --source "$GITHUB_WORKSPACE" diff)"'
+        in deploy
+    )
     assert deploy.count("Deploy (first pass)") == 1
     assert deploy.count("Deploy (idempotency pass)") == 1
     assert "continue-on-error" not in deploy
