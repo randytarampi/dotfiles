@@ -151,6 +151,20 @@ def filter_role_overrides(overrides: Optional[List[str]], tier: str) -> List[str
     return filtered
 
 
+def effective_role_overrides(overrides: Optional[List[str]], requested_tier: str) -> List[str]:
+    """Select overrides by the user's tier, then strip consumed scopes.
+
+    A downstream consumer may materialize a *different* fallback preset.
+    Re-evaluating @patterns against that fallback would invert the selection,
+    so return ordinary role=model overrides after checking the requested tier.
+    """
+    return [
+        f"{role}={model}"
+        for override in filter_role_overrides(overrides, requested_tier)
+        for role, _, model in [_parse_role_override(override)]
+    ]
+
+
 def materialize_role_models(
     registry: Dict,
     tier: str,
