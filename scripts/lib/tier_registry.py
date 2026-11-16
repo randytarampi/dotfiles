@@ -151,7 +151,9 @@ def filter_role_overrides(overrides: Optional[List[str]], tier: str) -> List[str
     return filtered
 
 
-def effective_role_overrides(overrides: Optional[List[str]], requested_tier: str) -> List[str]:
+def effective_role_overrides(
+    overrides: Optional[List[str]], requested_tier: str
+) -> List[str]:
     """Select overrides by the user's tier, then strip consumed scopes.
 
     A downstream consumer may materialize a *different* fallback preset.
