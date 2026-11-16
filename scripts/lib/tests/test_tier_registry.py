@@ -553,7 +553,11 @@ class TierRegistryTests(unittest.TestCase):
         )
 
     def test_effective_override_validates_malformed_scopes_before_fallback(self):
-        for invalid in ("orchestrator@=omlx/model", "@local*=omlx/model", "orchestrator@local*"):
+        for invalid in (
+            "orchestrator@=omlx/model",
+            "@local*=omlx/model",
+            "orchestrator@local*",
+        ):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 tier_registry.effective_role_overrides([invalid], "pro")
 
