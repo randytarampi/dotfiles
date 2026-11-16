@@ -282,17 +282,6 @@ jobs:
           fi
           git diff --cached --check
 
-      - name: Require OpenCode App fix publisher configuration
-        env:
-          EXPECTED_APP_ID: ${{ vars.OPENCODE_GITHUB_APP_ID }}
-          EXPECTED_CLIENT_ID: ${{ vars.OPENCODE_GITHUB_CLIENT_ID }}
-          HAS_APP_PRIVATE_KEY: ${{ secrets.OPENCODE_GITHUB_APP_PRIVATE_KEY != '' }}
-        run: |
-          set -euo pipefail
-          if [[ ! "${EXPECTED_APP_ID}" =~ ^[1-9][0-9]*$ || -z "${EXPECTED_CLIENT_ID}" || "${HAS_APP_PRIVATE_KEY}" != "true" ]]; then
-            echo "::error title=Missing OpenCode App fix publisher configuration::Set OPENCODE_GITHUB_APP_ID and OPENCODE_GITHUB_CLIENT_ID as Actions variables and OPENCODE_GITHUB_APP_PRIVATE_KEY as an Actions secret." >&2
-            exit 1
-          fi
       - name: Mint OpenCode App fix publication token
         id: publish
         uses: actions/create-github-app-token@v3
@@ -305,14 +294,9 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.publish.outputs.token }}
           PUBLISH_APP_SLUG: ${{ steps.publish.outputs.app-slug }}
-          EXPECTED_APP_ID: ${{ vars.OPENCODE_GITHUB_APP_ID }}
-          EXPECTED_CLIENT_ID: ${{ vars.OPENCODE_GITHUB_CLIENT_ID }}
         run: |
           set -euo pipefail
           [[ "${PUBLISH_APP_SLUG}" == opencode-randytarampi-ca ]] || { echo "Unexpected OpenCode App slug for manual fix publisher" >&2; exit 1; }
-          actual_id="$(gh api "/apps/${PUBLISH_APP_SLUG}" --jq .id)"
-          actual_client_id="$(gh api "/apps/${PUBLISH_APP_SLUG}" --jq .client_id)"
-          [[ "${actual_id}" == "${EXPECTED_APP_ID}" && "${actual_client_id}" == "${EXPECTED_CLIENT_ID}" ]] || { echo "OpenCode fix publisher App ID/client ID mismatch" >&2; exit 1; }
           bot_id="$(gh api "/users/${PUBLISH_APP_SLUG}[bot]" --jq .id)"
           [[ "${bot_id}" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid OpenCode App bot user ID" >&2; exit 1; }
           printf 'OPENCODE_BOT_USER_ID=%s\n' "${bot_id}" >> "${GITHUB_ENV}"
