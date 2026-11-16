@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import sys
 
-ENTRY = re.compile(r'^(tap|brew|cask|npm|uv)\s+"([A-Za-z0-9@/_.+\-]+)"(?:\s*,\s*.+)?
+ENTRY = re.compile(r'^(tap|brew|cask|npm|uv)\s+"([A-Za-z0-9@/_.+\-]+)"(?:\s*,\s*.+)?$')
 # A macOS-specific name deserves a separate qualification, but is not
 # declared impossible on Linux without actual endpoint/formula evidence.
 MACOS_NAMED_CANDIDATES = frozenset(
