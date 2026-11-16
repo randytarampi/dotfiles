@@ -7,7 +7,7 @@ model placeholders consistently.
 
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import logger
 
@@ -89,7 +89,7 @@ def get_preset_placeholder_categories(registry: Dict, tier: str) -> set:
 
 
 def classify_models_for_preset(
-    models: List[str],
+    models: List[Union[str, Dict[str, Any]]],
     registry: Dict,
     tier: str,
     min_reasoning_embedding: int = 0,
