@@ -12,7 +12,6 @@ jobs:
   real-gate:
     name: Real gate (${{ matrix.gate }})
     runs-on: ubuntu-latest
-    continue-on-error: true
     timeout-minutes: 60
     # Keep Poetry's locked environment in the checkout before HOME is replaced
     # with a disposable test home for each isolated gate.
