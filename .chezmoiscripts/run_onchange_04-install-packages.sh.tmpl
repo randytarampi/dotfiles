@@ -88,21 +88,21 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
   # formula/tap support remains unqualified until actual host receipts.
   if [[ "$(uname -s)" == "Linux" ]]; then
     linux_manifests=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile")
-    {{ if .categories.dev }}
+    {{- if .categories.dev }}
     linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev")
-    {{ end }}
-    {{ if .categories.local_ai_headless }}
+    {{- end }}
+    {{- if .categories.local_ai_headless }}
     linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.local.ai.headless")
-    {{ end }}
-    {{ if .categories.dev_security }}
+    {{- end }}
+    {{- if .categories.dev_security }}
     linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev.security")
-    {{ end }}
-    {{ if .categories.utilities }}
+    {{- end }}
+    {{- if .categories.utilities }}
     linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.utilities")
-    {{ end }}
-    {{ if .categories.dev_ops }}
+    {{- end }}
+    {{- if .categories.dev_ops }}
     linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev.ops")
-    {{ end }}
+    {{- end }}
     python3 "{{ .chezmoi.sourceDir }}/scripts/check-linux-brewfile-eligibility.py" --enforce "${linux_manifests[@]}" ||
       die "Linux package selection contains blocked Brewfile directives; no package manager was invoked"
   fi
