@@ -187,18 +187,17 @@ def test_opencode_v2_labels_comments_and_isolated_app_publication():
     assert "OPENCODE_API_KEY" not in publisher
     assert "actions/create-github-app-token@v3" in publisher
     assert "vars.OPENCODE_GITHUB_CLIENT_ID" in publisher
-    assert "vars.OPENCODE_GITHUB_APP_ID" in publisher
     assert "client-id: ${{ vars.OPENCODE_GITHUB_CLIENT_ID }}" in publisher
     assert "secrets.OPENCODE_GITHUB_APP_PRIVATE_KEY" in publisher
     assert "permission-pull-requests: write" in publisher
     assert "opencode-randytarampi-ca" in publisher
     assert "app-id:" not in publisher
     assert "permission-contents: write" not in publisher
-    assert "Require OpenCode App publisher configuration" in publisher
-    assert 'actual_id="$(gh api "/apps/${APP_SLUG}" --jq .id)"' in publisher
-    assert (
-        'actual_client_id="$(gh api "/apps/${APP_SLUG}" --jq .client_id)"' in publisher
-    )
+    assert "Require OpenCode App publisher configuration" not in publisher
+    assert "EXPECTED_APP_ID" not in publisher
+    assert "EXPECTED_CLIENT_ID" not in publisher
+    assert 'gh api "/apps/' not in publisher
+    assert '[[ "${APP_SLUG}" == opencode-randytarampi-ca ]]' in publisher
     assert "needs.opencode.outputs.head" in publisher
     assert (
         "agent-review:opencode:v2 publisher=opencode-randytarampi-ca head=" in publisher
@@ -537,7 +536,6 @@ def test_manual_fix_uses_opencode_app_publisher_credentials():
     assert "OPENCODE_GITHUB_APP_PRIVATE_KEY" not in generate
     assert "environment: agentic-review-fix" in publish
     assert "client-id: ${{ vars.OPENCODE_GITHUB_CLIENT_ID }}" in publish
-    assert "vars.OPENCODE_GITHUB_APP_ID" in publish
     assert "private-key: ${{ secrets.OPENCODE_GITHUB_APP_PRIVATE_KEY }}" in publish
     assert "app-id:" not in publish
     assert "secrets.APP_ID" not in publish
@@ -546,12 +544,11 @@ def test_manual_fix_uses_opencode_app_publisher_credentials():
     assert "GH_TOKEN: ${{ steps.publish.outputs.token }}" in publish
     assert "PUBLISH_APP_SLUG: ${{ steps.publish.outputs.app-slug }}" in publish
     assert "Unexpected OpenCode App slug for manual fix publisher" in publish
-    assert "Require OpenCode App fix publisher configuration" in publish
-    assert 'actual_id="$(gh api "/apps/${PUBLISH_APP_SLUG}" --jq .id)"' in publish
-    assert (
-        'actual_client_id="$(gh api "/apps/${PUBLISH_APP_SLUG}" --jq .client_id)"'
-        in publish
-    )
+    assert "Require OpenCode App fix publisher configuration" not in publish
+    assert "EXPECTED_APP_ID" not in publish
+    assert "EXPECTED_CLIENT_ID" not in publish
+    assert 'gh api "/apps/' not in publish
+    assert '[[ "${PUBLISH_APP_SLUG}" == opencode-randytarampi-ca ]]' in publish
     assert 'bot_id="$(gh api "/users/${PUBLISH_APP_SLUG}[bot]" --jq .id)"' in publish
     assert '[[ "${bot_id}" =~ ^[1-9][0-9]*$ ]]' in publish
     assert 'publisher_login="${PUBLISH_APP_SLUG}[bot]"' in publish
