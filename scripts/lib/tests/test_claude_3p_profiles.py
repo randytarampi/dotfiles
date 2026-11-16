@@ -1,5 +1,6 @@
 import pytest
 import importlib.util
+import os
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -114,7 +115,7 @@ def test_claude_main_cannot_import_operator_env_into_other_tests(tmp_path, monke
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "0")
     monkeypatch.delenv("DOTFILES_CODEX_PROFILES_V2", raising=False)
     assert profiles.main(["--dry-run"]) == 0
-    assert "DOTFILES_CODEX_PROFILES_V2" not in __import__("os").environ
+    assert "DOTFILES_CODEX_PROFILES_V2" not in os.environ
 
 
 def test_unchanged_profile_is_not_rewritten_and_mode_private(tmp_path):
