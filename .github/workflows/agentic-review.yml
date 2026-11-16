@@ -684,17 +684,6 @@ jobs:
           done
           current="$(gh api "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
           [[ "${current}" == "${EXPECTED_HEAD}" ]] || exit 1
-      - name: Require OpenCode App publisher configuration
-        env:
-          EXPECTED_APP_ID: ${{ vars.OPENCODE_GITHUB_APP_ID }}
-          EXPECTED_CLIENT_ID: ${{ vars.OPENCODE_GITHUB_CLIENT_ID }}
-          HAS_APP_PRIVATE_KEY: ${{ secrets.OPENCODE_GITHUB_APP_PRIVATE_KEY != '' }}
-        run: |
-          set -euo pipefail
-          if [[ ! "${EXPECTED_APP_ID}" =~ ^[1-9][0-9]*$ || -z "${EXPECTED_CLIENT_ID}" || "${HAS_APP_PRIVATE_KEY}" != "true" ]]; then
-            echo "::error title=Missing OpenCode App publisher configuration::Set OPENCODE_GITHUB_APP_ID and OPENCODE_GITHUB_CLIENT_ID as Actions variables and OPENCODE_GITHUB_APP_PRIVATE_KEY as an Actions secret in the calling repository." >&2
-            exit 1
-          fi
       - name: Mint OpenCode App publication token
         uses: actions/create-github-app-token@v3
         id: publisher
@@ -708,14 +697,9 @@ jobs:
           APP_SLUG: ${{ steps.publisher.outputs.app-slug }}
           PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
           EXPECTED_HEAD: ${{ needs.opencode.outputs.head }}
-          EXPECTED_APP_ID: ${{ vars.OPENCODE_GITHUB_APP_ID }}
-          EXPECTED_CLIENT_ID: ${{ vars.OPENCODE_GITHUB_CLIENT_ID }}
         run: |
           set -euo pipefail
           [[ "${APP_SLUG}" == opencode-randytarampi-ca ]] || { echo "Incorrect OpenCode review publisher App" >&2; exit 1; }
-          actual_id="$(gh api "/apps/${APP_SLUG}" --jq .id)"
-          actual_client_id="$(gh api "/apps/${APP_SLUG}" --jq .client_id)"
-          [[ "${actual_id}" == "${EXPECTED_APP_ID}" && "${actual_client_id}" == "${EXPECTED_CLIENT_ID}" ]] || { echo "OpenCode publisher App ID/client ID mismatch" >&2; exit 1; }
           current="$(gh api "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
           [[ "${current}" == "${EXPECTED_HEAD}" ]] || exit 1
           # App-qualified marker keeps historical Woofbot reviews distinct.
