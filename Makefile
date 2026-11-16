@@ -19,6 +19,10 @@ worktree-ready: ## Check or install Python tooling in an existing WORKTREE (INST
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
+# Keep the executable separate from optional config arguments: HOME paths with
+# spaces cannot be represented safely in a multi-word CHEZMOI variable.
+CHEZMOI_CONFIG ?=
+CHEZMOI_CONFIG_ARG = $(if $(strip $(CHEZMOI_CONFIG)),--config "$(CHEZMOI_CONFIG)")
 CHEZMOI_SOURCE := $(CURDIR)
 ENV_FILE ?= $(HOME)/.env
 ENV_EXAMPLE ?= dot_dotfiles/shell/.env.example
@@ -138,13 +142,13 @@ categories: ## Show per-machine category state and toggle overrides
 	@python3 scripts/show-categories.py
 
 diff: ## Show pending chezmoi changes
-	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" diff
+	@$(LOAD_ENV); $(CHEZMOI) $(CHEZMOI_CONFIG_ARG) --source "$(CHEZMOI_SOURCE)" diff
 
 dry-run: ## Preview chezmoi changes without applying them
-	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" apply --dry-run --force
+	@$(LOAD_ENV); $(CHEZMOI) $(CHEZMOI_CONFIG_ARG) --source "$(CHEZMOI_SOURCE)" apply --dry-run --force
 
 deploy: ## Apply dotfiles and run all configuration scripts
-	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" apply --force
+	@$(LOAD_ENV); $(CHEZMOI) $(CHEZMOI_CONFIG_ARG) --source "$(CHEZMOI_SOURCE)" apply --force
 	@$(LOAD_ENV); bash scripts/configure-all.sh
 	@python3 -c "import sys; sys.path.insert(0,'scripts/lib'); from model_stamp import notice_message; message = notice_message(); print(message) if message else None"
 

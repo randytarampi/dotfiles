@@ -207,13 +207,14 @@ jobs:
           # Reuse the preview-first Git Bash helper instead of embedding a
           # Windows executable path that may differ across installations.
           # --write refuses overwriting user-owned config; CI uses RUNNER_TEMP.
-          bash scripts/bootstrap/windows-chezmoi-interpreter.sh --write "$RUNNER_TEMP/chezmoi-interpreters.toml"
-          bash scripts/bootstrap/windows-chezmoi-interpreter.sh --check "$RUNNER_TEMP/chezmoi-interpreters.toml"
-          # The Makefile's CHEZMOI command is split by Bash; a forward-slashed
-          # native path keeps Windows escaping intact on this runner. Human
-          # home paths containing spaces still need qualification under #274.
-          cz_config="$(cygpath -m "$RUNNER_TEMP")/chezmoi-interpreters.toml"
-          echo "CHEZMOI=chezmoi --config $cz_config" >> "$GITHUB_ENV"
+          # Exercise both Git Bash's TOML writer and Makefile's config forwarding
+          # with a space-bearing path (the previous multiword CHEZMOI lost it).
+          mkdir -p "$RUNNER_TEMP/chezmoi config"
+          config_file="$RUNNER_TEMP/chezmoi config/interpreters.toml"
+          bash scripts/bootstrap/windows-chezmoi-interpreter.sh --write "$config_file"
+          bash scripts/bootstrap/windows-chezmoi-interpreter.sh --check "$config_file"
+          cz_config="$(cygpath -m "$config_file")"
+          echo "CHEZMOI_CONFIG=$cz_config" >> "$GITHUB_ENV"
       - name: Install locked production Python dependencies
         shell: bash
         run: poetry install --only main --no-root
@@ -221,11 +222,18 @@ jobs:
         shell: bash
         run: |
           # Ephemeral runners are isolated; this also makes the HOME/state-dir contract explicit.
-          mkdir -p "$RUNNER_TEMP/dotfiles-home"
-          echo "HOME=$RUNNER_TEMP/dotfiles-home" >> "$GITHUB_ENV"
-          echo "USERPROFILE=$RUNNER_TEMP/dotfiles-home" >> "$GITHUB_ENV"
-          cp dot_dotfiles/shell/.env.example "$RUNNER_TEMP/dotfiles-home/.env"
-          rm -rf "$RUNNER_TEMP/dotfiles-home/.config/chezmoi"
+          # A space-bearing Windows HOME is deliberate acceptance coverage.
+          # Other runners retain their historical synthetic HOME.
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            smoke_home="$RUNNER_TEMP/dotfiles home"
+          else
+            smoke_home="$RUNNER_TEMP/dotfiles-home"
+          fi
+          mkdir -p "$smoke_home"
+          echo "HOME=$smoke_home" >> "$GITHUB_ENV"
+          echo "USERPROFILE=$smoke_home" >> "$GITHUB_ENV"
+          cp dot_dotfiles/shell/.env.example "$smoke_home/.env"
+          rm -rf "$smoke_home/.config/chezmoi"
       - name: Deploy (first pass)
         shell: bash
         run: make deploy
@@ -235,13 +243,14 @@ jobs:
       - name: Chezmoi no-op check
         shell: bash
         run: |
-          # Verify with the same effective configuration the deploy passes
-          # used: CHEZMOI carries the Windows interpreters --config override
-          # and must word-split (unquoted) into its three words — quoting it
-          # turns the whole string into one command name and exits 127
-          # (observed on run 6). The value is workflow-controlled.
-          ${CHEZMOI:-chezmoi} --source "$GITHUB_WORKSPACE" verify
-          if ! diff_output="$(${CHEZMOI:-chezmoi} --source "$GITHUB_WORKSPACE" diff)"; then
+          # Keep a single executable and a separately quoted config argument;
+          # Windows runner HOME and config paths deliberately contain spaces.
+          chezmoi_args=()
+          if [[ -n "${CHEZMOI_CONFIG:-}" ]]; then
+            chezmoi_args+=(--config "$CHEZMOI_CONFIG")
+          fi
+          chezmoi "${chezmoi_args[@]}" --source "$GITHUB_WORKSPACE" verify
+          if ! diff_output="$(chezmoi "${chezmoi_args[@]}" --source "$GITHUB_WORKSPACE" diff)"; then
             echo "chezmoi diff command failed" >&2
             exit 1
           fi

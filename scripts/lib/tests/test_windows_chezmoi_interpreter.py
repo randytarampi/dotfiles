@@ -128,7 +128,9 @@ def test_ci_reuses_the_helper_and_keeps_existing_windows_deploy_required():
     assert "windows-latest" in deploy
     assert "bash scripts/bootstrap/windows-chezmoi-interpreter.sh --write" in deploy
     assert "bash scripts/bootstrap/windows-chezmoi-interpreter.sh --check" in deploy
-    assert 'echo "CHEZMOI=chezmoi --config $cz_config" >> "$GITHUB_ENV"' in deploy
+    assert 'echo "CHEZMOI_CONFIG=$cz_config" >> "$GITHUB_ENV"' in deploy
+    assert 'mkdir -p "$RUNNER_TEMP/chezmoi config"' in deploy
+    assert 'smoke_home="$RUNNER_TEMP/dotfiles home"' in deploy
     assert "- name: Deploy (first pass)" in deploy
     assert "- name: Deploy (idempotency pass)" in deploy
     assert "- name: Chezmoi no-op check" in deploy
