@@ -147,10 +147,11 @@ The `publish` job authenticates with a GitHub App, not the workflow's read-only 
 3. Under **Settings → Secrets and variables → Actions → Secrets**, create
     the **repository Actions secret** `WOOFBOT_GITHUB_APP_PRIVATE_KEY` from
     the complete PEM private key. Only the **model-catalogue** publisher uses this
-    Woofbot secret; the OpenCode manual fix and review publishers use the separate
-    `OPENCODE_GITHUB_APP_ID`, `OPENCODE_GITHUB_CLIENT_ID` and
-    `OPENCODE_GITHUB_APP_PRIVATE_KEY` configuration documented in
-    [agentic-review.md](agentic-review.md#secrets). No per-environment secret
+    Woofbot secret; the OpenCode manual fix and review publishers instead use
+    `OPENCODE_GITHUB_CLIENT_ID` and `OPENCODE_GITHUB_APP_PRIVATE_KEY` as
+    documented in [agentic-review.md](agentic-review.md#secrets). The separately
+    provisioned `OPENCODE_GITHUB_APP_ID` is not read by those workflows.
+    No per-environment secret
     copies are required. Do not commit the key or
     copy it into ordinary Actions variables.
 4. The publisher jobs still name the `model-catalogue-publish` and
