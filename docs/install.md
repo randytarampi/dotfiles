@@ -52,14 +52,14 @@ mkdir -p "$HOME/.config/chezmoi"
 bash scripts/bootstrap/windows-chezmoi-interpreter.sh --write "$HOME/.config/chezmoi/interpreters.toml"
 bash scripts/bootstrap/windows-chezmoi-interpreter.sh --check "$HOME/.config/chezmoi/interpreters.toml"
 
-# Use the explicit config for first initialization; keep the same config
-# for subsequent deploys. These examples assume no spaces in its file path.
+# Use the same explicit config for initialization and subsequent deploys.
+# CHEZMOI_CONFIG is quoted by Makefile; it also supports paths with spaces.
 cz_config="$(cygpath -m "$HOME/.config/chezmoi/interpreters.toml")"
 chezmoi --config "$cz_config" init --source "$PWD"
-CHEZMOI="chezmoi --config $cz_config" make deploy
+CHEZMOI_CONFIG="$cz_config" make deploy
 ```
 
-The helper derives the native `bash.exe` location using `cygpath`, validates TOML literal-string safety, previews without writing, refuses to overwrite an existing config (or any symlink) by default, and writes a mode-600 file atomically when explicitly requested. The `--force` override replaces only an existing regular file. **A Windows profile path containing spaces is not yet verified with Makefile's multi-word `CHEZMOI` override**; don't present this recipe as universally safe, or mutate a user's existing chezmoi configuration to work around it. The current GitHub runner path is known-good, not proof of a fresh Windows VM.
+The helper derives the native `bash.exe` location using `cygpath`, validates TOML literal-string safety, previews without writing, refuses to overwrite an existing config (or any symlink) by default, and writes a mode-600 file atomically when explicitly requested. The `--force` override replaces only an existing regular file. **Windows HOME/config-path with spaces:** `CHEZMOI_CONFIG` avoids the unsafe multi-word `CHEZMOI` override. The required Windows Server x64 and Windows 11 ARM64 deployment rows exercise space-bearing synthetic HOME and config paths; count them as hosted-runner evidence only once the exact-head CI passes. Do not overwrite a user's existing chezmoi config; the helper refuses collisions unless explicitly forced. Native PowerShell-only, fresh retail Windows VMs, WinGet provisioning and the actual installed user's profile remain unqualified under #274.
 
 **macOS qualification:** The required deployment matrix retains floating `macos-latest` but adds explicit `macos-15-intel` (x86_64) and `macos-26` (arm64), asserting their OS major version and CPU before the unchanged two-pass deployment. Passing those runner jobs qualifies that GitHub-hosted account/toolchain, **not** all Homebrew formulae, GUI clients or a fresh owner account. macOS 10.15–14 is **legacy core-only, best-effort**; GitHub-hosted macOS 14 images have been retired, so no CI claim is made for those versions. See [#274](https://github.com/randytarampi/dotfiles/issues/274).
 
