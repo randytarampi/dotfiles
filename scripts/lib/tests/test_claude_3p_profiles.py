@@ -9,6 +9,15 @@ profiles = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(profiles)
 
 
+@pytest.fixture(autouse=True)
+def _hermetic_load_env(monkeypatch):
+    # The generator's main() unconditionally calls load_env(), which reads the
+    # real ~/.env and writes every key into os.environ with no cleanup. Tests
+    # here must not pollute the process environment for later test modules
+    # (e.g. gate-sensitive configure-codex tests) with machine-local values.
+    monkeypatch.setattr(profiles, "load_env", lambda *args, **kwargs: False)
+
+
 def registry():
     return {
         "presets": {
