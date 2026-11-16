@@ -49,6 +49,7 @@ fi
 # install-npm-brewfile-packages.sh: {{ include "scripts/install-npm-brewfile-packages.sh" | sha256sum }}
 # scripts/lib/ollama_brew_preflight.sh: {{ include "scripts/lib/ollama_brew_preflight.sh" | sha256sum }}
 # scripts/lib/homebrew_bootstrap.sh: {{ include "scripts/lib/homebrew_bootstrap.sh" | sha256sum }}
+# scripts/check-linux-brewfile-eligibility.py: {{ include "scripts/check-linux-brewfile-eligibility.py" | sha256sum }}
 {{- if eq .chezmoi.os "windows" }}
 # scripts/lib/winget_manifest.sh: {{ include "scripts/lib/winget_manifest.sh" | sha256sum }}
 # wingetfile hashes (triggers re-run when any wingetfile changes):
@@ -82,6 +83,30 @@ fi
 
 # --- Brew (macOS / Linux) ---
 if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
+  # Fail *before* acquiring Homebrew or changing any packages when a selected
+  # Linux category contains macOS casks or invalid Brewfile syntax. Unknown
+  # formula/tap support remains unqualified until actual host receipts.
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    linux_manifests=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile")
+    {{ if .categories.dev }}
+    linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev")
+    {{ end }}
+    {{ if .categories.local_ai_headless }}
+    linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.local.ai.headless")
+    {{ end }}
+    {{ if .categories.dev_security }}
+    linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev.security")
+    {{ end }}
+    {{ if .categories.utilities }}
+    linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.utilities")
+    {{ end }}
+    {{ if .categories.dev_ops }}
+    linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev.ops")
+    {{ end }}
+    python3 "{{ .chezmoi.sourceDir }}/scripts/check-linux-brewfile-eligibility.py" --enforce "${linux_manifests[@]}" ||
+      die "Linux package selection contains blocked Brewfile directives; no package manager was invoked"
+  fi
+
   # Resolve *after* installation; a missing brew --prefix must not become
   # /bin/brew. Stop on failed download/install/shellenv before any bundle.
   source "${LIB_DIR}/homebrew_bootstrap.sh"

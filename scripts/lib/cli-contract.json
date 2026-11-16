@@ -91,6 +91,22 @@
   },
   "scripts": [
     {
+      "path": "scripts/check-linux-brewfile-eligibility.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--manifest",
+        "--json",
+        "--enforce"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/migrate-env-sections.py",
       "capabilities": [
         "mutates",
