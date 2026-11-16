@@ -446,7 +446,7 @@ scripts/configure-opencode-tier.py --role-model observer=ollama/qwen3.5:9b-mlx -
 
 Format: `--role-model <role>=<model>` or `--role-model <role>@<pattern>=<model>` where role is one of `orchestrator`, `oracle`, `librarian`, `explorer`, `fixer`, `designer`, `observer`; patterns are tier-name globs matched against the requested `--preset`, such as `orchestrator@local*=ollama/model`. Unscoped entries continue to apply to every preset.
 
-When switching to a cloud preset, local-role diagnostics and fallback chains show the unmodified local discovery mapping if a scoped override does not match the requested preset.
+When switching to a cloud preset, local-role diagnostics and fallback chains show the unmodified local discovery mapping if a scoped override does not match the requested preset. An override selector is matched **once** against the canonical requested preset, not against a separate `--local-fallback-preset` used for model discovery. The matching selector is then consumed as a plain role override in Pi and voice where the resolution preset can differ; a nonmatching scoped override never becomes active merely because its target model happens to match the discovery result. Multiple matching overrides for one role retain their original input order, so the last matching assignment wins, as with unscoped overrides. The active-role log always reports the actual model regardless of skipped scoped entries.
 
 Role and category overrides set the role's primary model; local fallback appending then adds alternatives.
 
