@@ -293,9 +293,11 @@ def _local_category_models(registry, preset):
     from discover_models import list_local_ollama_models
 
     models = list_local_ollama_models()
-    if models and isinstance(models[0], dict):
-        models = [item.get("name") for item in models if isinstance(item, dict)]
-    models = [model for model in models if model]
+    models = [
+        model
+        for model in models
+        if (model.get("name") if isinstance(model, dict) else model)
+    ]
     if not models:
         return {}
     return tier_registry.classify_models_for_preset(

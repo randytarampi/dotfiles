@@ -2,6 +2,7 @@ import pytest
 import importlib.util
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[2] / "configure-claude-3p-profiles.py"
 SPEC = importlib.util.spec_from_file_location("claude_3p_profiles", SCRIPT)
@@ -59,6 +60,21 @@ def test_profile_mapping_cloud_and_local():
         "anthropic/claude-cloud-oracle"
     )
     assert desired["cloud"]["inferenceModels"][0]["labelOverride"] == "gateway/oracle"
+
+
+def test_local_category_models_preserves_provider_for_classification(monkeypatch):
+    models = [{"name": "ornith-local", "provider": "omlx"}]
+    with (
+        patch("discover_models.list_local_ollama_models", return_value=models),
+        patch.object(profiles.tier_registry, "get_profile_name", return_value=None),
+        patch.object(
+            profiles.tier_registry,
+            "classify_models_for_preset",
+            side_effect=lambda models, *_args, **_kwargs: models,
+        ) as classify,
+    ):
+        assert profiles._local_category_models(registry(), "local") == models
+    assert classify.call_args.args[0] == [{"name": "ornith-local", "provider": "omlx"}]
 
 
 def test_unchanged_profile_is_not_rewritten_and_mode_private(tmp_path):
