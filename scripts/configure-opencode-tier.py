@@ -5,7 +5,6 @@ Handles local Ollama model role classification and placeholder resolution.
 """
 
 import copy
-import fnmatch
 import sys
 import json
 import importlib.util
@@ -407,18 +406,13 @@ def orchestrate_tier_switch(
             if local_assignments:
                 logger.info("Local role assignments:\n" + "\n".join(local_assignments))
         # Log the active tier's role assignments (cloud for cloud tiers, local for local tiers)
-    role_assignments = []
-    for role, model in sorted(resolved_role_models.items()):
-        if model:
-            if role in {
-                item.split("=", 1)[0].split("@", 1)[0]
-                for item in role_models or []
-                if "=" in item
-                and "@" in item.split("=", 1)[0]
-                and item.split("=", 1)[0] not in requested_role_models
-            }:
-                continue
-            role_assignments.append(f"  {role} → {model}")
+    # Report the actual resolved roles. Whether an override was skipped is a
+    # separate audit fact; it must never hide the active role assignment.
+    role_assignments = [
+        f"  {role} → {model}"
+        for role, model in sorted(resolved_role_models.items())
+        if model
+    ]
     if role_assignments:
         if local_preset:
             logger.info("Active tier role assignments:\n" + "\n".join(role_assignments))
