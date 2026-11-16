@@ -22,7 +22,10 @@ CHEZMOI ?= chezmoi
 # Keep the executable separate from optional config arguments: HOME paths with
 # spaces cannot be represented safely in a multi-word CHEZMOI variable.
 CHEZMOI_CONFIG ?=
-CHEZMOI_CONFIG_ARG = $(if $(strip $(CHEZMOI_CONFIG)),--config "$(CHEZMOI_CONFIG)")
+export CHEZMOI_CONFIG
+# Expand the quoted *shell environment variable* at execution time, not a
+# make-interpolated path: valid Windows path characters can include backticks.
+CHEZMOI_CONFIG_ARG = $(if $(strip $(CHEZMOI_CONFIG)),--config "$$CHEZMOI_CONFIG")
 CHEZMOI_SOURCE := $(CURDIR)
 ENV_FILE ?= $(HOME)/.env
 ENV_EXAMPLE ?= dot_dotfiles/shell/.env.example
