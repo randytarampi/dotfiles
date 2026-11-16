@@ -40,11 +40,11 @@ def test_make_dry_run_preserves_space_bearing_config_as_one_quoted_arg(tmp_path)
 def test_make_exec_does_not_interpret_shell_metacharacters_in_config(tmp_path):
     config = tmp_path / "a space `printf UNSAFE`" / "interpreter.toml"
     config.parent.mkdir()
-    config.write_text("[interpreters.sh]\\n")
+    config.write_text("[interpreters.sh]\n")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     shim = bin_dir / "chezmoi"
-    shim.write_text('#!/usr/bin/env bash\\nprintf "%s\\\\n" "$@" > "$ARG_CAPTURE"\\n')
+    shim.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "$ARG_CAPTURE"\n')
     shim.chmod(0o755)
     captured = tmp_path / "args.txt"
     result = subprocess.run(
