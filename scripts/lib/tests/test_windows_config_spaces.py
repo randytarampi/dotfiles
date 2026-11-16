@@ -13,7 +13,7 @@ def test_make_has_separate_quoted_chezmoi_config_argument():
     source = MAKEFILE.read_text(encoding="utf-8")
     assert "CHEZMOI_CONFIG ?=" in source
     assert (
-        'CHEZMOI_CONFIG_ARG = $(if $(strip $(CHEZMOI_CONFIG)),--config "$(CHEZMOI_CONFIG)")'
+        'CHEZMOI_CONFIG_ARG = $(if $(strip $(CHEZMOI_CONFIG)),--config "$$CHEZMOI_CONFIG")'
         in source
     )
     assert source.count("$(CHEZMOI) $(CHEZMOI_CONFIG_ARG) --source") == 3
@@ -34,7 +34,41 @@ def test_make_dry_run_preserves_space_bearing_config_as_one_quoted_arg(tmp_path)
         env={**os.environ, "HOME": str(tmp_path)},
     )
     assert result.returncode == 0, result.stderr
-    assert f'--config "{config}"' in result.stdout
+    assert '--config "$CHEZMOI_CONFIG"' in result.stdout
+
+
+def test_make_exec_does_not_interpret_shell_metacharacters_in_config(tmp_path):
+    config = tmp_path / "a space `printf UNSAFE`" / "interpreter.toml"
+    config.parent.mkdir()
+    config.write_text("[interpreters.sh]\\n")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    shim = bin_dir / "chezmoi"
+    shim.write_text('#!/usr/bin/env bash\\nprintf "%s\\\\n" "$@" > "$ARG_CAPTURE"\\n')
+    shim.chmod(0o755)
+    captured = tmp_path / "args.txt"
+    result = subprocess.run(
+        ["make", "-s", "diff", "CHEZMOI=chezmoi", f"CHEZMOI_CONFIG={config}"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+        env={
+            **os.environ,
+            "HOME": str(tmp_path),
+            "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}",
+            "ARG_CAPTURE": str(captured),
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert captured.read_text().splitlines() == [
+        "--config",
+        str(config),
+        "--source",
+        str(ROOT),
+        "diff",
+    ]
 
 
 def test_ci_actually_deploys_and_checks_windows_spaces_without_skipping_rows():
