@@ -34,9 +34,10 @@ def test_nightly_real_gates_have_locked_poetry_before_switching_home():
     assert version.group() in steps[poetry_index]["run"]
     assert steps[deps_index]["run"].strip() == "poetry install --only main --no-root"
 
-    # Never accidentally promote a stabilizing scheduled matrix to a hard PR
-    # context when repairing its missing runtime prerequisite.
-    assert gate["continue-on-error"] is True
+    # The eight-RUN scheduled streak (ledgered on #212) promoted the matrix
+    # past its allow-failure trial: a nightly real-gate failure must fail
+    # the workflow and reach the owner's notification channel.
+    assert "continue-on-error" not in gate
     assert {item["gate"] for item in gate["strategy"]["matrix"]["include"]} == {
         "DOTFILES_RUN_OPENCODE_SETUP",
         "DOTFILES_RUN_MCP_SETUP",
