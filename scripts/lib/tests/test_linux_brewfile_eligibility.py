@@ -64,9 +64,7 @@ def test_cask_and_invalid_entry_are_blocked_without_execution(tmp_path):
     manifest = tmp_path / "danger"
     marker = tmp_path / "never-executed"
     manifest.write_text(
-        'cask "antigravity-cli"\n'
-        + '$(touch "' + str(marker) + '")\n'
-        + 'brew "git"\n'
+        'cask "antigravity-cli"\n' + '$(touch "' + str(marker) + '")\n' + 'brew "git"\n'
     )
     result = _run("--json", "--enforce", "--manifest", manifest)
     assert result.returncode == 1
@@ -88,7 +86,9 @@ def test_missing_or_symlinked_manifest_fails_closed(tmp_path):
 
 def test_package_template_guards_linux_before_homebrew_download():
     source = TEMPLATE.read_text(encoding="utf-8")
-    assert source.index("scripts/check-linux-brewfile-eligibility.py\" --enforce") < source.index("dotfiles_homebrew_ready ||")
+    assert source.index(
+        'scripts/check-linux-brewfile-eligibility.py" --enforce'
+    ) < source.index("dotfiles_homebrew_ready ||")
     assert 'linux_manifests=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile")' in source
     for name in ("dev", "local_ai_headless", "dev_security", "utilities", "dev_ops"):
         assert "if .categories." + name in source
