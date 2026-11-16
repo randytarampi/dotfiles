@@ -6,6 +6,7 @@ model placeholders consistently.
 """
 
 import json
+import fnmatch
 import os
 from typing import Any, Dict, List, Optional, Union
 
@@ -124,6 +125,32 @@ def apply_placeholder_overrides(
         category_models[category] = model
 
 
+def _parse_role_override(override: str):
+    if "=" not in override:
+        raise ValueError(
+            f"Malformed role override {override!r}; expected role=model or role@pattern=model"
+        )
+    selector, model = override.split("=", 1)
+    scoped = "@" in selector
+    role, pattern = selector.split("@", 1) if scoped else (selector, None)
+    if not role or not model or (scoped and not pattern):
+        raise ValueError(
+            f"Malformed role override {override!r}; expected role=model or role@pattern=model"
+        )
+    return role, pattern, model
+
+
+def filter_role_overrides(overrides: Optional[List[str]], tier: str) -> List[str]:
+    """Keep unscoped overrides and those scoped to the requested tier."""
+    canonical_tier = resolve_deprecated_tier(tier)
+    filtered = []
+    for override in overrides or []:
+        _, pattern, _ = _parse_role_override(override)
+        if pattern is None or fnmatch.fnmatchcase(canonical_tier, pattern):
+            filtered.append(override)
+    return filtered
+
+
 def materialize_role_models(
     registry: Dict,
     tier: str,
@@ -140,16 +167,8 @@ def materialize_role_models(
             role_models[role] = category_models.get(category)
         else:
             role_models[role] = model_ref
-    for override in role_overrides or []:
-        if "=" not in override:
-            raise ValueError(
-                f"Malformed role override {override!r}; expected role=model"
-            )
-        role, model = override.split("=", 1)
-        if not role or not model:
-            raise ValueError(
-                f"Malformed role override {override!r}; expected role=model"
-            )
+    for override in filter_role_overrides(role_overrides, tier):
+        role, _, model = _parse_role_override(override)
         if role not in role_models:
             logger.warning("Unknown role override: %s", role)
         role_models[role] = model

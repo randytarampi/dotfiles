@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate Pi agent configuration from the shared OpenCode tier registry."""
 
-import argparse, copy, json, os, shlex, shutil, subprocess, sys
+import argparse, copy, fnmatch, json, os, shlex, shutil, subprocess, sys
 from pathlib import Path
 import stat
 import tempfile
@@ -902,19 +902,31 @@ def main():
         logger.info(f"Classified local models: {json.dumps(category_models, indent=2)}")
     if args.role_models:
         overrides = {}
+        skipped_scoped = []
         for item in args.role_models:
             if "=" in item:
-                role, model = item.split("=", 1)
-                overrides[role] = model
-        applied = {
-            role: model
-            for role, model in overrides.items()
-            if role_models.get(role) == model
-        }
+                selector, model = item.split("=", 1)
+                role, pattern = (
+                    selector.split("@", 1) if "@" in selector else (selector, None)
+                )
+                if pattern is not None:
+                    if role_models.get(role) == model:
+                        overrides[role] = model
+                    else:
+                        skipped_scoped.append(selector)
+                elif role_models.get(role) == model:
+                    overrides[role] = model
+        applied = {role: model for role, model in overrides.items()}
         if applied:
             logger.info(
                 "Applied role-model overrides: %s",
                 json.dumps(applied, sort_keys=True),
+            )
+        if skipped_scoped:
+            logger.info(
+                "Skipped scoped role-model overrides for tier %s: %s",
+                preset,
+                ", ".join(skipped_scoped),
             )
 
     skipped = {item.strip() for item in (args.skip or "").split(",") if item.strip()}

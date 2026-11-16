@@ -5,6 +5,7 @@ Handles local Ollama model role classification and placeholder resolution.
 """
 
 import copy
+import fnmatch
 import sys
 import json
 import importlib.util
@@ -375,8 +376,9 @@ def orchestrate_tier_switch(
 
     tier_registry.apply_placeholder_overrides(local_role_models, category_models)
     fallback_role_models = local_role_models
+    requested_role_models = tier_registry.filter_role_overrides(role_models, tier)
     resolved_role_models = tier_registry.materialize_role_models(
-        registry, tier, fallback_role_models, role_models
+        registry, tier, fallback_role_models, requested_role_models
     )
     if dynamic_free:
         if dynamic_audit is None:
@@ -391,10 +393,12 @@ def orchestrate_tier_switch(
         logger.info(
             f"Classified local models: {json.dumps(local_role_models, indent=2)}"
         )
-        # Log local role assignments (from the resolution preset's role mapping)
         if local_role_models:
             local_role_models_logged = tier_registry.materialize_role_models(
-                registry, resolution_preset, local_role_models, role_models
+                registry,
+                resolution_preset,
+                local_role_models,
+                tier_registry.filter_role_overrides(role_models, tier),
             )
             local_assignments = []
             for role, model in sorted(local_role_models_logged.items()):
@@ -403,17 +407,42 @@ def orchestrate_tier_switch(
             if local_assignments:
                 logger.info("Local role assignments:\n" + "\n".join(local_assignments))
         # Log the active tier's role assignments (cloud for cloud tiers, local for local tiers)
-        role_assignments = []
-        for role, model in sorted(resolved_role_models.items()):
-            if model:
-                role_assignments.append(f"  {role} → {model}")
-        if role_assignments:
-            if local_preset:
-                logger.info(
-                    "Active tier role assignments:\n" + "\n".join(role_assignments)
-                )
-            else:
-                logger.info("Cloud role assignments:\n" + "\n".join(role_assignments))
+    role_assignments = []
+    for role, model in sorted(resolved_role_models.items()):
+        if model:
+            if role in {
+                item.split("=", 1)[0].split("@", 1)[0]
+                for item in role_models or []
+                if "=" in item
+                and "@" in item.split("=", 1)[0]
+                and item.split("=", 1)[0] not in requested_role_models
+            }:
+                continue
+            role_assignments.append(f"  {role} → {model}")
+    if role_assignments:
+        if local_preset:
+            logger.info("Active tier role assignments:\n" + "\n".join(role_assignments))
+        else:
+            logger.info("Cloud role assignments:\n" + "\n".join(role_assignments))
+    applied_scoped = {
+        item.split("=", 1)[0]
+        for item in requested_role_models
+        if "@" in item.split("=", 1)[0]
+    }
+    skipped_scoped = [
+        item.split("=", 1)[0]
+        for item in role_models or []
+        if "=" in item
+        and "@" in item.split("=", 1)[0]
+        and item.split("=", 1)[0] not in applied_scoped
+    ]
+    if skipped_scoped:
+        logger.info(
+            "Skipped scoped role-model overrides for requested tier %s: %s",
+            tier,
+            ", ".join(skipped_scoped),
+        )
+    if fallback_role_models:
         if not dynamic_free and tier_registry.uses_local_placeholders(registry, tier):
             tier_council = tier_config.get("council", {})
             council_presets = tier_council.get("presets", {})
