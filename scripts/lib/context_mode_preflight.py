@@ -18,32 +18,7 @@ REQUIRED_EFFECTS = {
 }
 
 
-def safely_staged(path: Path) -> bool:
-    """True only when the plugin is disabled or already securely configured."""
-    if path.is_symlink() or not path.is_file():
-        return False
-    try:
-        config = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, UnicodeDecodeError):
-        return False
-    if not isinstance(config, dict):
-        return False
-    plugins = config.get("plugins")
-    if not isinstance(plugins, list):
-        return False
-
-    enabled = [
-        item
-        for item in plugins
-        if isinstance(item, str) and item.startswith("context-mode@")
-    ]
-    disabled = plugins.count("-context-mode")
-    if disabled == 1 and not enabled:
-        return True
-    if disabled or enabled != ["context-mode@2.2.1"]:
-        return False
-
-    permissions = config.get("permissions")
+def _secure_active_permissions(permissions: object) -> bool:
     if not isinstance(permissions, list):
         return False
     for action, expected in REQUIRED_EFFECTS.items():
@@ -61,6 +36,34 @@ def safely_staged(path: Path) -> bool:
             return False
     return True
 
+
+def safely_staged(path: Path) -> bool:
+    """True only when the plugin is disabled or already securely configured."""
+    if path.is_symlink() or not path.is_file():
+        return False
+    try:
+        config = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(config, dict):
+        return False
+    plugins = config.get("plugins")
+    if not isinstance(plugins, list):
+        return False
+
+    enabled = [
+        item
+        for item in plugins
+        if isinstance(item, str) and item.startswith("context-mode@")
+    ]
+    disabled = plugins.count("-context-mode")
+    if disabled == 1 and not enabled:
+        return True
+    return (
+        disabled == 0
+        and enabled == ["context-mode@2.2.1"]
+        and _secure_active_permissions(config.get("permissions"))
+    )
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
