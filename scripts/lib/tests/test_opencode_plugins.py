@@ -80,9 +80,9 @@ def test_context_mode_staging_check_is_preinstall_and_hash_triggered():
     assert 'include "scripts/lib/context_mode_preflight.py" | sha256sum' in installer
     assert 'python3 "${LIB_DIR}/context_mode_preflight.py"' in installer
     assert 'DOTFILES_RUN_OPENCODE_SETUP:-0' in installer
-    assert installer.index('context_mode_preflight.py" "${CONTEXT_MODE_OC_CONFIG}"') < installer.index(
-        'info "Installing opencode plugins..."'
-    )
+    assert installer.index(
+        'context_mode_preflight.py" "${CONTEXT_MODE_OC_CONFIG}"'
+    ) < installer.index('info "Installing opencode plugins..."')
 
 
 def test_legacy_memory_plugin_stays_retired_with_old_gate(monkeypatch):
