@@ -147,3 +147,21 @@ def test_real_discovery_checks_explicit_prefix(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == str(executable)
+
+
+def test_caddy_package_does_not_create_a_homebrew_service():
+    """The root LaunchDaemon, not brew bundle, owns the Caddy process."""
+    brewfile = (ROOT / "Brewfile.dev.ops").read_text(encoding="utf-8")
+    caddy_rows = [
+        line.strip()
+        for line in brewfile.splitlines()
+        if line.strip().startswith('brew "caddy"')
+    ]
+    assert caddy_rows == ['brew "caddy"']
+
+    installer = (
+        ROOT / ".chezmoiscripts/run_onchange_24-install-caddy.sh.tmpl"
+    ).read_text(encoding="utf-8")
+    assert "<string>com.caddy.proxy</string>" in installer
+    assert '${BREW_PREFIX}/etc/caddy/Caddyfile' in installer
+    assert 'launchctl bootstrap system/ "$PLIST_PATH"' in installer
