@@ -15,6 +15,22 @@ MACOS_NAMED_CANDIDATES = frozenset(
 )
 
 
+def _classify(kind, name, ignored):
+    """Map one parsed directive to its report status."""
+    # Mirrors brew_bundle_filtered: DOTFILES_BREWFILE_IGNORE only removes
+    # brew/cask directives, so an ignored name is never bundled. Report it
+    # rather than dropping it silently; malformed source stays blocked.
+    if kind in ("brew", "cask") and name in ignored:
+        return "ignored_by_operator"
+    if kind == "cask":
+        return "blocked_linux_cask"
+    if kind == "brew" and name in MACOS_NAMED_CANDIDATES:
+        return "macos_named_needs_evidence"
+    if kind in ("npm", "uv"):
+        return "external_runtime_not_qualified"
+    return "needs_linux_formula_or_tap_evidence"
+
+
 def inspect(path, ignored=()):
     """Return package-name-only inventory; never echo untrusted source lines."""
     file = Path(path)
@@ -32,20 +48,14 @@ def inspect(path, ignored=()):
             )
             continue
         kind, name = found.groups()
-        # Mirrors brew_bundle_filtered: DOTFILES_BREWFILE_IGNORE only removes
-        # brew/cask directives, so an ignored name is never bundled. Report it
-        # rather than dropping it silently; malformed source stays blocked.
-        if kind in ("brew", "cask") and name in ignored:
-            status = "ignored_by_operator"
-        elif kind == "cask":
-            status = "blocked_linux_cask"
-        elif kind == "brew" and name in MACOS_NAMED_CANDIDATES:
-            status = "macos_named_needs_evidence"
-        elif kind in ("npm", "uv"):
-            status = "external_runtime_not_qualified"
-        else:
-            status = "needs_linux_formula_or_tap_evidence"
-        entries.append({"line": line_no, "kind": kind, "name": name, "status": status})
+        entries.append(
+            {
+                "line": line_no,
+                "kind": kind,
+                "name": name,
+                "status": _classify(kind, name, ignored),
+            }
+        )
     return {"manifest": str(file), "entries": entries}
 
 
