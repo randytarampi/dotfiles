@@ -27,6 +27,9 @@ source "${LIB_DIR}/tier_args.sh"
 # scripts/lib/tier_registry.py: {{ include "scripts/lib/tier_registry.py" | sha256sum }}
 # scripts/lib/tier_resolve.py: {{ include "scripts/lib/tier_resolve.py" | sha256sum }}
 # scripts/lib/opencode_config.py: {{ include "scripts/lib/opencode_config.py" | sha256sum }}
+# configs/opencode/opencode-plugins.json: {{ include "configs/opencode/opencode-plugins.json" | sha256sum }}
+# scripts/lib/opencode_plugins.py: {{ include "scripts/lib/opencode_plugins.py" | sha256sum }}
+# env gate fingerprint: {{ env "DOTFILES_RUN_CONTEXT_MODE_SETUP" | sha256sum }}
 # scripts/lib/models_dev.py: {{ include "scripts/lib/models_dev.py" | sha256sum }}
 # scripts/lib/constants.py: {{ include "scripts/lib/constants.py" | sha256sum }}
 # scripts/lib/local_engines.py: {{ include "scripts/lib/local_engines.py" | sha256sum }}

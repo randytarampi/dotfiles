@@ -4,6 +4,7 @@
   "plugins": [
     "oh-my-opencode-slim@latest",
     "@tarquinen/opencode-dcp@latest",
+    "context-mode@2.2.1",
     "@plannotator/opencode@latest",
     "github:AxeForce/opencode-vibeguard-v2#main",
     "@cheesecodestudio/opencode-tokenscope-v2@latest"
@@ -13,6 +14,8 @@
       "package": "@renjfk/opencode-voice@latest"
     }
   ],
-  "gated": {},
+  "gated": {
+    "context-mode@2.2.1": "DOTFILES_RUN_CONTEXT_MODE_SETUP"
+  },
   "excluded": {}
 }

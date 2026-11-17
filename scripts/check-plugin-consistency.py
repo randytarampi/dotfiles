@@ -255,8 +255,14 @@ def _evaluate_expression(node, environment):
 
 
 def _plugin_list_environment(manifest_plugins):
+    active = active_plugin_specs()
     return {
-        "configured_plugins": active_plugin_specs(),
+        "configured_plugins": active,
+        "context_mode_directives": (
+            []
+            if any(spec.startswith("context-mode@") for spec in active)
+            else ["-context-mode"]
+        ),
         "plannotator": next(
             spec
             for spec in manifest_plugins
@@ -307,6 +313,13 @@ def parse_config_plugins(path):
     # their registration after the disable directive. Remove only that
     # sentinel, not a machine-owned Meridian entry.
     plugins.remove("-opencode-mem")
+    disabled = not any(
+        spec.startswith("context-mode@") for spec in active_plugin_specs()
+    )
+    if plugins.count("-context-mode") != int(disabled):
+        raise ValueError("context-mode negative registration disagrees with gate")
+    if disabled:
+        plugins.remove("-context-mode")
     return plugins
 
 

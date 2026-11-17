@@ -112,6 +112,27 @@ def active_plugin_specs(path=MANIFEST_PATH, environ=None):
     ]
 
 
+def context_mode_permission_rules(plugins):
+    """Require explicit consent for optional code-running tools.
+
+    OpenCode v2 evaluates rules in order, last match wins. A generic
+    shell deny cannot stop ctx_execute(language="javascript") because that
+    call is authorized as ctx_execute rather than as native shell.
+    """
+    if not any(spec.startswith("context-mode@") for spec in plugins):
+        return []
+    return [
+        {"action": action, "resource": "*", "effect": effect}
+        for action, effect in (
+            ("ctx_execute", "ask"),
+            ("ctx_batch", "ask"),
+            ("ctx_index", "ask"),
+            ("ctx_purge", "ask"),
+            ("ctx_upgrade", "deny"),
+        )
+    ]
+
+
 def configured_plugin_specs(path=MANIFEST_PATH, environ=None):
     """Return plugin specs in the order emitted in native OpenCode config."""
     plugins = active_plugin_specs(path, environ)

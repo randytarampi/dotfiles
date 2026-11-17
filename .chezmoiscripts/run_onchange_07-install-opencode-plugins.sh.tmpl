@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_TOOLS_SETUP" | sha256sum }}
+# env gate fingerprint: {{ env "DOTFILES_RUN_CONTEXT_MODE_SETUP" | sha256sum }}
 # env gate fingerprint: {{ env "DOTFILES_RUN_VOICE_SETUP" | sha256sum }}
 # env gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE" | sha256sum }}
 # env gate fingerprint: {{ env "DOTFILES_RUN_UPDATE_SYSTEM_SETUP" | sha256sum }}
@@ -23,6 +24,14 @@ load_env || warn "\$HOME/.env not found, skipping env load"
 if [[ "${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}" != "1" ]]; then
   info "DOTFILES_RUN_OPENCODE_TOOLS_SETUP='${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}' — skipping opencode plugin setup"
   exit 0
+fi
+
+# A gated Context Mode install must not run with unsupported Node or mutate
+# the rest of the plugin set before failing its runtime prerequisite.
+if [[ "${DOTFILES_RUN_CONTEXT_MODE_SETUP:-0}" == "1" ]]; then
+  if ! command -v node >/dev/null 2>&1 || ! node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>24||(a===24&&b>=15)?0:1)' >/dev/null 2>&1; then
+    die "Context Mode requires Node >= 24.15.0; no plugin changes made"
+  fi
 fi
 
 info "Installing opencode plugins..."
