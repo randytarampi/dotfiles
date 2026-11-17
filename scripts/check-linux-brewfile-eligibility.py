@@ -15,7 +15,7 @@ MACOS_NAMED_CANDIDATES = frozenset(
 )
 
 
-def inspect(path):
+def inspect(path, ignored=()):
     """Return package-name-only inventory; never echo untrusted source lines."""
     file = Path(path)
     if not file.is_file() or file.is_symlink():
@@ -32,7 +32,12 @@ def inspect(path):
             )
             continue
         kind, name = found.groups()
-        if kind == "cask":
+        # Mirrors brew_bundle_filtered: DOTFILES_BREWFILE_IGNORE only removes
+        # brew/cask directives, so an ignored name is never bundled. Report it
+        # rather than dropping it silently; malformed source stays blocked.
+        if kind in ("brew", "cask") and name in ignored:
+            status = "ignored_by_operator"
+        elif kind == "cask":
             status = "blocked_linux_cask"
         elif kind == "brew" and name in MACOS_NAMED_CANDIDATES:
             status = "macos_named_needs_evidence"
@@ -44,8 +49,9 @@ def inspect(path):
     return {"manifest": str(file), "entries": entries}
 
 
-def assess(paths):
-    documents = [inspect(path) for path in paths]
+def assess(paths, ignored=()):
+    ignored_names = frozenset(ignored)
+    documents = [inspect(path, ignored_names) for path in paths]
     statuses = [e["status"] for doc in documents for e in doc["entries"]]
     blocked = sum(s.startswith("blocked_") for s in statuses)
     return {
@@ -55,23 +61,35 @@ def assess(paths):
         "can_install_without_known_blockers": blocked == 0,
         "packages_l1": "not_qualified",
         "blocked_entries": blocked,
+        "ignored_entries": statuses.count("ignored_by_operator"),
         "manifests": documents,
         "notes": [
             "No formula/tap availability, version, licence or architecture was queried",
             "A zero-blocker result is NOT an install authorization or success receipt",
             "Brewfile selection must reflect actual chezmoi category values",
+            "ignored_by_operator entries match DOTFILES_BREWFILE_IGNORE and are skipped by brew bundle",
         ],
     }
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument(
         "--manifest",
         action="append",
         type=Path,
         required=True,
         help="Selected Brewfile; repeat for each enabled Linux category",
+    )
+    parser.add_argument(
+        "--ignore",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help=(
+            "brew/cask name filtered at bundle time by DOTFILES_BREWFILE_IGNORE; "
+            "repeat for each name. Never suppresses malformed syntax"
+        ),
     )
     parser.add_argument(
         "--json", action="store_true", help="Print machine-readable audit"
@@ -83,8 +101,8 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     try:
-        result = assess(args.manifest)
-    except (OSError, UnicodeError, ValueError) as exc:
+        result = assess(args.manifest, args.ignore)
+    except (OSError, ValueError) as exc:
         print(f"Linux Brewfile audit: {exc}", file=sys.stderr)
         return 1
     if args.json:
@@ -99,7 +117,8 @@ def main(argv=None):
                         f'=> {entry["status"]}'
                     )
         print(
-            f'Linux Brewfile static audit: {result["blocked_entries"]} blockers; '
+            f'Linux Brewfile static audit: {result["blocked_entries"]} blockers, '
+            f'{result["ignored_entries"]} operator-ignored; '
             "remaining entries still require real Linux/CPU package qualification"
         )
     return 1 if args.enforce and result["blocked_entries"] else 0
