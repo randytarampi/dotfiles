@@ -33,7 +33,8 @@ def safely_staged(path: Path) -> bool:
         return False
 
     enabled = [
-        item for item in plugins
+        item
+        for item in plugins
         if isinstance(item, str) and item.startswith("context-mode@")
     ]
     disabled = plugins.count("-context-mode")
