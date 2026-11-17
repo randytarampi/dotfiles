@@ -7,6 +7,7 @@ set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_UPDATE_SYSTEM_SETUP" | sha256sum }}
 # configs/opencode/opencode-plugins.json: {{ include "configs/opencode/opencode-plugins.json" | sha256sum }}
 # scripts/lib/opencode_plugins.py: {{ include "scripts/lib/opencode_plugins.py" | sha256sum }}
+# scripts/lib/context_mode_preflight.py: {{ include "scripts/lib/context_mode_preflight.py" | sha256sum }}
 # scripts/lib/meridian_path.py: {{ include "scripts/lib/meridian_path.py" | sha256sum }}
 # scripts/lib/opencode_host.py: {{ include "scripts/lib/opencode_host.py" | sha256sum }}
 # scripts/lib/opencode_bin.sh: {{ include "scripts/lib/opencode_bin.sh" | sha256sum }}
@@ -29,6 +30,16 @@ fi
 # A gated Context Mode install must not run with unsupported Node or mutate
 # the rest of the plugin set before failing its runtime prerequisite.
 if [[ "${DOTFILES_RUN_CONTEXT_MODE_SETUP:-0}" == "1" ]]; then
+  # Phase 07 installs plugins before phase 16 generates permissions. Refuse
+  # a first-time activation until a previous gate-off deploy staged the
+  # negative package directive, or an existing active config has safe rules.
+  if [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" != "1" ]]; then
+    die "Context Mode requires DOTFILES_RUN_OPENCODE_SETUP=1 before installation"
+  fi
+  CONTEXT_MODE_OC_CONFIG="${OPENCODE_DIR:-${HOME}/.config/opencode}/opencode.json"
+  if ! python3 "${LIB_DIR}/context_mode_preflight.py" "${CONTEXT_MODE_OC_CONFIG}"; then
+    die "Stage Context Mode first: deploy with DOTFILES_RUN_CONTEXT_MODE_SETUP=0, verify -context-mode in opencode.json, then enable the gate"
+  fi
   if ! command -v node >/dev/null 2>&1 || ! node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>24||(a===24&&b>=15)?0:1)' >/dev/null 2>&1; then
     die "Context Mode requires Node >= 24.15.0; no plugin changes made"
   fi
