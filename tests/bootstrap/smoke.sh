@@ -56,6 +56,14 @@ fi
 test -s "$HOME/.gitconfig"
 test -s "$HOME/.bashrc"
 test ! -e "$HOME/.local/share/litellm/service.env"
+# The source checkout contains build/test inputs, not home-managed files.
+# A clean deploy must not publish these entries even if they appear in source.
+for source_only in tests artifacts LICENSE opencode.json poetry.lock poetry.toml pyproject.toml qlty.toml zizmor.yml coverage.lcov; do
+  if [[ -e "$HOME/$source_only" || -L "$HOME/$source_only" ]]; then
+    echo "repo-only source entry deployed into HOME: $source_only" >&2
+    exit 1
+  fi
+done
 EOF
 
 # This synthetic-only variable proves that env -i strips ambient secrets;
