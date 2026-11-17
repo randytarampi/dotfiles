@@ -87,24 +87,39 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
   # Linux category contains macOS casks or invalid Brewfile syntax. Unknown
   # formula/tap support remains unqualified until actual host receipts.
   if [[ "$(uname -s)" == "Linux" ]]; then
-    linux_manifests=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile")
+    linux_audit_args=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile")
     {{- if .categories.dev }}
-    linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev")
+    linux_audit_args+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev")
     {{- end }}
     {{- if .categories.local_ai_headless }}
-    linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.local.ai.headless")
+    linux_audit_args+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.local.ai.headless")
     {{- end }}
     {{- if .categories.dev_security }}
-    linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev.security")
+    linux_audit_args+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev.security")
     {{- end }}
     {{- if .categories.utilities }}
-    linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.utilities")
+    linux_audit_args+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.utilities")
     {{- end }}
     {{- if .categories.dev_ops }}
-    linux_manifests+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev.ops")
+    linux_audit_args+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev.ops")
     {{- end }}
-    python3 "{{ .chezmoi.sourceDir }}/scripts/check-linux-brewfile-eligibility.py" --enforce "${linux_manifests[@]}" ||
-      die "Linux package selection contains blocked Brewfile directives; no package manager was invoked"
+    {{- if .categories.legacy }}
+    linux_audit_args+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.legacy")
+    {{- end }}
+    # brew_bundle_filtered drops DOTFILES_BREWFILE_IGNORE entries before bundling,
+    # so the audit must not refuse a name the operator already excluded.
+    if [[ -n "${DOTFILES_BREWFILE_IGNORE:-}" ]]; then
+      IFS=',' read -r -a linux_ignored_names <<<"${DOTFILES_BREWFILE_IGNORE}"
+      for linux_ignored_name in "${linux_ignored_names[@]}"; do
+        linux_ignored_name="${linux_ignored_name// /}"
+        if [[ -n "$linux_ignored_name" ]]; then
+          linux_audit_args+=(--ignore "$linux_ignored_name")
+        fi
+      done
+    fi
+    if ! python3 "{{ .chezmoi.sourceDir }}/scripts/check-linux-brewfile-eligibility.py" --enforce "${linux_audit_args[@]}"; then
+      die "Linux package selection was refused before any Homebrew operation (see the audit output above); no package manager was invoked"
+    fi
   fi
 
   # Resolve *after* installation; a missing brew --prefix must not become
