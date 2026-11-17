@@ -21,11 +21,23 @@ Brewfile*
 wingetfile*
 
 # Repo build tooling, documentation, and source templates — not dotfiles.
+# Nothing here is read from $HOME; deploying it only clutters the home directory
+# and lets stale copies drift from the checkout.
 AGENTS.md
 Makefile
 README.md
 config.json
 docs/
+tests/
+artifacts/
+LICENSE
+opencode.json
+poetry.lock
+poetry.toml
+pyproject.toml
+qlty.toml
+zizmor.yml
+coverage.lcov
 
 # GitHub special files (PR templates, issue templates, CI workflows) — not dotfiles.
 .github/
