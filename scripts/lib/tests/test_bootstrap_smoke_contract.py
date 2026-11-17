@@ -81,7 +81,9 @@ def test_chezmoi_diff_cannot_mask_failure(tmp_path, diff_exit, drift, expected):
         assert "chezmoi drift" in result.stderr
 
 
-@pytest.mark.parametrize("entry", ["tests", "artifacts", "poetry.lock", "coverage.lcov"])
+@pytest.mark.parametrize(
+    "entry", ["tests", "artifacts", "poetry.lock", "coverage.lcov"]
+)
 def test_repo_only_files_in_home_fail_bootstrap(tmp_path, entry):
     result = _run_inner(tmp_path, forbidden_entry=entry)
     assert result.returncode != 0
