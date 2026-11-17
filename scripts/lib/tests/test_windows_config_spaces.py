@@ -78,10 +78,21 @@ def test_ci_actually_deploys_and_checks_windows_spaces_without_skipping_rows():
     assert 'config_file="$RUNNER_TEMP/chezmoi config/interpreters.toml"' in deploy
     assert 'echo "CHEZMOI_CONFIG=$cz_config" >> "$GITHUB_ENV"' in deploy
     assert 'chezmoi_args+=(--config "$CHEZMOI_CONFIG")' in deploy
-    assert 'chezmoi "${chezmoi_args[@]}" --source "$GITHUB_WORKSPACE" verify' in deploy
+    assert 'cz_bin="${CHEZMOI:-chezmoi}"' in deploy
     assert (
-        'diff_output="$(chezmoi "${chezmoi_args[@]}" --source "$GITHUB_WORKSPACE" diff)"'
+        '"$cz_bin" "${chezmoi_args[@]}" --source "$GITHUB_WORKSPACE" verify' in deploy
+    )
+    assert (
+        'diff_output="$("$cz_bin" "${chezmoi_args[@]}" --source "$GITHUB_WORKSPACE" diff)"'
         in deploy
+    )
+    # The space-bearing paths must be asserted on the runner, not only in source.
+    assert "- name: Assert space-bearing Windows acceptance paths" in deploy
+    assert "if: runner.os == 'Windows'" in deploy
+    assert '[[ "$HOME" == *" "* ]]' in deploy
+    assert '[[ "${CHEZMOI_CONFIG:-}" == *" "* ]]' in deploy
+    assert deploy.index("Assert space-bearing Windows acceptance paths") < deploy.index(
+        "Deploy (first pass)"
     )
     assert deploy.count("Deploy (first pass)") == 1
     assert deploy.count("Deploy (idempotency pass)") == 1
