@@ -1,8 +1,8 @@
 # --- Brews ---
 brew "arping"
 brew "awscli"
-# No service declaration: scripts/caddy-setup.sh owns Caddy through the root
-# LaunchDaemon com.caddy.proxy (docs/caddy.md). Homebrew's generated agent
+# No service declaration: the run_onchange_24 installer owns Caddy through
+# the root LaunchDaemon com.caddy.proxy (docs/caddy.md). Homebrew's agent
 # points at $(brew --prefix)/etc/Caddyfile, which this setup never writes, so it
 # crash-loops against the real config at $(brew --prefix)/etc/caddy/Caddyfile and
 # reports an error state in `brew services list`.
