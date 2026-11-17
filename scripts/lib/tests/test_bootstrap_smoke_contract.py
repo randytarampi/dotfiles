@@ -15,11 +15,17 @@ def _inner_script():
     return source.split(marker, 1)[1].split("\nEOF\n", 1)[0] + "\n"
 
 
-def _run_inner(tmp_path, *, diff_exit=0, drift="", canary=False):
+def _run_inner(tmp_path, *, diff_exit=0, drift="", canary=False, forbidden_entry=None):
     home = tmp_path / "home"
     home.mkdir()
     (home / ".gitconfig").write_text("[user]\nname = smoke\n")
     (home / ".bashrc").write_text("# smoke\n")
+    if forbidden_entry is not None:
+        target = home / forbidden_entry
+        if forbidden_entry in ("tests", "artifacts"):
+            target.mkdir()
+        else:
+            target.write_text("source-only\n")
     bins = tmp_path / "bin"
     bins.mkdir()
 
@@ -73,6 +79,13 @@ def test_chezmoi_diff_cannot_mask_failure(tmp_path, diff_exit, drift, expected):
         assert "chezmoi diff failed" in result.stderr
     elif drift:
         assert "chezmoi drift" in result.stderr
+
+
+@pytest.mark.parametrize("entry", ["tests", "artifacts", "poetry.lock", "coverage.lcov"])
+def test_repo_only_files_in_home_fail_bootstrap(tmp_path, entry):
+    result = _run_inner(tmp_path, forbidden_entry=entry)
+    assert result.returncode != 0
+    assert f"repo-only source entry deployed into HOME: {entry}" in result.stderr
 
 
 def test_parent_secret_canary_must_not_reach_deploy(tmp_path):
