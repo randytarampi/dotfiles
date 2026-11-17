@@ -25,6 +25,24 @@ configure_codex = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(configure_codex)
 
 
+@pytest.fixture(autouse=True)
+def _scrub_inherited_dotfiles_env(monkeypatch):
+    # A parent process that sourced ~/.env (an agent session, a deploy shell)
+    # exports every gate, so a machine-local DOTFILES_CODEX_PROFILES_V2=1 put
+    # these gate-sensitive tests into the wrong mode: main() then refused
+    # legacy [profiles.*] tables and unmarked profile selectors that the tests
+    # expect to be reconciled. Clear inherited values for the whole module and
+    # let each test set the gates it actually exercises. DOTFILES_TEST_CODEX_PY310
+    # is exempt: it is an explicit harness opt-in, not a machine gate.
+    inherited = [
+        name
+        for name in os.environ
+        if name.startswith("DOTFILES_") and name != "DOTFILES_TEST_CODEX_PY310"
+    ]
+    for name in inherited:
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.mark.parametrize(
     "root_setting",
     ["", 'model_provider = "openai"\n'],
