@@ -234,6 +234,14 @@ jobs:
           echo "USERPROFILE=$smoke_home" >> "$GITHUB_ENV"
           cp dot_dotfiles/shell/.env.example "$smoke_home/.env"
           rm -rf "$smoke_home/.config/chezmoi"
+      - name: Assert space-bearing Windows acceptance paths
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          # Fail before two full deploys if the space coverage silently vanished.
+          [[ "$HOME" == *" "* ]] || { echo "Expected a space-bearing Windows HOME, got '$HOME'" >&2; exit 1; }
+          [[ "${CHEZMOI_CONFIG:-}" == *" "* ]] || { echo "Expected a space-bearing chezmoi config path, got '${CHEZMOI_CONFIG:-}'" >&2; exit 1; }
+          printf 'space-bearing acceptance paths: HOME=%s CHEZMOI_CONFIG=%s\n' "$HOME" "$CHEZMOI_CONFIG"
       - name: Deploy (first pass)
         shell: bash
         run: make deploy
@@ -245,12 +253,13 @@ jobs:
         run: |
           # Keep a single executable and a separately quoted config argument;
           # Windows runner HOME and config paths deliberately contain spaces.
+          cz_bin="${CHEZMOI:-chezmoi}"
           chezmoi_args=()
           if [[ -n "${CHEZMOI_CONFIG:-}" ]]; then
             chezmoi_args+=(--config "$CHEZMOI_CONFIG")
           fi
-          chezmoi "${chezmoi_args[@]}" --source "$GITHUB_WORKSPACE" verify
-          if ! diff_output="$(chezmoi "${chezmoi_args[@]}" --source "$GITHUB_WORKSPACE" diff)"; then
+          "$cz_bin" "${chezmoi_args[@]}" --source "$GITHUB_WORKSPACE" verify
+          if ! diff_output="$("$cz_bin" "${chezmoi_args[@]}" --source "$GITHUB_WORKSPACE" diff)"; then
             echo "chezmoi diff command failed" >&2
             exit 1
           fi
