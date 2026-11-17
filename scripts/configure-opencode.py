@@ -56,6 +56,7 @@ from local_engines import (  # noqa: E402 -- local import follows bootstrap.
 from basic_memory_ownership import ensure_basic_memory_ownership  # noqa: E402
 from opencode_plugins import (  # noqa: E402  # sys.path bootstrap above is intentional.
     active_plugin_specs,
+    context_mode_permission_rules,
     plugin_specs,
 )
 from models_dev import (  # noqa: E402 -- local import follows bootstrap.
@@ -1509,6 +1510,12 @@ def main():
     }
 
     configured_plugins = active_plugin_specs()
+    # Disabling a package in the manifest alone does not suppress its cache.
+    context_mode_directives = (
+        []
+        if any(spec.startswith("context-mode@") for spec in configured_plugins)
+        else ["-context-mode"]
+    )
     if args.mode == "project":
         # Project configs must be self-sufficient: emit every provider the
         # selected preset references, and reset disabled_providers so an
@@ -1685,6 +1692,7 @@ def main():
                     )
                     for plugin_spec in configured_plugins[1:]
                 ],
+                *context_mode_directives,
                 # OpenCode v2 may load already-installed package plugins even
                 # after their manifest entry disappears. Disable the retired
                 # memory plugin explicitly; never delete its user-owned data.
@@ -1946,6 +1954,9 @@ def main():
     config["permissions"] = _native_permissions(
         _external_dir_permissions, config.pop("permissions", None)
     )
+    # Explicitly gate ctx_* execution: native shell denial alone does not
+    # cover ctx_execute in JavaScript/Python. The agent cannot self-upgrade.
+    config["permissions"].extend(context_mode_permission_rules(configured_plugins))
     if config.get("mcp"):
         config["mcp"] = _native_mcp_config(config["mcp"])
     config.pop("server", None)

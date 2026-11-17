@@ -39,6 +39,40 @@ def test_manifest_matches_config_and_install_template():
     assert checker.parse_install_plugins(checker.INSTALL_SCRIPT) == expected
 
 
+@pytest.mark.parametrize("enabled", ["0", "1"])
+def test_context_mode_manifest_and_native_plugin_gate(monkeypatch, enabled):
+    monkeypatch.setenv("DOTFILES_RUN_CONTEXT_MODE_SETUP", enabled)
+    checker = load_checker()
+    expected = checker.active_plugin_specs()
+    assert ("context-mode@2.2.1" in expected) == (enabled == "1")
+    assert checker.parse_install_plugins(checker.INSTALL_SCRIPT) == expected
+    assert checker.parse_config_plugins(checker.CONFIG_SCRIPT) == expected
+    generator = checker.CONFIG_SCRIPT.read_text(encoding="utf-8")
+    assert "*context_mode_directives," in generator
+    assert '"compaction": {"auto": False}' in generator
+    assert "@tarquinen/opencode-dcp@latest" in expected
+
+
+def test_context_mode_permission_rules_are_explicit_and_not_global(monkeypatch):
+    loader = load_pinned_spec_loader()
+    monkeypatch.setenv("DOTFILES_RUN_CONTEXT_MODE_SETUP", "0")
+    assert loader.context_mode_permission_rules(loader.active_plugin_specs()) == []
+    monkeypatch.setenv("DOTFILES_RUN_CONTEXT_MODE_SETUP", "1")
+    rules = loader.context_mode_permission_rules(loader.active_plugin_specs())
+    assert rules == [
+        {"action": "ctx_execute", "resource": "*", "effect": "ask"},
+        {"action": "ctx_batch", "resource": "*", "effect": "ask"},
+        {"action": "ctx_index", "resource": "*", "effect": "ask"},
+        {"action": "ctx_purge", "resource": "*", "effect": "ask"},
+        {"action": "ctx_upgrade", "resource": "*", "effect": "deny"},
+    ]
+    source = (ROOT / "scripts/configure-opencode.py").read_text(encoding="utf-8")
+    assert (
+        'config["permissions"].extend(context_mode_permission_rules(configured_plugins))'
+        in source
+    )
+
+
 def test_legacy_memory_plugin_stays_retired_with_old_gate(monkeypatch):
     checker = load_checker()
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_MEMORY_SETUP", "1")
