@@ -163,5 +163,5 @@ def test_caddy_package_does_not_create_a_homebrew_service():
         ROOT / ".chezmoiscripts/run_onchange_24-install-caddy.sh.tmpl"
     ).read_text(encoding="utf-8")
     assert "<string>com.caddy.proxy</string>" in installer
-    assert '${BREW_PREFIX}/etc/caddy/Caddyfile' in installer
+    assert "${BREW_PREFIX}/etc/caddy/Caddyfile" in installer
     assert 'launchctl bootstrap system/ "$PLIST_PATH"' in installer
