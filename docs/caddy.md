@@ -222,6 +222,7 @@ On Linux, Caddy runs as a systemd system service (`/etc/systemd/system/caddy.ser
 - **Certificate renewal fails**: verify `ACME_EMAIL`, Route 53 credentials, and hosted zone access.
 - **DDNS does not update**: confirm `ddns-zones.json` has the right hosted zone and AWS credentials can edit it.
 - **Caddy will not start**: validate the Caddyfile with `make caddy-validate`; confirm `~/.config/caddy/caddy-auth.conf` exists and has valid `user:hash` entries.
+- **`brew services list` reports `caddy error` on macOS**: the repo-owned server is the root LaunchDaemon `com.caddy.proxy`, not a Homebrew user LaunchAgent. Check `sudo launchctl print system/com.caddy.proxy`, `make caddy-validate` and the actual HTTPS sites before treating the Homebrew entry as a service outage. Older `Brewfile.dev.ops` revisions declared `restart_service: :changed`, which could create a separate, failing Homebrew LaunchAgent with the wrong Caddyfile path. On a host where you have confirmed that agent is redundant and user-owned files are preserved, explicitly stop it with `brew services stop caddy` (without `sudo`). The current Brewfile installs the binary only; it does not remove previously registered agents or alter the root LaunchDaemon.
 - **Need a password hash**: run `caddy hash-password` and add the result to `~/.config/caddy/caddy-auth.conf`.
 
 ## Links
