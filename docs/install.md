@@ -32,6 +32,10 @@ The single source of truth for secrets and toggles is `~/.env` (or `$HOME\.env` 
    DOTFILES_RUN_PACKAGES_SETUP=1
    ```
 
+### Previously deployed repository-only files
+
+The source-level `.chezmoiignore` excludes build inputs such as `tests/`, `artifacts/`, the Poetry lockfiles, and `coverage.lcov` from future home-directory deployment. The rule is not a licence to delete existing `~/tests`, `~/artifacts` or other same-named files: a previous deploy may have copied them, but later user changes may make them independent. Inspect the actual files and compare them with the source checkout before any owner-approved clean-up; never recursively remove them as part of `make deploy`. Check `chezmoi managed` and the two-pass diff to confirm the current managed-file contract.
+
 ### Step 3: Makefile + chezmoi Orchestration
 Initialize chezmoi, then use `make deploy` so `~/.env` is loaded in the same shell process as each chezmoi command:
 
