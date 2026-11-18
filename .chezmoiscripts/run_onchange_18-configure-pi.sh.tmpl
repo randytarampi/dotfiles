@@ -3,6 +3,7 @@ set -euo pipefail
 # scripts/lib/litellm_aliases.py: {{ include "scripts/lib/litellm_aliases.py" | sha256sum }}
 # scripts/lib/selected_service.py: {{ include "scripts/lib/selected_service.py" | sha256sum }}
 # env gate fingerprint: {{ env "DOTFILES_RUN_PI_SETUP" | sha256sum }}
+# env gate fingerprint: {{ env "DOTFILES_RUN_CONTEXT_MODE_SETUP" | sha256sum }}
 # LiteLLM gate fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_USE_LITELLM_PROXY" | default "0" }}
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "$LIB_DIR/common.sh"
@@ -26,6 +27,7 @@ source "$LIB_DIR/tier_args.sh"
 # scripts/lib/free_route_catalogues.py: {{ include "scripts/lib/free_route_catalogues.py" | sha256sum }}
 # scripts/lib/models_dev.py: {{ include "scripts/lib/models_dev.py" | sha256sum }}
 # scripts/configure-pi.py: {{ include "scripts/configure-pi.py" | sha256sum }}
+# scripts/lib/context_mode_native.py: {{ include "scripts/lib/context_mode_native.py" | sha256sum }}
 # configs/pi/vibeguard.config.json: {{ include "configs/pi/vibeguard.config.json" | sha256sum }}
 load_env || true
 if [[ "${DOTFILES_RUN_PI_SETUP:-0}" != "1" ]]; then
