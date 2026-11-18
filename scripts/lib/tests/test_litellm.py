@@ -1654,10 +1654,21 @@ def test_service_lane_rates_and_gate_off_render(monkeypatch):
         Path(__file__).resolve().parents[3] / "configs/litellm/model-rates.json"
     )
     rates = json.loads(rates_path.read_text())["models"]
-    standard = {
-        "gpt-6.2-astra": (1e-5, 5e-5, 1e-6, 1.25e-5),
-        "gpt-6-luna": (1e-7, 5e-7, 1e-8, 1.25e-7),
-    }
+    standard = {"gpt-6-luna": (1e-7, 5e-7, 1e-8, 1.25e-7)}
+    # Astra 6.2 has published input/output/cache-read rates; a cache-write
+    # rate has not been established, so do not fabricate one for the base row.
+    astra_keys = (
+        "input_cost_per_token",
+        "output_cost_per_token",
+        "cache_read_input_token_cost",
+    )
+    astra = (8e-6, 4e-5, 4e-7)
+    assert tuple(rates["gpt-6.2-astra"][key] for key in astra_keys) == astra
+    assert "cache_creation_input_token_cost" not in rates["gpt-6.2-astra"]
+    for suffix, multiplier in (("flex", 0.5), ("fast", 2.0)):
+        assert tuple(
+            rates[f"gpt-6.2-astra-{suffix}"][key] for key in astra_keys
+        ) == tuple(value * multiplier for value in astra)
     rate_keys = (
         "input_cost_per_token",
         "output_cost_per_token",

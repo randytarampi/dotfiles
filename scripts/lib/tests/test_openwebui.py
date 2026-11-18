@@ -6090,8 +6090,11 @@ def test_openwebui_tether_prerequisites_are_idempotent_and_overridable(tmp_path)
     library = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
     service = tmp_path / "service.env"
     # A user-authored opt-out must survive both reconciliation passes.
-    (tmp_path / ".env").write_text("ENABLE_TOOL_SERVERS=false\\n")
-    cmd = f"source {shlex.quote(str(library))}; openwebui_service_env_sync {shlex.quote(str(service))}"
+    (tmp_path / ".env").write_text("ENABLE_TOOL_SERVERS=false\n")
+    cmd = (
+        f"source {shlex.quote(str(library))}; "
+        f"openwebui_service_env_sync {shlex.quote(str(service))}"
+    )
     env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")}
     assert subprocess.run(["bash", "-c", cmd], env=env).returncode == 0
     first = service.read_bytes()
