@@ -18,7 +18,7 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # 2026-11-17: optional, default-off DOTFILES_RUN_CONTEXT_MODE_SETUP gate
 # for pinned OpenCode Context Mode; baseline defaults remain unchanged.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "cd599b2cb24894cdbc361ec51b06e2ac198b268214cd4a94c99f3f334fffd893"
+    "1e6f90a000f456505e834ec4d2c3da869c588942484e931fd9b44f18efc38484"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
