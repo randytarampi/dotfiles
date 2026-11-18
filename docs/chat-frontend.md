@@ -286,7 +286,7 @@ Reads use `GET /api/v1/retrieval/embedding`; writes use `POST /api/v1/retrieval/
 
 - **Local engines:** models are discovered live through each connection's native model-list mechanism (Ollama native API; `/v1/models` for OpenAI-protocol connections). Nothing to check in; add/remove a model in Ollama/oMLX and it appears. The existing `check-model-drift` gate continues to cover OpenCode catalogs only.
 - **OpenCode tier presets are unchanged** — this system is a parallel consumer of the same engines, not a replacement for the slim.json tier registry.
-- Update pinned Open WebUI releases deliberately (change `DOTFILES_OPENWEBUI_VERSION`; the default lives at `.chezmoiscripts/run_onchange_30-openwebui.sh.tmpl` — 0.13.0 is the target; 0.12.5 is the last live-verified release. Rehearse before deployment. change; check release notes for security fixes first). Since 0.12.0 the deploy template stops the service and backs up `webui.db` (+ WAL/SHM) automatically whenever the pinned version changes, before the upgrade runs. SQLite data is not always backward-compatible across versions: the first boot of a newer release migrates the database irreversibly, so rollback means restoring a pre-upgrade backup from the data directory.
+- Update pinned Open WebUI releases deliberately (change `DOTFILES_OPENWEBUI_VERSION`; the default lives at `.chezmoiscripts/run_onchange_30-openwebui.sh.tmpl` — 0.13.4 is the proposed pinned target; live-host acceptance remains unverified. Rehearse before deployment. change; check release notes for security fixes first). Since 0.12.0 the deploy template stops the service and backs up `webui.db` (+ WAL/SHM) automatically whenever the pinned version changes, before the upgrade runs. SQLite data is not always backward-compatible across versions: the first boot of a newer release migrates the database irreversibly, so rollback means restoring a pre-upgrade backup from the data directory.
 
 ### Documentation duties when touching this area
 
@@ -369,3 +369,40 @@ Recorded at PR review closure. Each row names the review gate that raised the it
 Merge preconditions: final-head CI green and owner verification of gateway mode on the release host. Both are tracked in the PR; the PR is currently **not in draft on GitHub** — the gates apply regardless of the draft flag.
 
 Evidence vocabulary — **delivered** (reconciled and readback-verified), **probe-qualified** (`PROTOCOL_PROBED` from an opt-in `--probe-routes` run), **consumer-verified** (a real consumer outcome served through the configured route) — applies to every claim in this document.
+
+
+## November 2026 — Open WebUI 0.13.4, Tether and coding-agent rollout
+
+**Status:** source pins and server-side prerequisites prepared; installed-host operation, device pairing, agent inference and tool permissions unverified. Sources: [Open WebUI 0.13.4](https://github.com/open-webui/open-webui/releases/tag/v0.13.4), [Tether](https://docs.openwebui.com/ecosystem/tether/), [coding agents](https://docs.openwebui.com/features/open-terminal/coding-agents/), [MCP](https://docs.openwebui.com/features/extensibility/mcp/).
+
+| Product | Pin | Deployment |
+|---|---|---|
+| Open WebUI | 0.13.4 | Existing gated venv, loopback service and chat Caddy site |
+| Open Terminal | 0.17.20 | Existing independent macOS gate |
+| Open WebUI Computer (cptr) | 0.9.21 (unchanged) | Existing independent macOS gate; full host access |
+| Tether | 0.1.16 recommended | **User-owned external computer**; not installed, configured or started on this host |
+| Open WebUI Terminals | 0.4.3 candidate | Not installed; 0.3.x-to-0.4.x requires manual migration |
+
+### Server prerequisites and permission policy
+
+The managed WebUI `service.env` now defaults `ENABLE_WEBSOCKET_SUPPORT=true` and `ENABLE_TOOL_SERVERS=true` for Tether and external tools; `ENABLE_TOOL_PERMISSIONS=true` offers per-chat approval controls while `ENABLE_TOOL_PERMISSIONS_AUTO=false` withholds experimental automatic approvals. Each setting may be overridden by the owner's `~/.env`. **Existing database-persisted ConfigVars can take precedence**: recheck actual Admin Settings → Interface and External Tools after deployment. Do not disable persistent configuration or overwrite users, managed credentials, MCP settings, old chats or embedding representations.
+
+Tool Permissions offers **Ask for approval** per chat but also **Full access**. Enabling the UI does **not** force every chat to ask permission, and disabling Auto does not prevent Full access. Before privileged work, a trusted operator must select Ask for approval and restrict terminal connection Write access and Tools access to trusted users. Per-user Tether integrations must not be auto-added into shared server connections.
+
+### Pair and sandbox Tether **only on an external computer**
+
+The owner installs Tether 0.1.16 on their **other** computer, signs in against an authenticated HTTPS WebUI instance with functioning WebSockets, pairs that device, and explicitly enables individual local models/tools/terminal integrations in Tether Settings. Use an owner-approved private tailnet/Caddy HTTPS path; do not publish LiteLLM, the terminal port, MCP commands or credential files for this purpose. Tether 0.1.16's new integration screen does not preserve connections saved in 0.1.14–0.1.15; inventory connection metadata and keys locally first. **Dotfiles does not install or launch Tether on this machine.**
+
+On a supported macOS or Windows Tether host, the owner may select Settings → Open Terminal → Sandbox → Restrict file access, choose exactly one workspace folder and Apply and restart. The sandbox disables network by default and should refuse to start if enforcement fails; browser/desktop control is unavailable while sandboxed. It is not a cross-OS guarantee; verify prohibited outside-folder read/write and network requests on that host before entrusting it with data.
+
+Tether 0.1.16 can launch local stdio MCP servers from Settings → Integrations → Tools or connect approved HTTP MCP services, then enable selected tools for that user. **Local MCP commands run with the Tether account's OS privileges outside its Open Terminal workspace sandbox.** Explicitly review each executable, arguments, environment, authentication and filesystem scope; do not copy the dotfiles MCP registry or private secrets into Tether. This feature is separate from the repository's server-side Streamable-HTTP MCP reconciler.
+
+### Coding agents as chat models
+
+WebUI 0.13.4 plus Open Terminal 0.17.20 allow installed/authorized Codex, OpenCode, Pi, Claude Code, Gemini CLI, Copilot, Cursor, Hermes, Antigravity and ACP-capable agents to appear as chat models. The managed Open Terminal LaunchAgent now includes standard Homebrew/user CLI directories in its clean PATH, but **does not install, sign in, configure or authorize any agents**. Custom ACP definitions via `OPEN_TERMINAL_ACP_AGENTS` require explicit verification; do not automatically mirror the existing agent/ACP registries. On the host, test a read-only chat, approval UX, one disposable file modification, stream/fork behavior and session cleanup. The OpenCode/OMO-Slim presets remain an independent source of model selection.
+
+### Host acceptance and rollback
+
+Before deployment, record installed version, health, existing WebUI db state, client keys and embedding/index identity. The current gated upgrade backs up the database before invoking pip. After running owner-approved deployment, check `/api/version`, an existing authenticated chat, Tether WebSocket pairing from an approved different computer, model/tool menus, Ask-mode selections, MCP execution, terminal identity, a coding-agent task, and two idempotent reconciliations with no credential or user-state churn.
+
+For rollback, **stop WebUI**, restore the pre-upgrade SQLite database with matching WAL/SHM and old pin, then restart the previous binary. Do not run an older version against an already migrated database. Disable only the independently failing terminal/Computer gate if needed; Tether disconnects on its other host. Open WebUI Terminals 0.4.x requires a separate access/capacity/container-policy and explicit manual migration before adoption.
