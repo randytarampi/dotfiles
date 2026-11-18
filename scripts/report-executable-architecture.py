@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import os
 import re
 import shutil
 import struct
@@ -35,12 +36,52 @@ def pe_architecture_from_bytes(data):
     return MACHINES.get(machine, f"unknown (0x{machine:04X})"), None
 
 
+MAX_HEADER_BYTES = 1024 * 1024 + 64
+
+
+def candidate_paths(path):
+    """Yield the path as given, then its Windows form when cygpath exists.
+
+    A shell in Git Bash resolves `bash` to `/usr/bin/bash`, which a native
+    Windows Python cannot open; `cygpath -w` bridges that gap without guessing.
+    """
+    yield Path(path)
+    if os.name == "nt" or shutil.which("cygpath"):
+        try:
+            converted = subprocess.run(
+                ["cygpath", "-w", str(path)],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            converted = ""
+        if converted and converted != str(path):
+            yield Path(converted)
+
+
+def display_path(path):
+    """Replace the owner's home prefix so output never prints a personal path."""
+    if not path:
+        return path
+    home = os.path.expanduser("~")
+    text = str(path)
+    if home and home != "~" and text.startswith(home):
+        return "~" + text[len(home) :]
+    return text
+
+
 def pe_architecture(path):
-    try:
-        data = Path(path).read_bytes()
-    except (OSError, ValueError) as error:
-        return "unknown", f"cannot read executable: {error}"
-    return pe_architecture_from_bytes(data)
+    last_error = "cannot read executable"
+    for candidate in candidate_paths(path):
+        try:
+            with open(candidate, "rb") as handle:
+                data = handle.read(MAX_HEADER_BYTES)
+        except (OSError, ValueError) as error:
+            last_error = f"cannot read executable: {error}"
+            continue
+        return pe_architecture_from_bytes(data)
+    return "unknown", last_error
 
 
 def executable_path(name):
@@ -128,7 +169,7 @@ def entry(path, resolution):
         }
     architecture, reason = pe_architecture(path)
     return {
-        "path": str(path),
+        "path": display_path(path),
         "architecture": architecture,
         "reason": reason,
         "resolution": resolution,
