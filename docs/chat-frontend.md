@@ -327,7 +327,7 @@ Reads use `GET /api/v1/retrieval/embedding`; writes use `POST /api/v1/retrieval/
 All former open questions were resolved during implementation and live-validated against `open-webui==0.11.4`:
 
 1. **Meridian:** included by explicit user authorization (Phase 4 planning) as a reconciler-managed `meridian` connection whenever `is_meridian_configured()` reports availability; no entry is created otherwise. Not a general subscription-to-API bridge.
-2. **pip-in-venv** chosen: `open-webui==${DOTFILES_OPENWEBUI_VERSION:-0.13.0}` in `~/.local/share/openwebui/venv` (Python 3.11 preferred; 3.12 fallback; 3.14 unsupported upstream). LaunchAgent behaviour verified live (KeepAlive respawn works; see the bootout/bootstrap retry note below). Early Phase 4 validation was against 0.11.4; the pinned default is 0.13.0 (target; live deployment verified on 0.12.5; upgrade rehearsal required before deployment).
+2. **pip-in-venv** chosen: `open-webui==${DOTFILES_OPENWEBUI_VERSION:-0.13.4}` in `~/.local/share/openwebui/venv` (Python 3.11 preferred; 3.12 fallback; 3.14 unsupported upstream). LaunchAgent behaviour verified live (KeepAlive respawn works; see the bootout/bootstrap retry note below). Early Phase 4 validation was against 0.11.4; the pinned default is 0.13.4 (target; live deployment verified on 0.12.5; upgrade rehearsal required before deployment).
 3. **Port** `OPENWEBUI_PORT` (default 8080, CLI option); Caddy host is
     `chat.<CADDY_DOMAIN>` follows `CADDY_ACCESS` when the service is
     gate-enabled and installed; app auth is the public-mode boundary.
