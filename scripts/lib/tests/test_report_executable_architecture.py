@@ -65,12 +65,12 @@ def test_bash_launcher_not_reported_as_running_target(monkeypatch, tmp_path):
     launcher.write_bytes(pe(0x014C))
     implementation.write_bytes(pe(0xAA64))
     monkeypatch.setattr(REPORTER.shutil, "which", lambda name: str(launcher))
-    monkeypatch.setattr(
-        REPORTER.subprocess,
-        "run",
-        lambda *args, **kwargs: type("Result", (), {"stdout": str(implementation)})(),
-    )
+    # A PATH launcher, even after readlink, cannot prove the running shell.
     report = REPORTER.build_report({})
+    assert report["bash"]["architecture"] == "unknown"
+    assert report["bash"]["path"] is None
+    # The actual current shell is supplied by CI using $BASH.
+    report = REPORTER.build_report({"bash": str(implementation)})
     assert report["bash"]["path"] == str(implementation)
     assert report["bash"]["architecture"] == "ARM64"
 
@@ -78,7 +78,7 @@ def test_bash_launcher_not_reported_as_running_target(monkeypatch, tmp_path):
 def test_windows_ci_architecture_step_and_required_gate_unchanged():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "Report Windows deployment executable architectures" in workflow
-    assert "python scripts/report-executable-architecture.py --json" in workflow
+    assert 'python scripts/report-executable-architecture.py --json --path "bash=$BASH"' in workflow
     assert "name: ci/required" in workflow
     assert "needs: [verify, deploy, bootstrap-smoke, bootstrap-networkless]" in workflow
     assert workflow.count("architecture:") >= 6
@@ -122,3 +122,19 @@ def test_posix_shell_path_resolves_through_windows_form(tmp_path, monkeypatch):
     architecture, reason = REPORTER.pe_architecture("/usr/bin/bash-msys-only")
     assert architecture == "AMD64"
     assert reason is None
+
+def test_unresolved_shim_does_not_inherit_wrapper_architecture(tmp_path):
+    shim = tmp_path / "make.exe"
+    shim.write_bytes(pe(0x014C))
+    report = REPORTER.build_report({"make": str(shim)})
+    assert report["make"]["shim"]["architecture"] == "i386"
+    assert report["make"]["target"]["architecture"] == "unknown"
+
+
+def test_cygpath_bridge_timeout_is_bounded():
+    script = SCRIPT.read_text(encoding="utf-8")
+    assert "timeout=5" in script
+
+
+def test_other_windows_home_path_is_redacted():
+    assert "Alice" not in REPORTER.display_path(r"C:\Users\Alice\bin\chezmoi.exe")
