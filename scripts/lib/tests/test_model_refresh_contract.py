@@ -126,7 +126,9 @@ def test_gpt62_one_for_one_registry_migration_and_pricing():
     assert isclose(rates["gpt-6.2-astra"]["cache_read_input_token_cost"], 4e-7)
     assert isclose(rates["gpt-6.2-astra"]["output_cost_per_token"], 4e-5)
     assert isclose(rates["gpt-6.2-astra"]["cache_creation_input_token_cost"], 1e-5)
-    assert isclose(rates["gpt-6.2-astra"]["input_cost_per_token_above_272k_tokens"], 1.6e-5)
+    assert isclose(
+        rates["gpt-6.2-astra"]["input_cost_per_token_above_272k_tokens"], 1.6e-5
+    )
     assert isclose(rates["gpt-6.2-sol"]["cache_creation_input_token_cost"], 2.5e-6)
 
 

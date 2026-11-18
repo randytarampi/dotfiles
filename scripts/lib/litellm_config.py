@@ -210,11 +210,26 @@ def builtin_rates(wire_model):
         ("max_input_tokens", "max_input_tokens"),
         ("max_output_tokens", "max_output_tokens"),
         ("mode", "mode"),
-        ("input_cost_per_token_above_272k_tokens", "input_cost_per_token_above_272k_tokens"),
-        ("output_cost_per_token_above_272k_tokens", "output_cost_per_token_above_272k_tokens"),
-        ("cache_read_input_token_cost_above_272k_tokens", "cache_read_input_token_cost_above_272k_tokens"),
-        ("cache_creation_input_token_cost_above_272k_tokens", "cache_creation_input_token_cost_above_272k_tokens"),
-        ("cache_creation_input_token_cost_above_1hr", "cache_creation_input_token_cost_above_1hr"),
+        (
+            "input_cost_per_token_above_272k_tokens",
+            "input_cost_per_token_above_272k_tokens",
+        ),
+        (
+            "output_cost_per_token_above_272k_tokens",
+            "output_cost_per_token_above_272k_tokens",
+        ),
+        (
+            "cache_read_input_token_cost_above_272k_tokens",
+            "cache_read_input_token_cost_above_272k_tokens",
+        ),
+        (
+            "cache_creation_input_token_cost_above_272k_tokens",
+            "cache_creation_input_token_cost_above_272k_tokens",
+        ),
+        (
+            "cache_creation_input_token_cost_above_1hr",
+            "cache_creation_input_token_cost_above_1hr",
+        ),
     ):
         value = entry.get(source_key)
         if isinstance(value, (int, float, str)) and value is not None:

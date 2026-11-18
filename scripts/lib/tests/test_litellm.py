@@ -1664,7 +1664,9 @@ def test_service_lane_rates_and_gate_off_render(monkeypatch):
     )
     astra = (8e-6, 4e-5, 4e-7)
     assert tuple(rates["gpt-6.2-astra"][key] for key in astra_keys) == astra
-    assert rates["gpt-6.2-astra"]["cache_creation_input_token_cost"] == pytest.approx(1e-5)
+    assert rates["gpt-6.2-astra"]["cache_creation_input_token_cost"] == pytest.approx(
+        1e-5
+    )
     for suffix, multiplier in (("flex", 0.5), ("fast", 2.0)):
         assert tuple(
             rates[f"gpt-6.2-astra-{suffix}"][key] for key in astra_keys
@@ -1688,12 +1690,12 @@ def test_service_lane_rates_and_gate_off_render(monkeypatch):
             assert row["output_cost_per_token_above_272k_tokens"] == pytest.approx(
                 1.5 * output_rate * multiplier
             )
-            assert row["cache_read_input_token_cost_above_272k_tokens"] == pytest.approx(
-                2 * read_rate * multiplier
-            )
-            assert row["cache_creation_input_token_cost_above_272k_tokens"] == pytest.approx(
-                2 * write_rate * multiplier
-            )
+            assert row[
+                "cache_read_input_token_cost_above_272k_tokens"
+            ] == pytest.approx(2 * read_rate * multiplier)
+            assert row[
+                "cache_creation_input_token_cost_above_272k_tokens"
+            ] == pytest.approx(2 * write_rate * multiplier)
     rate_keys = (
         "input_cost_per_token",
         "output_cost_per_token",
@@ -4377,9 +4379,7 @@ def test_gpt62_official_prices_win_over_stale_models_dev(monkeypatch, tmp_path):
     monkeypatch.setattr(litellm_config, "_BUILTIN_COST_MAP_LOADED", False)
     monkeypatch.setattr(litellm_config, "BUILTIN_COST_MAP", {})
     monkeypatch.setenv("LITELLM_ROOT", str(tmp_path / "no-installed-map"))
-    info = litellm_config.model_rates(
-        "openai", "gpt-6.2-astra", "openai/gpt-6.2-astra"
-    )
+    info = litellm_config.model_rates("openai", "gpt-6.2-astra", "openai/gpt-6.2-astra")
     assert info["input_cost_per_token"] == pytest.approx(8e-6)
     assert info["output_cost_per_token"] == pytest.approx(4e-5)
     assert info["cache_creation_input_token_cost"] == pytest.approx(1e-5)
