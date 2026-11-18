@@ -429,7 +429,7 @@ def main():
         else:
             print(json.dumps(result, indent=2, sort_keys=True))
         return 0
-    except (OSError, ValueError, json.JSONDecodeError, ReceiptError) as error:
+    except (OSError, ValueError, TypeError) as error:
         print(f"receipt error: {error}", file=sys.stderr)
         return 1
 
