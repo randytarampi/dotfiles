@@ -232,6 +232,7 @@ The companion stamps predate the current shared guidance and still describe stas
 | 15 | configure-litellm | run_onchange | Separate LiteLLM loopback gateway; after MCP and before managed clients | `DOTFILES_RUN_LITELLM_SETUP` (default `0`) |
 | 16 | configure-opencode | run_onchange | OpenCode tier, models, voice | `DOTFILES_RUN_OPENCODE_SETUP` |
 | 18 | configure-pi | run_onchange | Pi providers, subagents, MCP, and skills | `DOTFILES_RUN_PI_SETUP` |
+| — | [context_mode_native.py](../scripts/lib/context_mode_native.py) | configure-all.sh (final step) | Upstream native hooks, MCP and bundled skills for detected Context Mode clients; skipped in project mode, `--dry-run` only plans | `DOTFILES_RUN_CONTEXT_MODE_SETUP` |
 | 10, 18 | install/configure-cortex | run_onchange | Snowflake Cortex Code CLI and native config | `DOTFILES_RUN_CORTEX_SETUP` |
 | 17 | configure-mozart-router | run_onchange | Mozart router config | `DOTFILES_RUN_MOZART_SETUP` |
 | 19 | configure-codegraph | run_onchange | CodeGraph MCP registration | `DOTFILES_RUN_CODEGRAPH_SETUP` |

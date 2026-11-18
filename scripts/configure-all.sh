@@ -125,7 +125,7 @@ IFS=',' read -ra _skip_list <<<"$SKIP_STEPS"
 # empty array as unset under set -u; CI runs with system bash 3.2.
 for _skip in ${_skip_list[@]+"${_skip_list[@]}"}; do
   case "$_skip" in
-  cleanup | npm-packages | secrets | aws | junie | mcps | opencode | pi | cortex | meridian | codex | mozart | agent-guidance | codegraph | codegraph-indexes | ollama-daemon | skills | ddns | caddy | paseo-web | openwebui | litellm | opencode-restart | "") ;;
+  cleanup | npm-packages | secrets | aws | junie | mcps | opencode | pi | cortex | meridian | codex | mozart | agent-guidance | codegraph | codegraph-indexes | ollama-daemon | skills | context-mode | ddns | caddy | paseo-web | openwebui | litellm | opencode-restart | "") ;;
   *)
     printf 'Error: unknown skip step: %s\n' "$_skip" >&2
     exit 2
@@ -693,6 +693,18 @@ elif ! step_skipped opencode-restart && [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" =
   ok "OpenCode Web restarted."
 elif [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" == "1" && "$OC_SUCCESS" == "0" ]]; then
   warn "Skipping OpenCode Web restart (config step failed or was skipped)"
+fi
+
+# Final phase: the earlier MCP, Codex and skills writers may rewrite native
+# agent files. Reconcile upstream Context Mode hooks and bundled skills only
+# after every other config writer has finished.
+if [[ "$CONFIG_MODE" == "global" ]] && ! step_skipped context-mode &&
+  [[ "${DOTFILES_RUN_CONTEXT_MODE_SETUP:-0}" == "1" ]]; then
+  _context_mode_args=()
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    _context_mode_args+=(--dry-run)
+  fi
+  run_step "Context Mode native client setup" python3 "$LIB_DIR/context_mode_native.py" ${_context_mode_args[@]+"${_context_mode_args[@]}"}
 fi
 
 if [[ "$FAILURES" -gt 0 ]]; then

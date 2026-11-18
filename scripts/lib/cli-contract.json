@@ -401,6 +401,7 @@
         "configure-ddns.py",
         "configure-caddy.py",
         "configure-pi.py",
+        "context_mode_native.py",
         "install-cortex.sh",
         "configure-cortex.py"
       ]
@@ -1548,6 +1549,21 @@
         "--help",
         "--no-backup",
         "--source-dir"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/lib/context_mode_native.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "failure_policy": "fail",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
       ],
       "positional_operand": null,
       "child_scripts": []

@@ -87,6 +87,10 @@ For `local*` presets, `moe_codegen_reuse=True` is passed to the resolver. When t
 
 For local models, Pi advertises the minimum of the native context window (when known) and the client cap. When native context is unknown, the fallback window is 32768. The default client cap is 131072 (also the Ollama client cap when `OLLAMA_CONTEXT_LENGTH` is unset or invalid). Model `maxTokens` is derived as `max(4096, min(32768, window - 8192))`; it is not a blanket fixed value. Tier switching also passes the selected local profile family through to Pi.
 
+## Context Mode
+
+When `DOTFILES_RUN_CONTEXT_MODE_SETUP=1`, `configure-pi.py` includes the upstream `npm:context-mode` native package alongside `pi-mcp-adapter`, `pi-subagents`, Plannotator, rpiv extensions and VibeGuard. Pi loads Context Mode's hooks and `ctx_*` tools in-process; no second MCP registration is needed. This is the same declarative package lane and existing setup gate as every other Pi extension. See [Context Mode](context-mode.md) for the full cross-agent architecture and verification.
+
 ## Managed preference defaults
 
 Generate a detached global saved profile with `configure-pi.py --preset anthropic --profiles-only`. This offline mode reads the shared registry and writes only an unselected profile and its private provenance record. It does not inspect or change active settings, models, auth or packages. `--dry-run` writes nothing. Local presets with unresolved model placeholders are refused rather than emitted as incomplete assignments. Only preset selection, global mode and `--dry-run` apply in this mode. Explicit discovery, fallback, skip and model-override flags are usage errors (exit 2), as is `--no-backup`: exclusive creation never replaces a profile or creates a backup. Dry-run validates existing private leaf directories without creating directories or changing permissions.
