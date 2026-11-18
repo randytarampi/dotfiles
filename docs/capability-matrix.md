@@ -26,6 +26,17 @@ ChatGPT Desktop Chat and Work are distinct from the standalone Codex CLI and hav
 
 Claude Desktop has a secret-free export scaffold (`scripts/export-claude-desktop-gateway.py`). The owner also wrote a backed-up native gateway configuration and relaunched the installed app; an independent dedicated-key `/v1/messages` gateway-wire request succeeded, but the third-party inference panel **failed to load**. Chat, Cowork and Code GUI tasks are all **NOT RUN**; [#209](https://github.com/randytarampi/dotfiles/issues/209) remains open. This is not Claude CLI acceptance. Other independent tool families are [Gemini #210](https://github.com/randytarampi/dotfiles/issues/210), [Hermes #217](https://github.com/randytarampi/dotfiles/issues/217) (closed after a selected gateway chat task; auxiliary tasks not separately proven), [Copilot CLI #218](https://github.com/randytarampi/dotfiles/issues/218) and [Cursor #219](https://github.com/randytarampi/dotfiles/issues/219) (both closed with owner-accepted versioned unsupported native routes), and [VS Code #220](https://github.com/randytarampi/dotfiles/issues/220) (open).
 
+## Context Mode
+
+Context Mode is an opt-in, default-off native context-management layer (`DOTFILES_RUN_CONTEXT_MODE_SETUP=0`), not a replacement for DCP, Basic Memory, CodeGraph or Context7. Source integration is recorded here; no installed-host acceptance has been run. See [Context Mode](context-mode.md).
+
+| Client | Managed surface | Registration path |
+|---|---|---|
+| opencode | `context-mode@latest` plugin; DCP keeps automatic compaction ownership | manifest + generator; `ctx_*` approvals emitted unconditionally |
+| pi | `npm:context-mode` native package | `configure-pi.py` package list |
+| claude-code, codex, gemini, qwen, copilot-cli, vscode, kiro, zcode, omp | upstream hooks, MCP and bundled skills | `scripts/lib/context_mode_native.py` after every other config writer |
+| claude desktop, codex desktop, cursor, junie, jetbrains/intellij, antigravity, cline, cortex, open-webui, omlx | none; their existing providers, MCP, skills and guidance stay authoritative | not a native upstream Context Mode target; do not fake it with a generic MCP entry |
+
 ## Tier families and service lanes
 
 - The registry contains 17 tiers: three local resolution profiles (`local-quiet`, `local`, `local-loud`) plus standalone `local-solo`; see [tiers.md](tiers.md) for the canonical table. The verifier derives the count from the registry.

@@ -1218,6 +1218,12 @@ def main():
             "npm:@juicesharp/rpiv-voice",
             "npm:@juicesharp/rpiv-i18n",
             "npm:@xzzpig/pi-vibeguard",
+            # Context Mode is a native Pi extension, not a second MCP server.
+            *(
+                ["npm:context-mode"]
+                if os.environ.get("DOTFILES_RUN_CONTEXT_MODE_SETUP", "0") == "1"
+                else []
+            ),
         ],
         "skills": ["~/.pi/agent/skills", ".pi/skills"],
         "extensions": [".pi/extensions"],
