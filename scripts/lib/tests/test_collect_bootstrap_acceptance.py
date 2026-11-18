@@ -28,7 +28,10 @@ def test_inspect_shape_and_validation():
     [
         (lambda r: r.update(schema_version=2), "schema_version"),
         (lambda r: r.update(source_sha="bad"), "source_sha"),
-        (lambda r: r["host"].update(cpu_model="unknown"), "cpu_model"),
+        (
+            lambda r: r["stages"]["deploy"].update(source="/Users/private/.ssh/id_rsa"),
+            "stage source",
+        ),
         (lambda r: r["stages"]["verify"].update(outcome="maybe"), "outcome"),
         (
             lambda r: r["stages"]["verify"].update(outcome="pass", exit_code=1),
@@ -134,3 +137,59 @@ def test_executable_type_sniffs_magic_bytes(tmp_path):
         assert collector.executable_type(target) == expected
     assert collector.executable_type(tmp_path / "absent") == "unknown"
     assert collector.executable_type("") == "unknown"
+
+def test_unknown_cpu_model_is_valid_on_windows_and_arm_macs():
+    result = receipt()
+    result["host"]["cpu_model"] = "unknown"
+    assert collector.validate(result)
+
+
+def test_record_rejects_private_values_even_without_secret_field_names(tmp_path):
+    record = tmp_path / "record.json"
+    record.write_text(
+        json.dumps({
+            "stages": {
+                "deploy": {
+                    "outcome": "pass",
+                    "exit_code": 0,
+                    "source": "manual",
+                    "notes": "/Users/tester/.ssh/id_rsa",
+                }
+            }
+        })
+    )
+    with pytest.raises(collector.ReceiptError, match="personal path"):
+        collector.merge_record(receipt(), record)
+
+
+def test_stage_record_rejects_paths_and_invalid_attempt_shapes(tmp_path):
+    record = tmp_path / "record.json"
+    record.write_text(
+        json.dumps({"stages": {"deploy": {"source": "/home/operator/log.txt"}}})
+    )
+    with pytest.raises(collector.ReceiptError, match="personal path"):
+        collector.merge_record(receipt(), record)
+    record.write_text(json.dumps({"stages": {"deploy": ["bad attempt"]}}))
+    with pytest.raises(collector.ReceiptError, match="attempt"):
+        collector.merge_record(receipt(), record)
+
+
+def test_inspect_with_unknown_cpu_model_still_validates(monkeypatch):
+    monkeypatch.setattr(collector, "_cpu_model", lambda _: "unknown")
+    result = collector.inspect("unknown", ".", "a" * 40, [])
+    assert collector.validate(result)
+
+
+def test_version_output_cannot_contain_a_home_path(tmp_path, monkeypatch):
+    fake = tmp_path / "private-version-tool"
+    fake.write_text("#!/bin/sh\\nprintf '/Users/private/.ssh/id_rsa\\n'\\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ.get("PATH", ""))
+    assert collector.tool_version("private-version-tool") == "redacted"
+
+
+def test_imported_stage_must_have_only_declared_fields():
+    result = receipt()
+    result["stages"]["deploy"]["notes"] = "unreviewed"
+    with pytest.raises(collector.ReceiptError, match="stage fields"):
+        collector.validate(result)
