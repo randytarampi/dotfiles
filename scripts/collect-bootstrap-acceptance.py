@@ -11,7 +11,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -45,71 +44,104 @@ def path_class(path):
     return "other"
 
 
-def host_facts():
-    system = platform.system()
-    os_id = os_version = os_build = "unknown"
+VERSION_TIMEOUT_SECONDS = 5
+VERSION_MAX_CHARS = 120
+
+
+def _command_output(command):
+    """Run a fixed, read-only command and return its trimmed output.
+
+    The executable is resolved through ``shutil.which`` so the invocation uses
+    an absolute path, and no shell is involved. A missing or failing tool is not
+    an error; callers record ``unknown``.
+    """
+    resolved = shutil.which(command[0])
+    if not resolved:
+        return None
+    try:
+        result = subprocess.run(
+            [resolved, *command[1:]],
+            capture_output=True,
+            text=True,
+            timeout=VERSION_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return (result.stdout or result.stderr or "").strip()
+
+
+def _linux_facts():
+    os_id = os_version = "unknown"
+    try:
+        for line in Path("/etc/os-release").read_text().splitlines():
+            key, sep, value = line.partition("=")
+            if not sep:
+                continue
+            if key == "ID":
+                os_id = value.strip("\"'")
+            elif key == "VERSION_ID":
+                os_version = value.strip("\"'")
+    except OSError:
+        pass
+    return os_id, os_version, "unknown"
+
+
+def _darwin_facts():
+    os_version = os_build = "unknown"
+    data = _command_output(["sw_vers"]) or ""
+    for line in data.splitlines():
+        key, _, value = line.partition(":")
+        if key.strip() == "ProductVersion":
+            os_version = value.strip()
+        elif key.strip() == "BuildVersion":
+            os_build = value.strip()
+    return "macos", os_version, os_build
+
+
+def _cpu_model(system):
+    if system == "Darwin":
+        return (
+            _command_output(["sysctl", "-n", "machdep.cpu.brand_string"]) or "unknown"
+        )
     if system == "Linux":
         try:
-            for line in Path("/etc/os-release").read_text().splitlines():
-                key, sep, value = line.partition("=")
-                if sep and key in ("ID", "VERSION_ID"):
-                    if key == "ID":
-                        os_id = value.strip("\"'")
-                    else:
-                        os_version = value.strip("\"'")
-        except OSError:
-            pass
-    elif system == "Darwin":
-        try:
-            data = subprocess.check_output(
-                ["sw_vers"], text=True, stderr=subprocess.DEVNULL
-            )
-            for line in data.splitlines():
-                key, _, value = line.partition(":")
-                if key.strip() == "ProductVersion":
-                    os_version = value.strip()
-                if key.strip() == "BuildVersion":
-                    os_build = value.strip()
-            os_id = "macos"
-        except (OSError, subprocess.SubprocessError):
-            pass
-    elif system == "Windows":
-        os_id = "windows"
-        os_version = safe_text(platform.version())
-    kernel = (
-        safe_text(platform.release())
-        if system in ("Linux", "Darwin", "Windows")
-        else "unknown"
-    )
-    cpu = "unknown"
-    try:
-        if system == "Darwin":
-            cpu = (
-                subprocess.check_output(
-                    ["sysctl", "-n", "machdep.cpu.brand_string"],
-                    text=True,
-                    stderr=subprocess.DEVNULL,
-                ).strip()
-                or "unknown"
-            )
-        elif system == "Linux":
             for line in Path("/proc/cpuinfo").read_text().splitlines():
                 if line.lower().startswith(("model name", "hardware")):
-                    cpu = line.split(":", 1)[-1].strip() or "unknown"
-                    break
-    except (OSError, subprocess.SubprocessError):
-        pass
+                    return line.split(":", 1)[-1].strip() or "unknown"
+        except OSError:
+            return "unknown"
+    return "unknown"
+
+
+def host_facts():
+    system = platform.system()
+    if system == "Linux":
+        os_id, os_version, os_build = _linux_facts()
+    elif system == "Darwin":
+        os_id, os_version, os_build = _darwin_facts()
+    elif system == "Windows":
+        os_id, os_version, os_build = (
+            "windows",
+            safe_text(platform.version()),
+            "unknown",
+        )
+    else:
+        os_id = os_version = os_build = "unknown"
     return {
         "os_id": os_id,
         "os_version": os_version,
         "os_build": os_build,
-        "kernel": kernel,
+        "kernel": (
+            safe_text(platform.release())
+            if system in ("Linux", "Darwin", "Windows")
+            else "unknown"
+        ),
         "architecture": safe_text(platform.machine()),
-        "cpu_model": cpu,
+        "cpu_model": _cpu_model(system),
     }
 
 
-VERSION_TIMEOUT_SECONDS = 5
 VERSION_MAX_CHARS = 120
 
 
@@ -119,17 +151,8 @@ def tool_version(name):
     Only ``--version`` is ever executed. No installer, service manager, sudo,
     deploy or hypervisor is invoked, and a probe failure is never an error.
     """
-    try:
-        result = subprocess.run(
-            [name, "--version"],
-            capture_output=True,
-            text=True,
-            timeout=VERSION_TIMEOUT_SECONDS,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return "unknown"
-    lines = (result.stdout or result.stderr or "").strip().splitlines()
+    output = _command_output([name, "--version"]) or ""
+    lines = output.splitlines()
     if not lines:
         return "unknown"
     return lines[0][:VERSION_MAX_CHARS] or "unknown"
