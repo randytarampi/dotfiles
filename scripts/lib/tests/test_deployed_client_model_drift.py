@@ -168,7 +168,7 @@ def test_opencode_native_provider_without_explicit_url_is_not_called_malformed(
     path = tmp_path / ".config/opencode/opencode.json"
     path.parent.mkdir(parents=True)
     path.write_text(
-        json.dumps({"provider": {"openai": {"models": {"gpt-6.1-sol": {}}}}})
+        json.dumps({"provider": {"openai": {"models": {"gpt-6.2-sol": {}}}}})
     )
     monkeypatch.setattr(
         drift,

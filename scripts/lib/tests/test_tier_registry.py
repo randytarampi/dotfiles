@@ -234,11 +234,11 @@ class TierRegistryTests(unittest.TestCase):
     def test_openai_primary_generation_mapping(self):
         data = registry()
         expected = {
-            "plus": ("openai/gpt-6.1-terra", "openai/gpt-6.1-sol"),
-            "omo-slim-openai": ("openai/gpt-6.1-sol", "openai/gpt-6.1-sol"),
+            "plus": ("openai/gpt-6.1-terra", "openai/gpt-6.2-sol"),
+            "omo-slim-openai": ("openai/gpt-6.2-sol", "openai/gpt-6.2-sol"),
             "omo-slim-thirty-dollars": (
-                "openai/gpt-6.1-sol",
-                "openai/gpt-6-astra",
+                "openai/gpt-6.2-sol",
+                "openai/gpt-6.2-astra",
             ),
         }
         for tier, (orchestrator, oracle) in expected.items():
@@ -269,11 +269,11 @@ class TierRegistryTests(unittest.TestCase):
         self.assertEqual(data["presets"]["plus"]["orchestrator"]["variant"], "high")
         self.assertEqual(
             data["_tiers"]["pro-plus"]["fallback"]["orchestrator"],
-            ["openai/gpt-6.1-sol"],
+            ["openai/gpt-6.2-sol"],
         )
         self.assertEqual(
             data["_tiers"]["pro-plus-anthropic"]["fallback"]["orchestrator"],
-            ["openai/gpt-6.1-sol", "ollama-cloud/glm-5.3-flash"],
+            ["openai/gpt-6.2-sol", "ollama-cloud/glm-5.3-flash"],
         )
         self.assertEqual(
             data["_tiers"]["pro-plus-anthropic"]["fallback"]["designer"],
@@ -290,11 +290,11 @@ class TierRegistryTests(unittest.TestCase):
             )
             self.assertEqual(
                 data["council"]["presets"][tier]["beta"]["model"],
-                "openai/gpt-6-astra",
+                "openai/gpt-6.2-astra",
             )
             self.assertEqual(
                 data["_tiers"][tier]["council"]["presets"][tier]["beta"]["model"],
-                "openai/gpt-6-astra",
+                "openai/gpt-6.2-astra",
             )
         self.assertEqual(
             data["_tiers"]["omo-slim-opencode-zen-free"]["fallback"]["orchestrator"],
@@ -320,12 +320,12 @@ class TierRegistryTests(unittest.TestCase):
         self.assertEqual(
             groups["anthropic-sonnet"]["primaryModel"], "claude-sonnet-5-5"
         )
-        self.assertEqual(groups["openai-sol"]["primaryModel"], "gpt-6.1-sol")
+        self.assertEqual(groups["openai-sol"]["primaryModel"], "gpt-6.2-sol")
         self.assertEqual(groups["openai-luna"]["primaryModel"], "gpt-6-luna")
         self.assertNotIn("openai-gpt-6-sol", groups)
         self.assertNotIn("litellm-openai-gpt-6-sol", groups)
         self.assertNotIn("openai-gpt-6-luna", groups)
-        self.assertNotIn("openai-gpt-6.1-sol", groups)
+        self.assertNotIn("openai-gpt-6.2-sol", groups)
         self.assertNotIn("meridian-opus", groups)
         self.assertEqual(groups["anthropic-opus"]["primaryModel"], "claude-opus-5-5")
 

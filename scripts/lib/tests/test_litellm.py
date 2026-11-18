@@ -1592,7 +1592,7 @@ def test_openai_api_key_transport_takes_precedence_over_oauth(tmp_path, monkeypa
 
 
 def test_openai_service_lanes_are_direct_key_only_and_gate_default_off(monkeypatch):
-    models = {"gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"}
+    models = {"gpt-6.2-sol", "gpt-6.2-astra", "gpt-6-luna"}
     monkeypatch.setattr(
         litellm_config,
         "_registry_model_refs",
@@ -1638,12 +1638,12 @@ def test_openai_service_lane_unknown_not_expanded_and_collision_fails(monkeypatc
         "-flex" in item["model_name"] for item in litellm_config.compute_model_list(env)
     )
     monkeypatch.setattr(
-        litellm_config, "_registry_model_refs", lambda: {"openai/gpt-6.1-sol"}
+        litellm_config, "_registry_model_refs", lambda: {"openai/gpt-6.2-sol"}
     )
     monkeypatch.setattr(
         litellm_config,
         "_live_catalogue",
-        lambda *_args: ["gpt-6.1-sol", "gpt-6.1-sol-flex"],
+        lambda *_args: ["gpt-6.2-sol", "gpt-6.2-sol-flex"],
     )
     with pytest.raises(ValueError, match="service-lane alias collision"):
         litellm_config.compute_model_list(env)
@@ -1655,7 +1655,7 @@ def test_service_lane_rates_and_gate_off_render(monkeypatch):
     )
     rates = json.loads(rates_path.read_text())["models"]
     standard = {
-        "gpt-6-astra": (1e-5, 5e-5, 1e-6, 1.25e-5),
+        "gpt-6.2-astra": (1e-5, 5e-5, 1e-6, 1.25e-5),
         "gpt-6-luna": (1e-7, 5e-7, 1e-8, 1.25e-7),
     }
     rate_keys = (
@@ -1666,7 +1666,7 @@ def test_service_lane_rates_and_gate_off_render(monkeypatch):
     )
     sol = (2e-6, 1e-5, 1e-7, 2.5e-6)
     for suffix, multiplier in (("flex", 0.5), ("fast", 2.0)):
-        assert tuple(rates[f"gpt-6.1-sol-{suffix}"][key] for key in rate_keys) == tuple(
+        assert tuple(rates[f"gpt-6.2-sol-{suffix}"][key] for key in rate_keys) == tuple(
             value * multiplier for value in sol
         )
     for model, values in standard.items():

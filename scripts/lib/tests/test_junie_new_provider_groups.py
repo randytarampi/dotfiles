@@ -38,7 +38,7 @@ def test_groups_have_supported_direct_transport_and_permanent_compatibility():
         assert name in MODULE.LITELLM_ROUTED_PROVIDERS
     assert cfg["compatibility"] == {
         "openai-gpt-6-luna": "openai-luna",
-        "openai-gpt-6.1-sol": "openai-sol",
+        "openai-gpt-6.2-sol": "openai-sol",
         "meridian-opus": "anthropic-opus",
         "meridian-sonnet": "anthropic-sonnet",
         "meridian-haiku": "anthropic-haiku",
