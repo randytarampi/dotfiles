@@ -11,6 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+PATH_OVERRIDE = "--path override"
+
 MACHINES = {
     0x8664: "AMD64",
     0xAA64: "ARM64",
@@ -93,7 +95,7 @@ def executable_path(name):
 
 def resolve_bash(overrides):
     if "bash" in overrides:
-        return {"path": overrides["bash"], "resolution": "--path override"}
+        return {"path": overrides["bash"], "resolution": PATH_OVERRIDE}
     launcher, reason = executable_path("bash")
     if not launcher:
         return {"path": None, "resolution": reason}
@@ -117,7 +119,7 @@ def resolve_bash(overrides):
 
 def resolve_tool(name, overrides):
     if name in overrides:
-        return {"path": overrides[name], "resolution": "--path override"}
+        return {"path": overrides[name], "resolution": PATH_OVERRIDE}
     path, resolution = executable_path(name)
     return {"path": path, "resolution": resolution}
 
@@ -182,7 +184,7 @@ def build_report(overrides):
     chezmoi = resolve_tool("chezmoi", overrides)
     python = {
         "path": overrides.get("python", sys.executable),
-        "resolution": "--path override" if "python" in overrides else "sys.executable",
+        "resolution": PATH_OVERRIDE if "python" in overrides else "sys.executable",
     }
     return {
         "bash": entry(bash["path"], bash["resolution"]),
@@ -193,6 +195,19 @@ def build_report(overrides):
         "chezmoi": entry(chezmoi["path"], chezmoi["resolution"]),
         "python": entry(python["path"], python["resolution"]),
     }
+
+
+def parse_overrides(parser, values):
+    """Turn repeated NAME=PATH arguments into an override map."""
+    overrides = {}
+    for value in values:
+        if "=" not in value:
+            parser.error("--path must be NAME=PATH")
+        name, path = value.split("=", 1)
+        if name not in {"bash", "make", "chezmoi", "python"} or not path:
+            parser.error("--path requires a supported name and nonempty path")
+        overrides[name] = path
+    return overrides
 
 
 def main():
@@ -206,14 +221,7 @@ def main():
         help="override a resolved executable path (repeatable)",
     )
     args = parser.parse_args()
-    overrides = {}
-    for value in args.path:
-        if "=" not in value:
-            parser.error("--path must be NAME=PATH")
-        name, path = value.split("=", 1)
-        if name not in {"bash", "make", "chezmoi", "python"} or not path:
-            parser.error("--path requires a supported name and nonempty path")
-        overrides[name] = path
+    overrides = parse_overrides(parser, args.path)
     try:
         report = build_report(overrides)
         if args.json:
