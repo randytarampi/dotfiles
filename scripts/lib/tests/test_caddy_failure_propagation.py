@@ -24,6 +24,9 @@ def _branches():
 
 def test_darwin_required_steps_are_not_warning_only():
     darwin, _ = _branches()
+    # Recovery may warn when trying to restart the previous service. Only
+    # the selected/authorized apply path must propagate every required error.
+    apply = darwin.split("trap caddy_finish EXIT", 1)[-1]
     for swallowed in (
         '"$BREW_BIN" install caddy || warn',
         'configure-caddy.py" || warn',
@@ -31,7 +34,7 @@ def test_darwin_required_steps_are_not_warning_only():
         'caddy_validate "$CADDYFILE_PATH" || warn',
         'caddy_reload "$CADDYFILE_PATH" || warn',
     ):
-        assert swallowed not in darwin
+        assert swallowed not in apply
     # The steps must still run; only their failure handling changed.
     assert 'launchctl bootstrap system/ "$PLIST_PATH"' in darwin
     assert 'caddy_validate "$CADDYFILE_PATH"' in darwin
