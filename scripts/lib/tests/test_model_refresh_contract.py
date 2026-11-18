@@ -132,10 +132,10 @@ def test_webui_and_litellm_upgrade_pins_are_coherent():
     litellm = (ROOT / ".chezmoiscripts/run_onchange_15-litellm.sh.tmpl").read_text()
     caddy = (ROOT / ".chezmoiscripts/run_onchange_24-install-caddy.sh.tmpl").read_text()
     template = (ROOT / "dot_dotfiles/shell/.env.example").read_text()
-    assert 'DOTFILES_OPENWEBUI_VERSION:-0.13.4' in webui
-    assert 'DOTFILES_OPENWEBUI_TERMINAL_VERSION:-0.17.20' in webui
-    assert 'DOTFILES_OPENWEBUI_COMPUTER_VERSION:-0.9.21' in webui
-    assert 'DOTFILES_LITELLM_VERSION:-1.108.11' in litellm
+    assert "DOTFILES_OPENWEBUI_VERSION:-0.13.4" in webui
+    assert "DOTFILES_OPENWEBUI_TERMINAL_VERSION:-0.17.20" in webui
+    assert "DOTFILES_OPENWEBUI_COMPUTER_VERSION:-0.9.21" in webui
+    assert "DOTFILES_LITELLM_VERSION:-1.108.11" in litellm
     assert 'DOTFILES_OPENWEBUI_VERSION" | default "0.13.4"' in caddy
     for version in ("0.13.4", "0.17.20", "0.9.21", "1.108.11"):
         assert version in template
