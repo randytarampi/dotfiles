@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import json
+import math
 import os
 import platform
 import re
@@ -19,6 +20,13 @@ OUTCOMES = {"pass", "fail", "not_run", "not_applicable", "unknown"}
 TOOLS = ("git", "python3", "python", "make", "brew", "winget", "chezmoi")
 SECRET_KEY = re.compile(r"key|token|secret|password|authorization", re.I)
 SHA = re.compile(r"^[0-9a-f]{40,64}$")
+# Receipts should not expose user-specific paths or credential-bearing strings.
+SENSITIVE_TEXT = re.compile(
+    r"(?:/Users/|/home/|/run/secrets/|[A-Za-z]:[\\/]Users[\\/]|"
+    r"/[a-z]/Users/|\b(?:api[_-]?key|token|password|authorization)\s*[:=])",
+    re.I,
+)
+STAGE_SOURCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$")
 
 
 class ReceiptError(ValueError):
@@ -142,8 +150,6 @@ def host_facts():
     }
 
 
-VERSION_MAX_CHARS = 120
-
 
 def tool_version(name):
     """Return the tool's first version line, or ``unknown``.
@@ -155,7 +161,8 @@ def tool_version(name):
     lines = output.splitlines()
     if not lines:
         return "unknown"
-    return lines[0][:VERSION_MAX_CHARS] or "unknown"
+    first = lines[0][:VERSION_MAX_CHARS]
+    return "redacted" if SENSITIVE_TEXT.search(first) else first or "unknown"
 
 
 def executable_type(path):
@@ -195,6 +202,7 @@ def inspect(kind, repo, source_sha, manifests):
                 cwd=repo,
                 text=True,
                 stderr=subprocess.DEVNULL,
+                timeout=VERSION_TIMEOUT_SECONDS,
             ).strip()
         except (OSError, subprocess.SubprocessError):
             source_sha = "unknown"
@@ -244,6 +252,8 @@ def reject_secrets(value, where="root"):
     elif isinstance(value, list):
         for child in value:
             reject_secrets(child, where)
+    elif isinstance(value, str) and SENSITIVE_TEXT.search(value):
+        raise ReceiptError("receipt contains a credential-like value or personal path")
 
 
 def validate(receipt, expected_sha=None):
@@ -286,8 +296,9 @@ def validate(receipt, expected_sha=None):
     }
     if set(receipt["host"]) != hostkeys:
         raise ReceiptError("invalid host fields")
-    if receipt["host"]["cpu_model"] == "unknown":
-        raise ReceiptError("host.cpu_model is unknown")
+    # CPU models are not universally available (notably Windows and ARM Macs).
+    if any(not isinstance(v, str) or not v or len(v) > 200 for v in receipt["host"].values()):
+        raise ReceiptError("invalid host fact value")
     if not isinstance(receipt["tools"], list):
         raise ReceiptError("tools must be an array")
     for tool in receipt["tools"]:
@@ -302,13 +313,29 @@ def validate(receipt, expected_sha=None):
             "unknown",
         }:
             raise ReceiptError("invalid tool path_class")
-    if set(receipt["stages"]) != set(STAGES):
+    if not isinstance(receipt["stages"], dict) or set(receipt["stages"]) != set(STAGES):
         raise ReceiptError("invalid stages")
     for item in receipt["stages"].values():
-        if item.get("outcome") not in OUTCOMES:
+        if not isinstance(item, dict) or set(item) != {
+            "outcome", "exit_code", "source", "elapsed_seconds"
+        }:
+            raise ReceiptError("invalid stage fields")
+        if item["outcome"] not in OUTCOMES:
             raise ReceiptError("invalid stage outcome")
-        if item["outcome"] == "pass" and item.get("exit_code") != 0:
+        exit_code = item["exit_code"]
+        if exit_code is not None and type(exit_code) is not int:
+            raise ReceiptError("invalid exit_code")
+        if item["outcome"] == "pass" and exit_code != 0:
             raise ReceiptError("pass requires exit_code 0")
+        if not isinstance(item["source"], str) or not STAGE_SOURCE.fullmatch(item["source"]):
+            raise ReceiptError("invalid stage source (use a short label, not a path)")
+        elapsed = item["elapsed_seconds"]
+        if elapsed is not None and (
+            type(elapsed) not in (int, float)
+            or not math.isfinite(elapsed)
+            or elapsed < 0
+        ):
+            raise ReceiptError("invalid elapsed_seconds")
     if receipt["privacy"] != {"secrets_included": False, "raw_paths_included": False}:
         raise ReceiptError("privacy boundary violated")
     reject_secrets(receipt, "receipt")
@@ -319,10 +346,14 @@ def merge_record(receipt, path):
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     reject_secrets(data)
     stages = data.get("stages", data)
+    if not isinstance(stages, dict):
+        raise ReceiptError("record stages must be an object")
     for name in STAGES:
         if name in stages:
             value = stages[name]
             if isinstance(value, list):
+                if not all(isinstance(attempt, dict) for attempt in value):
+                    raise ReceiptError("each recorded attempt must be an object")
                 # Multiple attempts count as pass only if every attempt passed.
                 value = (
                     value[-1]
@@ -332,6 +363,8 @@ def merge_record(receipt, path):
                         value[-1] if value else stage(),
                     )
                 )
+            if not isinstance(value, dict):
+                raise ReceiptError("recorded stage must be an object")
             receipt["stages"][name] = {**stage(), **value}
     return receipt
 
