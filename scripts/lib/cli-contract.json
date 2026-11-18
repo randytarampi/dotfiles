@@ -91,6 +91,21 @@
   },
   "scripts": [
     {
+      "path": "scripts/report-executable-architecture.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--json",
+        "--path"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/filter-brewfile.py",
       "capabilities": [
         "public",

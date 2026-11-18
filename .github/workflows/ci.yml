@@ -200,6 +200,10 @@ jobs:
         run: |
           curl -fsSL https://get.chezmoi.io | bash -s -- -b "$RUNNER_TEMP/bin" -t v2.72.2
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Report Windows deployment executable architectures
+        if: runner.os == 'Windows'
+        shell: bash
+        run: python scripts/report-executable-architecture.py --json
       - name: Configure chezmoi script interpreter (Windows)
         if: runner.os == 'Windows'
         shell: bash
