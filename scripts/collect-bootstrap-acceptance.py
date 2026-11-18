@@ -319,7 +319,10 @@ def validate(receipt, expected_sha=None):
         raise ReceiptError("invalid stages")
     for item in receipt["stages"].values():
         if not isinstance(item, dict) or set(item) != {
-            "outcome", "exit_code", "source", "elapsed_seconds"
+            "outcome",
+            "exit_code",
+            "source",
+            "elapsed_seconds",
         }:
             raise ReceiptError("invalid stage fields")
         if item["outcome"] not in OUTCOMES:
