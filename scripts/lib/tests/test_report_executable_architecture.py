@@ -85,3 +85,43 @@ def test_windows_ci_architecture_step_and_required_gate_unchanged():
     assert "name: ci/required" in workflow
     assert "needs: [verify, deploy, bootstrap-smoke, bootstrap-networkless]" in workflow
     assert workflow.count("architecture:") >= 6
+
+
+def test_home_prefix_is_masked_in_report(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    binary = home / "bin" / "chezmoi"
+    binary.parent.mkdir()
+    binary.write_bytes(pe(0xAA64))
+    monkeypatch.setenv("HOME", str(home))
+    masked = REPORTER.display_path(binary)
+    assert masked.startswith("~/")
+    assert str(home) not in masked
+    assert REPORTER.display_path("/usr/bin/python") == "/usr/bin/python"
+
+
+def test_missing_path_reports_unknown_with_reason(tmp_path):
+    architecture, reason = REPORTER.pe_architecture(tmp_path / "absent.exe")
+    assert architecture == "unknown"
+    assert "cannot read executable" in reason
+
+
+def test_posix_shell_path_resolves_through_windows_form(tmp_path, monkeypatch):
+    """A Git Bash `/usr/bin/bash` must not become a permanent `unknown`."""
+    windows = tmp_path / "bash.exe"
+    windows.write_bytes(pe(0x8664))
+    monkeypatch.setattr(
+        REPORTER.shutil,
+        "which",
+        lambda name: "/usr/bin/cygpath" if name == "cygpath" else None,
+    )
+
+    def fake_run(command, **kwargs):
+        if command[:2] == ["cygpath", "-w"]:
+            return subprocess.CompletedProcess(command, 0, f"{windows}\n", "")
+        raise AssertionError(f"unexpected subprocess: {command}")
+
+    monkeypatch.setattr(REPORTER.subprocess, "run", fake_run)
+    architecture, reason = REPORTER.pe_architecture("/usr/bin/bash-msys-only")
+    assert architecture == "AMD64"
+    assert reason is None
