@@ -246,7 +246,7 @@ entries = build_hosts_entries(
 for entry in entries:
     print(entry)
 PY
-)"
+)" || die "Caddy host entry generation failed; previous configuration will be restored"
 
 if [[ -n "$HOSTS_ENTRIES" ]]; then
   {
