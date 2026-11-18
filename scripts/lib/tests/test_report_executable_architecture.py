@@ -78,7 +78,10 @@ def test_bash_launcher_not_reported_as_running_target(monkeypatch, tmp_path):
 def test_windows_ci_architecture_step_and_required_gate_unchanged():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "Report Windows deployment executable architectures" in workflow
-    assert 'python scripts/report-executable-architecture.py --json --path "bash=$BASH"' in workflow
+    assert (
+        'python scripts/report-executable-architecture.py --json --path "bash=$BASH"'
+        in workflow
+    )
     assert "name: ci/required" in workflow
     assert "needs: [verify, deploy, bootstrap-smoke, bootstrap-networkless]" in workflow
     assert workflow.count("architecture:") >= 6
@@ -122,6 +125,7 @@ def test_posix_shell_path_resolves_through_windows_form(tmp_path, monkeypatch):
     architecture, reason = REPORTER.pe_architecture("/usr/bin/bash-msys-only")
     assert architecture == "AMD64"
     assert reason is None
+
 
 def test_unresolved_shim_does_not_inherit_wrapper_architecture(tmp_path):
     shim = tmp_path / "make.exe"
