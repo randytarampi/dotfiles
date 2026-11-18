@@ -272,7 +272,10 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
       return
     fi
     local filtered
-    filtered="$(umask 077; mktemp)"
+    filtered="$(
+      umask 077
+      mktemp
+    )"
     if ! python3 "{{ .chezmoi.sourceDir }}/scripts/filter-brewfile.py" \
       --manifest "$file" \
       --out "$filtered" \
