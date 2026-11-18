@@ -160,3 +160,6 @@ After pulling changes that rename gates or restructure scripts:
 3. `make reset` — clear orphaned chezmoi script state (only needed after script renames)
 4. `make deploy` — full rebuild
 5. `make verify` — confirm everything is in order
+# Windows deployment executable architectures
+
+The Windows deploy job reports the PE machine type of the executable files used for `bash`, `make`, `chezmoi` and Python. It resolves Git Bash's running shell implementation instead of reporting the launcher, and reports Chocolatey's make shim separately from the target recorded in its adjacent `.shim` metadata. An unavailable or unparseable executable is reported as `unknown`; this diagnostic does not assert architecture compatibility or replace the Windows OS/CPU check.
