@@ -88,6 +88,8 @@ mkdir -p "$(dirname "$CADDYFILE_PATH")"
 CANDIDATE="$(mktemp "${CADDYFILE_PATH}.candidate.XXXXXX")"
 PREVIOUS_CADDYFILE=""
 PREVIOUS_PLIST=""
+PREVIOUS_HOSTS=""
+HOSTS_PUBLISHED=0
 PLIST_CANDIDATE=""
 CADDY_PUBLISHED=0
 # Failures after publication restore both on-disk files and attempt to restart
@@ -115,7 +117,10 @@ caddy_finish() {
     fi
     warn "Inspect sudo launchctl print system/com.caddy.proxy and effective routes; no new access mode is claimed"
   fi
-  rm -f -- "$CANDIDATE" "${PREVIOUS_CADDYFILE:-}" "${PREVIOUS_PLIST:-}" "${PLIST_CANDIDATE:-}"
+  if [[ "$status" -ne 0 && "$HOSTS_PUBLISHED" == "1" && -n "$PREVIOUS_HOSTS" ]]; then
+    cp -p "$PREVIOUS_HOSTS" /etc/hosts || warn "Could not restore previous /etc/hosts; manual recovery is required"
+  fi
+  rm -f -- "$CANDIDATE" "${PREVIOUS_CADDYFILE:-}" "${PREVIOUS_PLIST:-}" "${PREVIOUS_HOSTS:-}" "${PLIST_CANDIDATE:-}"
   exit "$status"
 }
 trap caddy_finish EXIT
@@ -208,6 +213,10 @@ info "Ensuring Caddy-served domains resolve in /etc/hosts..."
 # - lan/public: all domains and their opencode subdomains
 # macOS doesn't auto-resolve *.localhost subdomains or local.* domains, so add entries to /etc/hosts.
 HOSTS_FILE="/etc/hosts"
+# Preserve the full existing hosts file in case any subsequent step fails.
+PREVIOUS_HOSTS="$(mktemp "${HOSTS_FILE}.rollback.XXXXXX")"
+cp -p "$HOSTS_FILE" "$PREVIOUS_HOSTS"
+HOSTS_PUBLISHED=1
 MARKER="# dotfiles-caddy-managed"
 # Remove old managed entries (idempotent)
 if grep -Fq "$MARKER" "$HOSTS_FILE" 2>/dev/null; then
