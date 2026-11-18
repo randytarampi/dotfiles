@@ -38,6 +38,9 @@ def test_groups_have_supported_direct_transport_and_permanent_compatibility():
         assert name in MODULE.LITELLM_ROUTED_PROVIDERS
     assert cfg["compatibility"] == {
         "openai-gpt-6-luna": "openai-luna",
+        # The owner ruled the original six names permanent (2026-11-07); the
+        # GPT-6.2 refresh adds an alias instead of renaming the existing one.
+        "openai-gpt-6.1-sol": "openai-sol",
         "openai-gpt-6.2-sol": "openai-sol",
         "meridian-opus": "anthropic-opus",
         "meridian-sonnet": "anthropic-sonnet",

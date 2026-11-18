@@ -108,17 +108,26 @@ def test_kimi_pro_replaces_only_paid_kimi_seats():
 
 
 def test_gpt62_one_for_one_registry_migration_and_pricing():
-    paths = (
+    for path in (
         "configs/opencode/openai-models.json",
         "configs/opencode/oh-my-opencode-slim.json",
-        "configs/junie/model-groups.json",
-    )
-    for path in paths:
+    ):
         content = (ROOT / path).read_text(encoding="utf-8")
         assert "gpt-6.1-sol" not in content
         assert "gpt-6-astra" not in content
         assert "gpt-6.2-sol" in content
         assert "gpt-6.2-astra" in content
+    # Junie compatibility aliases are profile names, not model selections:
+    # check the assignments so a permanent alias can never mask a retired ID.
+    groups = load("configs/junie/model-groups.json")
+    retired = {"gpt-6.1-sol", "gpt-6-astra"}
+    for name, group in groups["groups"].items():
+        selected = {group.get("primaryModel"), group.get("fasterModel")} & retired
+        assert not selected, f"{name} still selects a retired model: {selected}"
+    assert groups["groups"]["openai-sol"]["primaryModel"] == "gpt-6.2-sol"
+    assert groups["groups"]["openai-astra"]["primaryModel"] == "gpt-6.2-astra"
+    assert groups["compatibility"]["openai-gpt-6.1-sol"] == "openai-sol"
+    assert groups["compatibility"]["openai-gpt-6.2-sol"] == "openai-sol"
     rates = load("configs/litellm/model-rates.json")["models"]
     assert isclose(rates["gpt-6.2-sol"]["input_cost_per_token"], 2e-6)
     assert isclose(rates["gpt-6.2-sol"]["output_cost_per_token"], 1e-5)
