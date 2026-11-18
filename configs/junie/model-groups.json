@@ -135,7 +135,7 @@
     },
     "openai-astra": {
       "provider": "openai",
-      "primaryModel": "gpt-6-astra"
+      "primaryModel": "gpt-6.2-astra"
     },
     "openai-luna": {
       "provider": "openai",
@@ -143,7 +143,7 @@
     },
     "openai-sol": {
       "provider": "openai",
-      "primaryModel": "gpt-6.1-sol"
+      "primaryModel": "gpt-6.2-sol"
     },
     "openai": {
       "provider": "openai",
@@ -232,7 +232,7 @@
   },
   "compatibility": {
     "openai-gpt-6-luna": "openai-luna",
-    "openai-gpt-6.1-sol": "openai-sol",
+    "openai-gpt-6.2-sol": "openai-sol",
     "meridian-opus": "anthropic-opus",
     "meridian-sonnet": "anthropic-sonnet",
     "meridian-haiku": "anthropic-haiku",

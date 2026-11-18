@@ -139,14 +139,14 @@ import litellm
 from litellm.utils import get_optional_params
 
 params = get_optional_params(
-    model="openai/gpt-6.1-sol",
+    model="openai/gpt-6.2-sol",
     custom_llm_provider="openai",
     drop_params=True,
     service_tier="flex",
 )
 if params.get("service_tier") != "flex":
     raise RuntimeError("service_tier was dropped with drop_params=True")
-info = litellm.get_model_info("gpt-6.1-sol")
+info = litellm.get_model_info("gpt-6.2-sol")
 print(json.dumps({
     "version": version("litellm"),
     "metadata_path": "top-level model_info" if isinstance(info, dict) else "unknown",

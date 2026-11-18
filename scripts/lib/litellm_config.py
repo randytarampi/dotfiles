@@ -95,7 +95,7 @@ def classify_free_route(model_id, host, route_source, role):
 
 OPENAI_SERVICE_LANES_ENV = "DOTFILES_USE_OPENAI_SERVICE_LANES"
 LITELLM_SETUP_GATE = "DOTFILES_RUN_LITELLM_SETUP=1"
-OPENAI_SERVICE_LANE_MODELS = {"gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"}
+OPENAI_SERVICE_LANE_MODELS = {"gpt-6.2-sol", "gpt-6.2-astra", "gpt-6-luna"}
 OPENROUTER_FREE_TWINS_ENV = "DOTFILES_LITELLM_INCLUDE_OPENROUTER_FREE_TWINS"
 
 # Cloud providers whose live /v1/models catalogue the generator enumerates
