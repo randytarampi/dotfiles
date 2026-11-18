@@ -202,6 +202,9 @@ jobs:
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Report Windows deployment executable architectures
         if: runner.os == 'Windows'
+        # Diagnostic only: an unavailable wrapper/PE file must not mask an
+        # otherwise valid first/second deploy or no-drift check.
+        continue-on-error: true
         shell: bash
         run: python scripts/report-executable-architecture.py --json --path "bash=$BASH"
       - name: Configure chezmoi script interpreter (Windows)
