@@ -138,6 +138,7 @@ def test_executable_type_sniffs_magic_bytes(tmp_path):
     assert collector.executable_type(tmp_path / "absent") == "unknown"
     assert collector.executable_type("") == "unknown"
 
+
 def test_unknown_cpu_model_is_valid_on_windows_and_arm_macs():
     result = receipt()
     result["host"]["cpu_model"] = "unknown"
@@ -147,16 +148,18 @@ def test_unknown_cpu_model_is_valid_on_windows_and_arm_macs():
 def test_record_rejects_private_values_even_without_secret_field_names(tmp_path):
     record = tmp_path / "record.json"
     record.write_text(
-        json.dumps({
-            "stages": {
-                "deploy": {
-                    "outcome": "pass",
-                    "exit_code": 0,
-                    "source": "manual",
-                    "notes": "/Users/tester/.ssh/id_rsa",
+        json.dumps(
+            {
+                "stages": {
+                    "deploy": {
+                        "outcome": "pass",
+                        "exit_code": 0,
+                        "source": "manual",
+                        "notes": "/Users/tester/.ssh/id_rsa",
+                    }
                 }
             }
-        })
+        )
     )
     with pytest.raises(collector.ReceiptError, match="personal path"):
         collector.merge_record(receipt(), record)
