@@ -4,31 +4,11 @@
 import argparse
 import json
 from pathlib import Path
-import re
 import sys
 
-ENTRY = re.compile(r'^(tap|brew|cask|npm|uv)\s+"([A-Za-z0-9@/_.+\-]+)"(?:\s*,\s*.+)?$')
-# A macOS-specific name deserves a separate qualification, but is not
-# declared impossible on Linux without actual endpoint/formula evidence.
-MACOS_NAMED_CANDIDATES = frozenset(
-    ("pinentry-mac", "carthage", "cocoapods", "ios-deploy", "wix/brew/applesimutils")
-)
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 
-
-def _classify(kind, name, ignored):
-    """Map one parsed directive to its report status."""
-    # Mirrors brew_bundle_filtered: DOTFILES_BREWFILE_IGNORE only removes
-    # brew/cask directives, so an ignored name is never bundled. Report it
-    # rather than dropping it silently; malformed source stays blocked.
-    if kind in ("brew", "cask") and name in ignored:
-        return "ignored_by_operator"
-    if kind == "cask":
-        return "blocked_linux_cask"
-    if kind == "brew" and name in MACOS_NAMED_CANDIDATES:
-        return "macos_named_needs_evidence"
-    if kind in ("npm", "uv"):
-        return "external_runtime_not_qualified"
-    return "needs_linux_formula_or_tap_evidence"
+from brewfile_directives import classify, parse_line  # noqa: E402
 
 
 def inspect(path, ignored=()):
@@ -41,19 +21,19 @@ def inspect(path, ignored=()):
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        found = ENTRY.fullmatch(line)
+        found = parse_line(line)
         if found is None:
             entries.append(
                 {"line": line_no, "kind": "invalid", "status": "blocked_syntax"}
             )
             continue
-        kind, name = found.groups()
+        kind, name = found
         entries.append(
             {
                 "line": line_no,
                 "kind": kind,
                 "name": name,
-                "status": _classify(kind, name, ignored),
+                "status": classify(kind, name, frozenset(ignored)),
             }
         )
     return {"manifest": str(file), "entries": entries}

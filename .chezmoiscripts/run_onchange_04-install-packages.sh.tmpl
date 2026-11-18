@@ -50,6 +50,8 @@ fi
 # scripts/lib/ollama_brew_preflight.sh: {{ include "scripts/lib/ollama_brew_preflight.sh" | sha256sum }}
 # scripts/lib/homebrew_bootstrap.sh: {{ include "scripts/lib/homebrew_bootstrap.sh" | sha256sum }}
 # scripts/check-linux-brewfile-eligibility.py: {{ include "scripts/check-linux-brewfile-eligibility.py" | sha256sum }}
+# scripts/filter-brewfile.py: {{ include "scripts/filter-brewfile.py" | sha256sum }}
+# scripts/lib/brewfile_directives.py: {{ include "scripts/lib/brewfile_directives.py" | sha256sum }}
 {{- if eq .chezmoi.os "windows" }}
 # scripts/lib/winget_manifest.sh: {{ include "scripts/lib/winget_manifest.sh" | sha256sum }}
 # wingetfile hashes (triggers re-run when any wingetfile changes):
@@ -83,31 +85,120 @@ fi
 
 # --- Brew (macOS / Linux) ---
 if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
+  # One ordered selected-manifest set. The Linux preflight, the tap-trust
+  # step and the actual bundles all consume this exact list, so a category
+  # cannot be selected for one consumer and missed by another. The npm
+  # companion lane is tracked separately; it is a different package manager.
+  selected_brewfiles=("{{ .chezmoi.sourceDir }}/Brewfile")
+  selected_npm_manifests=("{{ .chezmoi.sourceDir }}/Brewfile")
+  {{- if .categories.dev }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.dev")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.dev")
+  {{- end }}
+  {{- if .categories.local_ai_headless }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.local.ai.headless")
+  {{- end }}
+  {{- if .categories.dev_security }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.dev.security")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.dev.security")
+  {{- end }}
+  {{- if .categories.utilities }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.utilities")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.utilities")
+  {{- end }}
+  {{- if and .categories.desktop_browsers (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.browsers")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.browsers")
+  {{- end }}
+  {{- if and .categories.desktop_comms (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.comms")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.comms")
+  {{- end }}
+  {{- if and .categories.desktop_security (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.security")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.security")
+  {{- end }}
+  {{- if and .categories.desktop_media (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.media")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.media")
+  {{- end }}
+  {{- if and .categories.desktop_utilities (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.utilities")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.utilities")
+  {{- end }}
+  {{- if and .categories.desktop_devices (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.devices")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.devices")
+  {{- end }}
+  {{- if and .categories.desktop_macos (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.macos")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.macos")
+  {{- end }}
+  {{- if and .categories.desktop_fonts (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.fonts")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.fonts")
+  {{- end }}
+  {{- if and .categories.desktop_gaming (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming")
+  {{- end }}
+  {{- if and .categories.desktop_cloud (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.cloud")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.cloud")
+  {{- end }}
+  {{- if and .categories.desktop_productivity (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity")
+  {{- end }}
+  {{- if and .categories.desktop_dev (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.dev")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.dev")
+  {{- end }}
+  {{- if .categories.dev_ops }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.dev.ops")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.dev.ops")
+  {{- end }}
+  {{- if .categories.legacy }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.legacy")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.legacy")
+  {{- end }}
+  {{- if and .categories.legacy_macfuse (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.legacy.macfuse")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.legacy.macfuse")
+  {{- end }}
+  {{- if and .categories.legacy_vmware (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.legacy.vmware")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.legacy.vmware")
+  {{- end }}
+  {{- if and .categories.desktop_privacy (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.privacy")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.privacy")
+  {{- end }}
+  {{- if and .categories.desktop_emulation (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.emulation")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.emulation")
+  {{- end }}
+  {{- if and .categories.desktop_gaming_emulation (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming.emulation")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming.emulation")
+  {{- end }}
+  {{- if and .categories.desktop_productivity_msoffice (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.msoffice")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.msoffice")
+  {{- end }}
+  {{- if and .categories.desktop_productivity_adobe (eq .chezmoi.os "darwin") }}
+  selected_brewfiles+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.adobe")
+  selected_npm_manifests+=("{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.adobe")
+  {{- end }}
+
   # Fail *before* acquiring Homebrew or changing any packages when a selected
   # Linux category contains macOS casks or invalid Brewfile syntax. Unknown
   # formula/tap support remains unqualified until actual host receipts.
   if [[ "$(uname -s)" == "Linux" ]]; then
-    linux_audit_args=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile")
-    {{- if .categories.dev }}
-    linux_audit_args+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev")
-    {{- end }}
-    {{- if .categories.local_ai_headless }}
-    linux_audit_args+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.local.ai.headless")
-    {{- end }}
-    {{- if .categories.dev_security }}
-    linux_audit_args+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev.security")
-    {{- end }}
-    {{- if .categories.utilities }}
-    linux_audit_args+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.utilities")
-    {{- end }}
-    {{- if .categories.dev_ops }}
-    linux_audit_args+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.dev.ops")
-    {{- end }}
-    {{- if .categories.legacy }}
-    linux_audit_args+=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile.legacy")
-    {{- end }}
-    # brew_bundle_filtered drops DOTFILES_BREWFILE_IGNORE entries before bundling,
-    # so the audit must not refuse a name the operator already excluded.
+    linux_audit_args=()
+    for selected_manifest in "${selected_brewfiles[@]}"; do
+      linux_audit_args+=(--manifest "$selected_manifest")
+    done
     if [[ -n "${DOTFILES_BREWFILE_IGNORE:-}" ]]; then
       IFS=',' read -r -a linux_ignored_names <<<"${DOTFILES_BREWFILE_IGNORE}"
       for linux_ignored_name in "${linux_ignored_names[@]}"; do
@@ -127,14 +218,40 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
   source "${LIB_DIR}/homebrew_bootstrap.sh"
   dotfiles_homebrew_ready || die "Homebrew prerequisite unavailable; refusing package reconciliation"
 
-  # Trust third-party taps before running brew bundle
-  for tap_name in $(grep -h '^tap "' "{{ .chezmoi.sourceDir }}"/Brewfile* 2>/dev/null | sed -E 's/^tap "([^"]+)".*/\1/'); do
-    brew trust "$tap_name" 2>/dev/null || true
+  # Trust only the taps the selected manifests declare. `brew trust` writes
+  # persistent user state (~/.homebrew/trust.json or
+  # $XDG_CONFIG_HOME/homebrew/trust.json), so an unselected manifest must never
+  # reach it, and a trust failure for a selected tap must not be hidden.
+  selected_taps=()
+  for selected_manifest in "${selected_brewfiles[@]}"; do
+    if [[ -f "$selected_manifest" ]]; then
+      while IFS= read -r tap_name; do
+        if [[ -n "$tap_name" ]]; then
+          selected_taps+=("$tap_name")
+        fi
+      done < <(sed -nE 's/^[[:space:]]*tap[[:space:]]+"([^"]+)".*/\1/p' "$selected_manifest")
+    fi
   done
+  if [[ "${#selected_taps[@]}" -gt 0 ]]; then
+    if brew trust --help >/dev/null 2>&1; then
+      while IFS= read -r tap_name; do
+        if [[ -n "$tap_name" ]] && ! brew trust "$tap_name"; then
+          die "brew trust failed for selected tap: $tap_name"
+        fi
+      done < <(printf '%s\n' "${selected_taps[@]}" | sort -u)
+    elif [[ "$(uname -s)" == "Linux" ]]; then
+      die "This Homebrew has no 'brew trust' but selected manifests declare third-party taps; refusing to bundle untrusted taps"
+    else
+      warn "This Homebrew has no 'brew trust'; selected third-party taps will be bundled without an explicit trust step"
+    fi
+  fi
 
-  # Accept EULA for Microsoft SQL Server formulas (msodbcsql18, mssql-tools18)
-  # to avoid interactive prompt hanging brew bundle in non-interactive mode.
-  export HOMEBREW_ACCEPT_EULA="${HOMEBREW_ACCEPT_EULA:-Y}"
+  # Microsoft SQL Server formulae prompt for a licence. macOS keeps the
+  # established non-interactive default; Linux must not accept a licence the
+  # operator did not supply, and no licensed package is selected there.
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    export HOMEBREW_ACCEPT_EULA="${HOMEBREW_ACCEPT_EULA:-Y}"
+  fi
 
   {{- if .categories.local_ai_headless }}
   # Refuse macOS app/formula dual ownership before running any brew bundle.
@@ -144,154 +261,46 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
   {{- end }}
 
   # Filter ignored packages from a Brewfile before running brew bundle.
-  # Controlled by DOTFILES_BREWFILE_IGNORE (comma-separated brew/cask names).
+  # Controlled by DOTFILES_BREWFILE_IGNORE: exact brew/cask names, matched
+  # literally by scripts/filter-brewfile.py. Operator input is never compiled
+  # into a pattern and never reaches the shell as code.
   brew_bundle_filtered() {
     local file="$1"
-    if [[ -n "${DOTFILES_BREWFILE_IGNORE:-}" ]]; then
-      local tmpfile
-      tmpfile="$(mktemp)"
-      # Build grep pattern: skip lines matching any ignored name
-      local pattern
-      pattern="$(echo "$DOTFILES_BREWFILE_IGNORE" | tr ',' '|')"
-      grep -vE "(brew|cask) \"($pattern)\"" "$file" >"$tmpfile"
-      brew bundle --file="$tmpfile"
-      local rc=$?
-      rm -f "$tmpfile"
-      return $rc
-    else
+    local status
+    if [[ -z "${DOTFILES_BREWFILE_IGNORE:-}" ]]; then
       brew bundle --file="$file"
+      return
+    fi
+    local filtered
+    filtered="$(umask 077; mktemp)"
+    if ! python3 "{{ .chezmoi.sourceDir }}/scripts/filter-brewfile.py" \
+      --manifest "$file" \
+      --out "$filtered" \
+      --ignore-list "${DOTFILES_BREWFILE_IGNORE}" \
+      --force; then
+      rm -f "$filtered"
+      die "Failed to apply DOTFILES_BREWFILE_IGNORE to $file"
+    fi
+    if brew bundle --file="$filtered"; then
+      rm -f "$filtered"
+      return 0
+    else
+      status=$?
+      rm -f "$filtered"
+      return "$status"
     fi
   }
 
-  # dev.cli — always installed
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile" || warn "npm package reconciliation failed for Brewfile"
+  # Bundles run in the selected order; the npm companion lane follows for the
+  # manifests that declare npm entries.
+  for selected_manifest in "${selected_brewfiles[@]}"; do
+    brew_bundle_filtered "$selected_manifest"
+  done
+  for selected_manifest in "${selected_npm_manifests[@]}"; do
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "$selected_manifest" ||
+      warn "npm package reconciliation failed for $(basename "$selected_manifest")"
+  done
 
-  {{- if .categories.dev }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.dev
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev" || warn "npm package reconciliation failed for Brewfile.dev"
-  {{- end }}
-
-  {{- if .categories.local_ai_headless }}
-  # This category installs the formula only; starting it is an owner action.
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.local.ai.headless
-  {{- end }}
-
-  {{- if .categories.dev_security }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.dev.security
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev.security" || warn "npm package reconciliation failed for Brewfile.dev.security"
-  {{- end }}
-
-  {{- if .categories.utilities }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.utilities
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.utilities" || warn "npm package reconciliation failed for Brewfile.utilities"
-  {{- end }}
-
-  # Desktop Brewfiles include cask entries and are skipped on Linux.
-  {{- if and .categories.desktop_browsers (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.browsers
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.browsers" || warn "npm package reconciliation failed for Brewfile.desktop.browsers"
-  {{- end }}
-
-  {{- if and .categories.desktop_comms (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.comms
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.comms" || warn "npm package reconciliation failed for Brewfile.desktop.comms"
-  {{- end }}
-
-  {{- if and .categories.desktop_security (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.security
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.security" || warn "npm package reconciliation failed for Brewfile.desktop.security"
-  {{- end }}
-
-  {{- if and .categories.desktop_media (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.media
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.media" || warn "npm package reconciliation failed for Brewfile.desktop.media"
-  {{- end }}
-
-  {{- if and .categories.desktop_utilities (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.utilities
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.utilities" || warn "npm package reconciliation failed for Brewfile.desktop.utilities"
-  {{- end }}
-
-  {{- if and .categories.desktop_devices (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.devices
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.devices" || warn "npm package reconciliation failed for Brewfile.desktop.devices"
-  {{- end }}
-
-  {{- if and .categories.desktop_macos (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.macos
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.macos" || warn "npm package reconciliation failed for Brewfile.desktop.macos"
-  {{- end }}
-
-  {{- if and .categories.desktop_fonts (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.fonts
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.fonts" || warn "npm package reconciliation failed for Brewfile.desktop.fonts"
-  {{- end }}
-
-  {{- if and .categories.desktop_gaming (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming" || warn "npm package reconciliation failed for Brewfile.desktop.gaming"
-  {{- end }}
-
-  {{- if and .categories.desktop_cloud (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.cloud
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.cloud" || warn "npm package reconciliation failed for Brewfile.desktop.cloud"
-  {{- end }}
-
-  {{- if and .categories.desktop_productivity (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity" || warn "npm package reconciliation failed for Brewfile.desktop.productivity"
-  {{- end }}
-
-  {{- if and .categories.desktop_dev (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.dev
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.dev" || warn "npm package reconciliation failed for Brewfile.desktop.dev"
-  {{- end }}
-
-  {{- if .categories.dev_ops }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.dev.ops
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev.ops" || warn "npm package reconciliation failed for Brewfile.dev.ops"
-  {{- end }}
-
-  {{- if .categories.legacy }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.legacy
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.legacy" || warn "npm package reconciliation failed for Brewfile.legacy"
-  {{- end }}
-
-  {{- if and .categories.legacy_macfuse (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.legacy.macfuse
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.legacy.macfuse" || warn "npm package reconciliation failed for Brewfile.legacy.macfuse"
-  {{- end }}
-
-  {{- if and .categories.legacy_vmware (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.legacy.vmware
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.legacy.vmware" || warn "npm package reconciliation failed for Brewfile.legacy.vmware"
-  {{- end }}
-
-  {{- if and .categories.desktop_privacy (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.privacy
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.privacy" || warn "npm package reconciliation failed for Brewfile.desktop.privacy"
-  {{- end }}
-
-  {{- if and .categories.desktop_emulation (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.emulation
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.emulation" || warn "npm package reconciliation failed for Brewfile.desktop.emulation"
-  {{- end }}
-
-  {{- if and .categories.desktop_gaming_emulation (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming.emulation
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming.emulation" || warn "npm package reconciliation failed for Brewfile.desktop.gaming.emulation"
-  {{- end }}
-
-  {{- if and .categories.desktop_productivity_msoffice (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.msoffice
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.msoffice" || warn "npm package reconciliation failed for Brewfile.desktop.productivity.msoffice"
-  {{- end }}
-
-  {{- if and .categories.desktop_productivity_adobe (eq .chezmoi.os "darwin") }}
-  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.adobe
-  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.adobe" || warn "npm package reconciliation failed for Brewfile.desktop.productivity.adobe"
-  {{- end }}
 fi
 
 # --- Cross-platform fonts (Linux + Windows; macOS handled by brew bundle above) ---
