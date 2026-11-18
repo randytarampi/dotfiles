@@ -1655,8 +1655,8 @@ def test_service_lane_rates_and_gate_off_render(monkeypatch):
     )
     rates = json.loads(rates_path.read_text())["models"]
     standard = {"gpt-6-luna": (1e-7, 5e-7, 1e-8, 1.25e-7)}
-    # Astra 6.2 has published input/output/cache-read rates; a cache-write
-    # rate has not been established, so do not fabricate one for the base row.
+    # Published Astra pricing includes the 30-minute cache-write rate.
+    # Long-context pricing applies when prompt input exceeds 272K tokens.
     astra_keys = (
         "input_cost_per_token",
         "output_cost_per_token",
@@ -1664,11 +1664,36 @@ def test_service_lane_rates_and_gate_off_render(monkeypatch):
     )
     astra = (8e-6, 4e-5, 4e-7)
     assert tuple(rates["gpt-6.2-astra"][key] for key in astra_keys) == astra
-    assert "cache_creation_input_token_cost" not in rates["gpt-6.2-astra"]
+    assert rates["gpt-6.2-astra"]["cache_creation_input_token_cost"] == pytest.approx(1e-5)
     for suffix, multiplier in (("flex", 0.5), ("fast", 2.0)):
         assert tuple(
             rates[f"gpt-6.2-astra-{suffix}"][key] for key in astra_keys
         ) == tuple(value * multiplier for value in astra)
+    # Official 30-minute write, 12-hour write and long-context rates are explicit.
+    for name, input_rate, output_rate, read_rate, write_rate in (
+        ("gpt-6.2-sol", 2e-6, 1e-5, 1e-7, 2.5e-6),
+        ("gpt-6.2-astra", 8e-6, 4e-5, 4e-7, 1e-5),
+    ):
+        for suffix, multiplier in (("", 1.0), ("-flex", 0.5), ("-fast", 2.0)):
+            row = rates[name + suffix]
+            assert row["cache_creation_input_token_cost"] == pytest.approx(
+                write_rate * multiplier
+            )
+            assert row["cache_creation_input_token_cost_above_1hr"] == pytest.approx(
+                2 * write_rate * multiplier
+            )
+            assert row["input_cost_per_token_above_272k_tokens"] == pytest.approx(
+                2 * input_rate * multiplier
+            )
+            assert row["output_cost_per_token_above_272k_tokens"] == pytest.approx(
+                1.5 * output_rate * multiplier
+            )
+            assert row["cache_read_input_token_cost_above_272k_tokens"] == pytest.approx(
+                2 * read_rate * multiplier
+            )
+            assert row["cache_creation_input_token_cost_above_272k_tokens"] == pytest.approx(
+                2 * write_rate * multiplier
+            )
     rate_keys = (
         "input_cost_per_token",
         "output_cost_per_token",
