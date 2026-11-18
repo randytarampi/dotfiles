@@ -55,6 +55,7 @@ def candidate_paths(path):
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=5,
             ).stdout.strip()
         except (OSError, subprocess.SubprocessError):
             converted = ""
@@ -70,6 +71,13 @@ def display_path(path):
     text = str(path)
     if home and home != "~" and text.startswith(home):
         return "~" + text[len(home) :]
+    # Do not print a user's name even when HOME is expressed in another
+    # native/MSYS spelling or is not the account root seen by this process.
+    text = re.sub(
+        r"(?i)(?:[A-Za-z]:[\\/]|/mnt/[a-z]/|/[a-z]/)?Users[\\/][^\\/]+",
+        "~",
+        text,
+    )
     return text
 
 
@@ -80,7 +88,7 @@ def pe_architecture(path):
             with open(candidate, "rb") as handle:
                 data = handle.read(MAX_HEADER_BYTES)
         except (OSError, ValueError) as error:
-            last_error = f"cannot read executable: {error}"
+            last_error = "cannot read executable (details suppressed to protect host paths)"
             continue
         return pe_architecture_from_bytes(data)
     return "unknown", last_error
@@ -94,27 +102,22 @@ def executable_path(name):
 
 
 def resolve_bash(overrides):
+    """Only an explicitly supplied running shell path proves its implementation.
+
+    Git for Windows can resolve a PATH launcher at Git/bin/bash.exe, and
+    readlink -f canonicalizes links but does not unwrap that launcher. The
+    GitHub Actions bash step supplies its own $BASH via --path bash=...
+    """
     if "bash" in overrides:
-        return {"path": overrides["bash"], "resolution": PATH_OVERRIDE}
-    launcher, reason = executable_path("bash")
-    if not launcher:
-        return {"path": None, "resolution": reason}
-    try:
-        result = subprocess.run(
-            ["readlink", "-f", launcher], capture_output=True, text=True, check=True
-        )
-        target = result.stdout.strip()
-        if target:
-            return {
-                "path": target,
-                "resolution": "readlink -f (running shell implementation)",
-            }
-    except (OSError, subprocess.CalledProcessError):
-        pass
-    return {
-        "path": launcher,
-        "resolution": "launcher only; running shell implementation could not be resolved",
-    }
+        return {"path": overrides["bash"], "resolution": "invoking shell BASH path"}
+    launcher, _ = executable_path("bash")
+    if launcher:
+        return {
+            "path": None,
+            "resolution": "PATH bash may be a launcher; supply --path bash=RUNNING_SHELL",
+        }
+    return {"path": None, "resolution": "bash missing from PATH"}
+
 
 
 def resolve_tool(name, overrides):
@@ -134,6 +137,8 @@ def resolve_make(overrides):
     shim_path = Path(shim["path"])
     metadata = Path(str(shim_path) + ".shim")
     try:
+        if metadata.is_symlink() or metadata.stat().st_size > 65536:
+            raise ValueError("unsafe or oversized ShimGen metadata")
         content = metadata.read_text(encoding="utf-8", errors="replace")
         match = re.search(r"(?im)^\s*(?:path|target)\s*[:=]\s*(.+?)\s*$", content)
         if not match:
@@ -151,12 +156,12 @@ def resolve_make(overrides):
             "shim": shim,
             "target": {"path": target, "resolution": f"adjacent {metadata.name}"},
         }
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError):
         return {
             "shim": shim,
             "target": {
                 "path": None,
-                "resolution": f"cannot resolve ShimGen target: {error}",
+                "resolution": "ShimGen target unavailable or metadata invalid",
             },
         }
 
