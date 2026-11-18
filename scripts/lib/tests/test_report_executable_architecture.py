@@ -78,6 +78,7 @@ def test_bash_launcher_not_reported_as_running_target(monkeypatch, tmp_path):
 def test_windows_ci_architecture_step_and_required_gate_unchanged():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "Report Windows deployment executable architectures" in workflow
+    assert "continue-on-error: true" in workflow
     assert (
         'python scripts/report-executable-architecture.py --json --path "bash=$BASH"'
         in workflow
