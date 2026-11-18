@@ -159,6 +159,6 @@ def test_host_mutations_and_autosave_clear_follow_successful_reload():
     reload_step = darwin.rindex('caddy_reload "$CADDYFILE_PATH"')
     assert reload_step < darwin.index('info "Ensuring Caddy-served domains')
     assert reload_step < darwin.index("# Clear Caddy autosave")
-    assert 'Caddy host entry generation failed' in darwin
+    assert "Caddy host entry generation failed" in darwin
     assert 'plutil -lint "$PLIST_CANDIDATE"' in darwin
     assert "CADDY_PUBLISHED=0" in darwin
