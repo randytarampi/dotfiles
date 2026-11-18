@@ -1586,6 +1586,28 @@
       ],
       "positional_operand": null,
       "child_scripts": []
+    },
+    {
+      "path": "scripts/collect-bootstrap-acceptance.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--inspect",
+        "--validate",
+        "--record",
+        "--out",
+        "--force",
+        "--source-sha",
+        "--repo",
+        "--environment-kind",
+        "--manifest"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
     }
   ]
 }
