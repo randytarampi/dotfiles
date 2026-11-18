@@ -113,6 +113,6 @@ def test_new_category_only_installs_and_does_not_start_service():
     assert "restart_service" not in manifest
     assert "brew services start ollama" not in template
     assert template.index("ollama_brew_package_preflight") < template.index(
-        "brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile"
+        'brew_bundle_filtered "$selected_manifest"'
     )
     assert "wingetfile.local.ai.headless" in template
