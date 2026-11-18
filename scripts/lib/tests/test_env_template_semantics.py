@@ -15,8 +15,10 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # retain exact ordering and defaults in the protected assignment fingerprint.
 # 2026-11-16: DOTFILES_ROLE_MODELS comment updated to document the
 # role@pattern=model scoped role-model override syntax.
+# 2026-11-17: optional, default-off DOTFILES_RUN_CONTEXT_MODE_SETUP gate
+# for the @latest OpenCode Context Mode plugin; baseline defaults unchanged.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "649cf5d4a821c65d744c6c41b0ba28ade503101f781dda0c13a90d8d6a2486c2"
+    "1e6f90a000f456505e834ec4d2c3da869c588942484e931fd9b44f18efc38484"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 

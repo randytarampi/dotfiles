@@ -75,6 +75,7 @@ The current source of truth is [`configs/opencode/opencode-plugins.json`](../con
 | --- | --- |
 | `oh-my-opencode-slim@latest` | Orchestration, presets and agents |
 | `@tarquinen/opencode-dcp@latest` | Dynamic context pruning |
+| `context-mode@latest` (opt-in) | Local tool-output indexing, see [Context Mode](context-mode.md) |
 | `@plannotator/opencode@latest` | Plan and code review |
 | `github:AxeForce/opencode-vibeguard-v2#main` | Secret-redaction plugin; floating Git branch, not a pinned immutable SHA |
 | `@cheesecodestudio/opencode-tokenscope-v2@latest` | Token and cost reporting |

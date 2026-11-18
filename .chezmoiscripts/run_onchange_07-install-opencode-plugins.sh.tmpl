@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_TOOLS_SETUP" | sha256sum }}
+# env gate fingerprint: {{ env "DOTFILES_RUN_CONTEXT_MODE_SETUP" | sha256sum }}
 # env gate fingerprint: {{ env "DOTFILES_RUN_VOICE_SETUP" | sha256sum }}
 # env gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE" | sha256sum }}
 # env gate fingerprint: {{ env "DOTFILES_RUN_UPDATE_SYSTEM_SETUP" | sha256sum }}
@@ -23,6 +24,16 @@ load_env || warn "\$HOME/.env not found, skipping env load"
 if [[ "${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}" != "1" ]]; then
   info "DOTFILES_RUN_OPENCODE_TOOLS_SETUP='${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}' — skipping opencode plugin setup"
   exit 0
+fi
+
+# A gated Context Mode install must not run with unsupported Node or mutate
+# the rest of the plugin set before failing its runtime prerequisite. This
+# mirrors scripts/lib/context_mode_native.py: a pre-release identifier such as
+# 24.15.0-rc.1 does not satisfy the upstream `>=24.15.0` range.
+if [[ "${DOTFILES_RUN_CONTEXT_MODE_SETUP:-0}" == "1" ]]; then
+  if ! command -v node >/dev/null 2>&1 || ! node -e 'const v = process.versions.node; const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(v); process.exit(m && (+m[1] > 24 || (+m[1] === 24 && +m[2] >= 15)) ? 0 : 1)' >/dev/null 2>&1; then
+    die "Context Mode requires Node >= 24.15.0; the whole OpenCode plugin set was skipped. Set DOTFILES_RUN_CONTEXT_MODE_SETUP='0' to install plugins without Context Mode, or upgrade Node and re-run."
+  fi
 fi
 
 info "Installing opencode plugins..."
