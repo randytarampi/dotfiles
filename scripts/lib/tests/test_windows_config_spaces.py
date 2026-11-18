@@ -96,5 +96,13 @@ def test_ci_actually_deploys_and_checks_windows_spaces_without_skipping_rows():
     )
     assert deploy.count("Deploy (first pass)") == 1
     assert deploy.count("Deploy (idempotency pass)") == 1
-    assert "continue-on-error" not in deploy
+    # Exactly one step in the deploy job may tolerate failure: the read-only
+    # architecture diagnostic. Every deploy, verify and no-drift step stays
+    # required. Any other continue-on-error weakens the gate.
+    tolerant = [
+        block.splitlines()[0].strip()
+        for block in deploy.split("- name: ")
+        if "continue-on-error" in block
+    ]
+    assert tolerant == ["Report Windows deployment executable architectures"]
     assert "windows-11-arm" in deploy and "windows-latest" in deploy

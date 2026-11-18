@@ -29,7 +29,15 @@ def test_required_native_deploy_matrix_has_explicit_windows_and_macos_cpu_rows()
     assert "name: Deploy (${{ matrix.os }})" in deploy
     assert "fail-fast: false" in deploy
     assert "runs-on: ${{ matrix.os }}" in deploy
-    assert "continue-on-error" not in deploy
+    # Exactly one step in the deploy job may tolerate failure: the read-only
+    # architecture diagnostic. Every deploy, verify and no-drift step stays
+    # required. Any other continue-on-error weakens the gate.
+    tolerant = [
+        block.splitlines()[0].strip()
+        for block in deploy.split("- name: ")
+        if "continue-on-error" in block
+    ]
+    assert tolerant == ["Report Windows deployment executable architectures"]
 
 
 def test_native_cpu_checks_run_before_any_package_or_user_state_mutation():
