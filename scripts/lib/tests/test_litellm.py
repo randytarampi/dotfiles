@@ -1641,9 +1641,9 @@ def test_openai_lane_scaling_keeps_limits_and_input_unchanged():
         assert actual["input_cost_per_token_above_272k_tokens"] == pytest.approx(
             4e-6 * multiplier
         )
-        assert actual["cache_creation_input_token_cost_above_272k_tokens"] == pytest.approx(
-            5e-6 * multiplier
-        )
+        assert actual[
+            "cache_creation_input_token_cost_above_272k_tokens"
+        ] == pytest.approx(5e-6 * multiplier)
         assert actual["max_input_tokens"] == 922000
         assert actual["mode"] == "chat"
     assert original["input_cost_per_token"] == pytest.approx(2e-6)

@@ -121,6 +121,7 @@ def _scaled_openai_lane_info(standard, lane):
             result[key] = value * multiplier
     return result
 
+
 OPENROUTER_FREE_TWINS_ENV = "DOTFILES_LITELLM_INCLUDE_OPENROUTER_FREE_TWINS"
 
 # Cloud providers whose live /v1/models catalogue the generator enumerates
