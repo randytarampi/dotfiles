@@ -740,7 +740,10 @@ def build_caddyfile(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate the Caddyfile.")
+    parser = argparse.ArgumentParser(
+        description="Generate the Caddyfile.", allow_abbrev=False
+    )
+    parser.add_argument("--output", type=Path, help="Caddyfile output path")
     add_common_args(parser, no_backup=True)
     args = parser.parse_args()
 
@@ -785,6 +788,8 @@ def main() -> None:
         if sys.platform == "darwin"
         else Path("/etc/caddy/Caddyfile")
     )
+    if args.output:
+        output_path = args.output
 
     bind_ip = os.environ.get("CADDY_BIND_IP", "").strip() or get_bind_ip()
     opencode_port = os.environ.get("OPENCODE_SERVER_PORT", "4096").strip() or "4096"

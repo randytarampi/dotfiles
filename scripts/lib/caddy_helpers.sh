@@ -29,21 +29,24 @@ caddy_prefix() {
 
 caddy_validate() {
   local caddyfile="${1:-$(caddy_prefix)/etc/caddy/Caddyfile}"
-  if caddy validate --config "$caddyfile" 2>/dev/null; then
+  local output
+  if output="$(caddy validate --config "$caddyfile" 2>&1)"; then
     ok "Caddyfile validation passed: $caddyfile"
     return 0
   else
-    warn "Caddyfile validation failed: $caddyfile"
+    warn "Caddyfile validation failed: $caddyfile: ${output%%$'\n'*}"
     return 1
   fi
 }
 
 caddy_reload() {
   local caddyfile="${1:-$(caddy_prefix)/etc/caddy/Caddyfile}"
-  if caddy reload --force --config "$caddyfile" 2>/dev/null; then
+  local output
+  if output="$(caddy reload --force --config "$caddyfile" 2>&1)"; then
     ok "Caddy reloaded: $caddyfile"
   else
     warn "Caddy reload failed: $caddyfile"
+    return 1
   fi
 }
 

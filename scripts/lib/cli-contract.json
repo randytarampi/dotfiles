@@ -444,7 +444,8 @@
       "accepted_flags": [
         "--help",
         "--dry-run",
-        "--no-backup"
+        "--no-backup",
+        "--output"
       ],
       "positional_operand": null,
       "child_scripts": []
