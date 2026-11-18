@@ -133,34 +133,14 @@ def test_missing_or_symlinked_manifest_fails_closed(tmp_path):
 
 
 def test_package_template_guards_linux_before_homebrew_download():
+    """The audit must still run before Homebrew, trust or any bundle.
+
+    Selection shape (one ordered array shared by the audit, tap trust and the
+    bundles) is pinned in test_package_selection_contract.py.
+    """
     source = TEMPLATE.read_text(encoding="utf-8")
     assert source.index(
         'scripts/check-linux-brewfile-eligibility.py" --enforce'
     ) < source.index("dotfiles_homebrew_ready ||")
-    assert 'linux_audit_args=(--manifest "{{ .chezmoi.sourceDir }}/Brewfile")' in source
-    # Every other Linux-reachable brew_bundle_filtered manifest must be audited.
-    for manifest in (
-        "Brewfile.dev",
-        "Brewfile.local.ai.headless",
-        "Brewfile.dev.security",
-        "Brewfile.utilities",
-        "Brewfile.dev.ops",
-        "Brewfile.legacy",
-    ):
-        expected = (
-            'linux_audit_args+=(--manifest "{{ .chezmoi.sourceDir }}/' + manifest + '")'
-        )
-        assert expected in source, manifest
-    for name in (
-        "dev",
-        "local_ai_headless",
-        "dev_security",
-        "utilities",
-        "dev_ops",
-        "legacy",
-    ):
-        assert "if .categories." + name in source
-    assert "DOTFILES_BREWFILE_IGNORE" in source
-    assert 'linux_audit_args+=(--ignore "$linux_ignored_name")' in source
     assert 'if [[ "${DOTFILES_RUN_PACKAGES_SETUP:-0}" != "1" ]]' in source
     assert 'include "scripts/check-linux-brewfile-eligibility.py" | sha256sum' in source

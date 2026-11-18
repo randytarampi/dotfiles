@@ -91,6 +91,25 @@
   },
   "scripts": [
     {
+      "path": "scripts/filter-brewfile.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--manifest",
+        "--out",
+        "--ignore",
+        "--ignore-list",
+        "--force"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/check-linux-brewfile-eligibility.py",
       "capabilities": [
         "public",
