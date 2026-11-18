@@ -99,6 +99,28 @@ OPENAI_SERVICE_LANE_MODELS = {"gpt-6.2-sol", "gpt-6.2-astra", "gpt-6-luna"}
 # 18 November 2026: these two new OpenAI families have authoritative prices
 # including their cache-retention and long-context variants.
 GPT62_OFFICIAL_PRICE_BASES = ("gpt-6.2-sol", "gpt-6.2-astra")
+
+
+def _scaled_openai_lane_info(standard, lane):
+    """Clone and scale priced fields without changing limits or protocol metadata."""
+    result = dict(standard or {})
+    multiplier = 0.5 if lane == "flex" else 2.0
+    rate_keys = (
+        "input_cost_per_token",
+        "output_cost_per_token",
+        "cache_read_input_token_cost",
+        "cache_creation_input_token_cost",
+        "input_cost_per_token_above_272k_tokens",
+        "output_cost_per_token_above_272k_tokens",
+        "cache_read_input_token_cost_above_272k_tokens",
+        "cache_creation_input_token_cost_above_272k_tokens",
+    )
+    for key in rate_keys:
+        value = result.get(key)
+        if isinstance(value, (int, float)):
+            result[key] = value * multiplier
+    return result
+
 OPENROUTER_FREE_TWINS_ENV = "DOTFILES_LITELLM_INCLUDE_OPENROUTER_FREE_TWINS"
 
 # Cloud providers whose live /v1/models catalogue the generator enumerates
@@ -1992,21 +2014,7 @@ def compute_model_list(environ=None, previous_entries=None, *, anthropic_bridges
                 base_entry = entries[-1]
                 standard = model_info or model_rates("openai", model_id, wire_model)
                 for lane in ("flex", "fast"):
-                    lane_info = dict(standard or {})
-                    multiplier = 0.5 if lane == "flex" else 2.0
-                    for rate_key in (
-                        "input_cost_per_token",
-                        "output_cost_per_token",
-                        "cache_read_input_token_cost",
-                        "cache_creation_input_token_cost",
-                        "input_cost_per_token_above_272k_tokens",
-                        "output_cost_per_token_above_272k_tokens",
-                        "cache_read_input_token_cost_above_272k_tokens",
-                        "cache_creation_input_token_cost_above_272k_tokens",
-                    ):
-                        value = lane_info.get(rate_key)
-                        if isinstance(value, (int, float)):
-                            lane_info[rate_key] = value * multiplier
+                    lane_info = _scaled_openai_lane_info(standard, lane)
                     lane_alias = f"{alias}-{lane}"
                     if f"{model_id}-{lane}" in confirmed_models or any(
                         item["model_name"] == lane_alias for item in entries
