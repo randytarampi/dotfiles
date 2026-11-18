@@ -80,10 +80,26 @@ PLIST_PATH="/Library/LaunchDaemons/com.caddy.proxy.plist"
 OLD_PLIST_PATH="$REAL_HOME/Library/LaunchAgents/com.caddy.proxy.plist"
 
 info "Installing Caddy..."
-sudo -u "$REAL_USER" env HOME="$REAL_HOME" PATH="$PATH" DOTFILES_RUN_CADDY_SETUP="${DOTFILES_RUN_CADDY_SETUP:-0}" "$BREW_BIN" install caddy || warn "brew install caddy failed"
+sudo -u "$REAL_USER" env HOME="$REAL_HOME" PATH="$PATH" DOTFILES_RUN_CADDY_SETUP="${DOTFILES_RUN_CADDY_SETUP:-0}" "$BREW_BIN" install caddy
+command -v caddy >/dev/null 2>&1 || die "Caddy binary is unavailable after installation"
 
 info "Generating Caddyfile..."
-sudo -u "$REAL_USER" env HOME="$REAL_HOME" PATH="$PATH" DOTFILES_RUN_CADDY_SETUP="${DOTFILES_RUN_CADDY_SETUP:-0}" python3 "{{ .chezmoi.sourceDir }}/scripts/configure-caddy.py" || warn "configure-caddy.py failed"
+  mkdir -p "$(dirname "$CADDYFILE_PATH")"
+  CANDIDATE="$(mktemp "${CADDYFILE_PATH}.candidate.XXXXXX")"
+  trap 'rm -f "$CANDIDATE"' EXIT
+  chown "$REAL_USER" "$CANDIDATE"
+  chmod 600 "$CANDIDATE"
+  sudo -u "$REAL_USER" env HOME="$REAL_HOME" PATH="$PATH" DOTFILES_RUN_CADDY_SETUP="${DOTFILES_RUN_CADDY_SETUP:-0}" python3 "{{ .chezmoi.sourceDir }}/scripts/configure-caddy.py" --output "$CANDIDATE" --no-backup
+  VALIDATION_LOG="$(mktemp)"
+  if ! caddy validate --config "$CANDIDATE" 2>"$VALIDATION_LOG"; then
+    head -n 1 "$VALIDATION_LOG" >&2
+    rm -f "$VALIDATION_LOG"
+    die "Caddy candidate validation failed; existing Caddyfile was preserved"
+  fi
+  rm -f "$VALIDATION_LOG"
+  if [[ -L "$CADDYFILE_PATH" ]]; then die "Refusing to replace symlinked Caddyfile: $CADDYFILE_PATH"; fi
+  install -m 0644 "$CANDIDATE" "${CADDYFILE_PATH}.new"
+  mv -f "${CADDYFILE_PATH}.new" "$CADDYFILE_PATH"
 
 info "Ensuring Caddy-served domains resolve in /etc/hosts..."
 # Caddy serves OpenCode web at opencode.localhost and Open WebUI at
@@ -149,8 +165,10 @@ fi
 
 info "Writing Caddy LaunchDaemon..."
 launchctl bootout gui/"$(id -u "$REAL_USER")"/com.caddy.proxy 2>/dev/null || true
+[[ ! -L "$OLD_PLIST_PATH" ]] || die "Refusing to remove symlinked LaunchAgent plist: $OLD_PLIST_PATH"
 rm -f "$OLD_PLIST_PATH"
 
+[[ ! -e "$PLIST_PATH" || -f "$PLIST_PATH" && ! -L "$PLIST_PATH" ]] || die "Refusing to overwrite foreign LaunchDaemon plist: $PLIST_PATH"
 cat >"$PLIST_PATH" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -192,10 +210,10 @@ chmod 644 "$PLIST_PATH"
 info "Loading Caddy LaunchDaemon..."
 launchctl bootout system/com.caddy.proxy 2>/dev/null || true
 sleep 2
-launchctl bootstrap system/ "$PLIST_PATH" || warn "launchctl bootstrap system/ failed"
+launchctl bootstrap system/ "$PLIST_PATH"
 
-caddy_validate "$CADDYFILE_PATH" || warn "Caddy validation reported issues"
-caddy_reload "$CADDYFILE_PATH" || warn "Caddy reload reported issues"
+caddy_validate "$CADDYFILE_PATH"
+caddy_reload "$CADDYFILE_PATH"
 
 ok "Caddy setup complete."
 {{- else if eq .chezmoi.os "linux" }}
@@ -246,7 +264,7 @@ if ! command -v caddy >/dev/null 2>&1; then
 fi
 
 info "Generating Caddyfile..."
-sudo -E env HOME="$REAL_HOME" PATH="$PATH" DOTFILES_RUN_CADDY_SETUP="${DOTFILES_RUN_CADDY_SETUP:-0}" python3 "{{ .chezmoi.sourceDir }}/scripts/configure-caddy.py" || warn "configure-caddy.py failed"
+sudo -E env HOME="$REAL_HOME" PATH="$PATH" DOTFILES_RUN_CADDY_SETUP="${DOTFILES_RUN_CADDY_SETUP:-0}" python3 "{{ .chezmoi.sourceDir }}/scripts/configure-caddy.py"
 # configure-caddy.py uses the shared /usr prefix on Linux; keep the service's
 # conventional /etc/caddy path in sync for distro-installed Caddy.
 if [[ -f /usr/etc/caddy/Caddyfile && ! -f "$CADDYFILE_PATH" ]]; then
@@ -318,8 +336,8 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable --now caddy
 
-caddy_validate "$CADDYFILE_PATH" || warn "Caddy validation reported issues"
-caddy_reload "$CADDYFILE_PATH" || warn "Caddy reload reported issues"
+caddy_validate "$CADDYFILE_PATH"
+caddy_reload "$CADDYFILE_PATH"
 ok "Caddy systemd setup complete."
 {{- else }}
 info "Skipping Caddy setup on {{ .chezmoi.os }}"
