@@ -272,7 +272,6 @@ if [[ -f "$AUTOSAVE_PATH" ]]; then
   rm -f "$AUTOSAVE_PATH" || warn "Failed to clear Caddy autosave"
 fi
 
-
 # The new root service, generated config and selected host routes were applied.
 CADDY_PUBLISHED=0
 ok "Caddy setup complete."
