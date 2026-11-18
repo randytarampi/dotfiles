@@ -16,9 +16,11 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # 2026-11-16: DOTFILES_ROLE_MODELS comment updated to document the
 # role@pattern=model scoped role-model override syntax.
 # 2026-11-17: optional, default-off DOTFILES_RUN_CONTEXT_MODE_SETUP gate
-# for the @latest OpenCode Context Mode plugin; baseline defaults unchanged.
+# for the @latest OpenCode Context Mode plugin.
+# 2026-11-18: Open WebUI/Terminal and LiteLLM version pins plus the four
+# Tether-related, commented service-default overrides; no active assignments.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "1e6f90a000f456505e834ec4d2c3da869c588942484e931fd9b44f18efc38484"
+    "6d9e1f276d9d565fc4e5ec3c2e0f064bd6cb4b10383532a809937f45343c232b"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
