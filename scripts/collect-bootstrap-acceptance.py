@@ -109,6 +109,52 @@ def host_facts():
     }
 
 
+VERSION_TIMEOUT_SECONDS = 5
+VERSION_MAX_CHARS = 120
+
+
+def tool_version(name):
+    """Return the tool's first version line, or ``unknown``.
+
+    Only ``--version`` is ever executed. No installer, service manager, sudo,
+    deploy or hypervisor is invoked, and a probe failure is never an error.
+    """
+    try:
+        result = subprocess.run(
+            [name, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=VERSION_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    lines = (result.stdout or result.stderr or "").strip().splitlines()
+    if not lines:
+        return "unknown"
+    return lines[0][:VERSION_MAX_CHARS] or "unknown"
+
+
+def executable_type(path):
+    """Classify the executable container from its magic bytes."""
+    if not path:
+        return "unknown"
+    try:
+        with open(path, "rb") as handle:
+            head = handle.read(4)
+    except OSError:
+        return "unknown"
+    if head.startswith(b"#!"):
+        return "script"
+    if head.startswith(b"\x7fELF"):
+        return "elf"
+    if head.startswith(b"MZ"):
+        return "pe"
+    if head[:2] in (b"\xcf\xfa", b"\xce\xfa") or head == b"\xca\xfe\xba\xbe":
+        return "macho"
+    return "unknown"
+
+
 def stage(outcome="not_run", exit_code=None, source="collector", elapsed=None):
     return {
         "outcome": outcome,
@@ -136,8 +182,8 @@ def inspect(kind, repo, source_sha, manifests):
             {
                 "name": name,
                 "path_class": path_class(found),
-                "version": "unknown",
-                "executable_type": "unknown",
+                "version": tool_version(name) if found else "unknown",
+                "executable_type": executable_type(found),
             }
         )
     hashes = []
