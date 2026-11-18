@@ -203,7 +203,7 @@ jobs:
       - name: Report Windows deployment executable architectures
         if: runner.os == 'Windows'
         shell: bash
-        run: python scripts/report-executable-architecture.py --json
+        run: python scripts/report-executable-architecture.py --json --path "bash=$BASH"
       - name: Configure chezmoi script interpreter (Windows)
         if: runner.os == 'Windows'
         shell: bash
