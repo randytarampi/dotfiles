@@ -27,10 +27,12 @@ if [[ "${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}" != "1" ]]; then
 fi
 
 # A gated Context Mode install must not run with unsupported Node or mutate
-# the rest of the plugin set before failing its runtime prerequisite.
+# the rest of the plugin set before failing its runtime prerequisite. This
+# mirrors scripts/lib/context_mode_native.py: a pre-release identifier such as
+# 24.15.0-rc.1 does not satisfy the upstream `>=24.15.0` range.
 if [[ "${DOTFILES_RUN_CONTEXT_MODE_SETUP:-0}" == "1" ]]; then
-  if ! command -v node >/dev/null 2>&1 || ! node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>24||(a===24&&b>=15)?0:1)' >/dev/null 2>&1; then
-    die "Context Mode requires Node >= 24.15.0; no plugin changes made"
+  if ! command -v node >/dev/null 2>&1 || ! node -e 'const v = process.versions.node; const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(v); process.exit(m && (+m[1] > 24 || (+m[1] === 24 && +m[2] >= 15)) ? 0 : 1)' >/dev/null 2>&1; then
+    die "Context Mode requires Node >= 24.15.0; the whole OpenCode plugin set was skipped. Set DOTFILES_RUN_CONTEXT_MODE_SETUP='0' to install plugins without Context Mode, or upgrade Node and re-run."
   fi
 fi
 
