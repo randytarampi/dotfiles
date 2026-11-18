@@ -288,6 +288,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_COPILOT_SETUP` | 0 | Standalone Copilot CLI gateway adapter; separately requires `DOTFILES_USE_LITELLM_PROXY=1` and `DOTFILES_RUN_LITELLM_SETUP=1`. Does not qualify the IDE extension. |
 | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` | 0 | Scripts 07, 08 (OpenCode plugins + CLI tools) |
 | `DOTFILES_RUN_OPENCODE_MEMORY_SETUP` | retired | Legacy gate ignored by current OpenCode plugin manifest; shared Basic Memory MCP follows `DOTFILES_RUN_MCP_SETUP` |
+| `DOTFILES_RUN_CONTEXT_MODE_SETUP` | 0 | Opt-in `context-mode@latest` OpenCode plugin (Scripts 07 and 16); requires Node >=24.15.0; adds `ctx_execute`, `ctx_batch`, `ctx_index` and `ctx_purge` approvals plus a `ctx_upgrade` denial. See [Context Mode](context-mode.md). |
 | `DOTFILES_RUN_PLANNOTATOR_SETUP` | 0 | Script 09 (Plannotator CLI) |
 | `DOTFILES_RUN_MERIDIAN_SETUP` | 0 | Script 11 (Meridian launchd) |
 | `DOTFILES_RUN_CLAUDE_SETUP` | 0 | Standalone Claude CLI LiteLLM launcher; enable explicitly to use `scripts/claude-litellm` |

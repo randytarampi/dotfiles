@@ -17,7 +17,9 @@ It **augments, rather than replaces**, existing components:
 
 ## Native installation and opt-in
 
-Keep `DOTFILES_RUN_CONTEXT_MODE_SETUP='0'` unless enabling Context Mode. Set it to `1` in private `~/.env`, then run `make deploy` with the applicable existing tool setup gates enabled. The OpenCode manifest uses `context-mode@latest` and its native plugin installer, with Node >=24.15.0 required; the OpenCode generator includes the plugin only while opted in. Its permission rules require explicit approval for `ctx_execute`, `ctx_batch`, `ctx_index` and `ctx_purge`, and deny agent-triggered `ctx_upgrade`. These rules apply to JavaScript/Python execution too; native shell permissions alone are insufficient.
+Keep `DOTFILES_RUN_CONTEXT_MODE_SETUP='0'` unless enabling Context Mode. Set it to `1` in private `~/.env`, then run `make deploy` with the applicable existing tool setup gates enabled. The OpenCode manifest uses `context-mode@latest` and its native plugin installer, with Node >=24.15.0 required; the OpenCode generator includes the plugin only while opted in. Its permission rules require explicit approval for `ctx_execute`, `ctx_batch`, `ctx_index` and `ctx_purge`, and deny agent-triggered `ctx_upgrade`. These rules apply to JavaScript/Python execution too; native shell permissions alone are insufficient. They gate *model-invoked* calls only: Context Mode indexes oversized tool results from its own post-tool hooks, which invoke no tool and therefore no approval, so redacted model output can still be written to the local index unredacted.
+
+The approvals rely on the host exposing `ctx.permission.assert`. OpenCode v2.3.2 does; on an older build `ctx_doctor` reports check `D10` as failed and the `ctx_*` rules cannot apply, so upgrade OpenCode rather than treating a green deployment as enforcement.
 
 When disabled, generated OpenCode configuration includes `-context-mode` to suppress the previous package cache without deleting user data. **Do not simultaneously add** a `context-mode` MCP entry in `global-mcps.json`: an OpenCode plugin already registers its own tools and hooks, and duplicate entries can race on session events.
 
