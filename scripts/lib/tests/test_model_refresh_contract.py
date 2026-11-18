@@ -32,7 +32,7 @@ def test_paid_cloud_orchestration_promotes_deepseek_without_changing_specialists
     assert slim["presets"]["pro-plus"]["designer"]["model"] == "openai/gpt-6-luna"
     assert slim["_tiers"]["pro"]["fallback"]["orchestrator"] == ["ollama-cloud/glm-5.3"]
     assert slim["_tiers"]["pro-plus"]["fallback"]["orchestrator"] == [
-        "openai/gpt-6.1-sol"
+        "openai/gpt-6.2-sol"
     ]
 
 
@@ -42,15 +42,15 @@ def test_terra_and_upstream_translations():
     assert p["plus"]["orchestrator"]["model"] == "openai/gpt-6.1-terra"
     assert p["plus"]["orchestrator"]["variant"] == "high"
     assert p["plus-anthropic"]["orchestrator"]["variant"] == "high"
-    assert p["plus"]["oracle"]["model"] == "openai/gpt-6.1-sol"
+    assert p["plus"]["oracle"]["model"] == "openai/gpt-6.2-sol"
     assert p["omo-slim-openai"]["orchestrator"]["variant"] == "medium"
-    assert p["omo-slim-openai"]["fixer"]["model"] == "openai/gpt-6.1-sol"
+    assert p["omo-slim-openai"]["fixer"]["model"] == "openai/gpt-6.2-sol"
     assert p["omo-slim-openai"]["fixer"]["variant"] == "low"
-    assert p["omo-slim-thirty-dollars"]["oracle"]["model"] == "openai/gpt-6-astra"
+    assert p["omo-slim-thirty-dollars"]["oracle"]["model"] == "openai/gpt-6.2-astra"
     forty = p["omo-slim-forty-dollars"]
     assert forty["orchestrator"]["model"] == "anthropic/claude-opus-5-5"
-    assert forty["oracle"]["model"] == "openai/gpt-6-astra"
-    assert forty["fixer"]["model"] == "openai/gpt-6.1-sol"
+    assert forty["oracle"]["model"] == "openai/gpt-6.2-astra"
+    assert forty["fixer"]["model"] == "openai/gpt-6.2-sol"
     assert set(p) == set(slim["_tiers"])
     for name in p:
         nested = slim["_tiers"][name]["council"]["presets"][name]
@@ -104,3 +104,19 @@ def test_kimi_pro_replaces_only_paid_kimi_seats():
     for name in ("free", "omo-slim-opencode-zen-free"):
         assert "kimi-k3.1-pro" not in json.dumps(slim["presets"][name])
         assert "kimi-k3.1-pro" not in json.dumps(slim["_tiers"][name])
+
+
+def test_gpt62_one_for_one_registry_migration_and_pricing():
+    paths = ("configs/opencode/openai-models.json", "configs/opencode/oh-my-opencode-slim.json", "configs/junie/model-groups.json")
+    for path in paths:
+        content = (ROOT / path).read_text(encoding="utf-8")
+        assert "gpt-6.1-sol" not in content
+        assert "gpt-6-astra" not in content
+        assert "gpt-6.2-sol" in content
+        assert "gpt-6.2-astra" in content
+    rates = load("configs/litellm/model-rates.json")["models"]
+    assert rates["gpt-6.2-sol"]["input_cost_per_token"] == 2e-6
+    assert rates["gpt-6.2-sol"]["output_cost_per_token"] == 1e-5
+    assert rates["gpt-6.2-astra"]["input_cost_per_token"] == 8e-6
+    assert rates["gpt-6.2-astra"]["cache_read_input_token_cost"] == 4e-7
+    assert rates["gpt-6.2-astra"]["output_cost_per_token"] == 4e-5

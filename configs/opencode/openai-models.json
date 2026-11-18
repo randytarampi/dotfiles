@@ -1,7 +1,7 @@
 {
   "models": {
-    "gpt-6-astra": {
-      "name": "gpt-6-astra"
+    "gpt-6.2-astra": {
+      "name": "gpt-6.2-astra"
     },
     "gpt-5.4": {
       "name": "gpt-5.4"
@@ -27,8 +27,8 @@
     "gpt-6-luna": {
       "name": "gpt-6-luna"
     },
-    "gpt-6.1-sol": {
-      "name": "gpt-6.1-sol"
+    "gpt-6.2-sol": {
+      "name": "gpt-6.2-sol"
     },
     "gpt-6.1-terra": {
       "name": "gpt-6.1-terra"
