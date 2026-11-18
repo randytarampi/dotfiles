@@ -34,7 +34,9 @@ NON_TRACKED_SCRIPTS = {
     "scripts/check-env-coverage.py",
     "scripts/check-hashes.py",  # self — doesn't need to track itself
     "scripts/report-bootstrap-capabilities.py",  # Read-only OS/CPU report used in CI, never a chezmoi deploy/config input
+
     "scripts/collect-bootstrap-acceptance.py",  # Read-only acceptance receipt collector; never a chezmoi deploy/config input
+    "scripts/report-executable-architecture.py",  # Read-only CI diagnostic; never a chezmoi deploy/config input
     "scripts/check-docs-drift.py",  # Makefile-only verification tool
     "scripts/check-mcp-parity.py",  # Makefile-only verification tool
     "scripts/cleanup-brewfiles.py",  # Makefile-only cleanup tool
