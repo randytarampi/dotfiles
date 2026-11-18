@@ -182,7 +182,7 @@ def test_inspect_with_unknown_cpu_model_still_validates(monkeypatch):
 
 def test_version_output_cannot_contain_a_home_path(tmp_path, monkeypatch):
     fake = tmp_path / "private-version-tool"
-    fake.write_text("#!/bin/sh\\nprintf '/Users/private/.ssh/id_rsa\\n'\\n")
+    fake.write_text("#!/bin/sh\nprintf '/Users/private/.ssh/id_rsa\\n'\n")
     fake.chmod(0o755)
     monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ.get("PATH", ""))
     assert collector.tool_version("private-version-tool") == "redacted"
