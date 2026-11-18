@@ -84,22 +84,22 @@ sudo -u "$REAL_USER" env HOME="$REAL_HOME" PATH="$PATH" DOTFILES_RUN_CADDY_SETUP
 command -v caddy >/dev/null 2>&1 || die "Caddy binary is unavailable after installation"
 
 info "Generating Caddyfile..."
-  mkdir -p "$(dirname "$CADDYFILE_PATH")"
-  CANDIDATE="$(mktemp "${CADDYFILE_PATH}.candidate.XXXXXX")"
-  trap 'rm -f "$CANDIDATE"' EXIT
-  chown "$REAL_USER" "$CANDIDATE"
-  chmod 600 "$CANDIDATE"
-  sudo -u "$REAL_USER" env HOME="$REAL_HOME" PATH="$PATH" DOTFILES_RUN_CADDY_SETUP="${DOTFILES_RUN_CADDY_SETUP:-0}" python3 "{{ .chezmoi.sourceDir }}/scripts/configure-caddy.py" --output "$CANDIDATE" --no-backup
-  VALIDATION_LOG="$(mktemp)"
-  if ! caddy validate --config "$CANDIDATE" 2>"$VALIDATION_LOG"; then
-    head -n 1 "$VALIDATION_LOG" >&2
-    rm -f "$VALIDATION_LOG"
-    die "Caddy candidate validation failed; existing Caddyfile was preserved"
-  fi
+mkdir -p "$(dirname "$CADDYFILE_PATH")"
+CANDIDATE="$(mktemp "${CADDYFILE_PATH}.candidate.XXXXXX")"
+trap 'rm -f "$CANDIDATE"' EXIT
+chown "$REAL_USER" "$CANDIDATE"
+chmod 600 "$CANDIDATE"
+sudo -u "$REAL_USER" env HOME="$REAL_HOME" PATH="$PATH" DOTFILES_RUN_CADDY_SETUP="${DOTFILES_RUN_CADDY_SETUP:-0}" python3 "{{ .chezmoi.sourceDir }}/scripts/configure-caddy.py" --output "$CANDIDATE" --no-backup
+VALIDATION_LOG="$(mktemp)"
+if ! caddy validate --config "$CANDIDATE" 2>"$VALIDATION_LOG"; then
+  head -n 1 "$VALIDATION_LOG" >&2
   rm -f "$VALIDATION_LOG"
-  if [[ -L "$CADDYFILE_PATH" ]]; then die "Refusing to replace symlinked Caddyfile: $CADDYFILE_PATH"; fi
-  install -m 0644 "$CANDIDATE" "${CADDYFILE_PATH}.new"
-  mv -f "${CADDYFILE_PATH}.new" "$CADDYFILE_PATH"
+  die "Caddy candidate validation failed; existing Caddyfile was preserved"
+fi
+rm -f "$VALIDATION_LOG"
+if [[ -L "$CADDYFILE_PATH" ]]; then die "Refusing to replace symlinked Caddyfile: $CADDYFILE_PATH"; fi
+install -m 0644 "$CANDIDATE" "${CADDYFILE_PATH}.new"
+mv -f "${CADDYFILE_PATH}.new" "$CADDYFILE_PATH"
 
 info "Ensuring Caddy-served domains resolve in /etc/hosts..."
 # Caddy serves OpenCode web at opencode.localhost and Open WebUI at
