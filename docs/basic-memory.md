@@ -45,7 +45,7 @@ The owner-only remaining acceptance is bounded: use a disposable home with warme
 
 ## Optional LiteLLM-backed reranker — not in default path
 
-Basic Memory supports `BASIC_MEMORY_RERANKER_PROVIDER=litellm` via its own optional `basic-memory[litellm]` extra and a configured reranker model/API. Upstream's extra is currently constrained to LiteLLM SDK `>=1.91.5,<1.92.0`, different from this repo's proxy v1.106.6. Keep environments separate. The proposed `jinaai/jina-reranker-v3-mlx` is an **owner-reported host model**, not verified here as a LiteLLM `/rerank` endpoint or Basic Memory-compatible response. Its availability cannot be inferred from model discovery alone. Do not add dynamic selection until an authenticated live rerank, shape, local-only routing, timeout and failure test succeeds. Keep local FastEmbed default.
+Basic Memory supports `BASIC_MEMORY_RERANKER_PROVIDER=litellm` via its own optional `basic-memory[litellm]` extra and a configured reranker model/API. Upstream's extra is currently constrained to LiteLLM SDK `>=1.91.5,<1.92.0`, different from this repo's newly declared proxy 1.108.11 LTS pin (the previous documented runtime was 1.106.6; installed-host upgrade unverified). Keep environments separate. The proposed `jinaai/jina-reranker-v3-mlx` is an **owner-reported host model**, not verified here as a LiteLLM `/rerank` endpoint or Basic Memory-compatible response. Its availability cannot be inferred from model discovery alone. Do not add dynamic selection until an authenticated live rerank, shape, local-only routing, timeout and failure test succeeds. Keep local FastEmbed default.
 
 ## Optional LiteLLM / Open WebUI MCP — deferred for security
 
