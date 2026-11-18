@@ -1622,6 +1622,33 @@ def test_openai_service_lanes_are_direct_key_only_and_gate_default_off(monkeypat
     assert not any(item["model_name"].endswith(("-flex", "-fast")) for item in oauth)
 
 
+def test_openai_lane_scaling_keeps_limits_and_input_unchanged():
+    original = {
+        "input_cost_per_token": 2e-6,
+        "output_cost_per_token": 1e-5,
+        "cache_read_input_token_cost": 1e-7,
+        "cache_creation_input_token_cost": 2.5e-6,
+        "input_cost_per_token_above_272k_tokens": 4e-6,
+        "output_cost_per_token_above_272k_tokens": 1.5e-5,
+        "cache_read_input_token_cost_above_272k_tokens": 2e-7,
+        "cache_creation_input_token_cost_above_272k_tokens": 5e-6,
+        "max_input_tokens": 922000,
+        "mode": "chat",
+    }
+    for lane, multiplier in (("flex", 0.5), ("fast", 2)):
+        actual = litellm_config._scaled_openai_lane_info(original, lane)
+        assert actual["input_cost_per_token"] == pytest.approx(2e-6 * multiplier)
+        assert actual["input_cost_per_token_above_272k_tokens"] == pytest.approx(
+            4e-6 * multiplier
+        )
+        assert actual["cache_creation_input_token_cost_above_272k_tokens"] == pytest.approx(
+            5e-6 * multiplier
+        )
+        assert actual["max_input_tokens"] == 922000
+        assert actual["mode"] == "chat"
+    assert original["input_cost_per_token"] == pytest.approx(2e-6)
+
+
 def test_openai_service_lane_unknown_not_expanded_and_collision_fails(monkeypatch):
     monkeypatch.setattr(
         litellm_config, "_registry_model_refs", lambda: {"openai/unlisted-model"}
