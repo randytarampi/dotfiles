@@ -1671,7 +1671,8 @@ def test_service_lane_rates_and_gate_off_render(monkeypatch):
         assert tuple(
             rates[f"gpt-6.2-astra-{suffix}"][key] for key in astra_keys
         ) == tuple(value * multiplier for value in astra)
-    # Official 30-minute write, 12-hour write and long-context rates are explicit.
+    # Only the 30-minute write and long-context rates have a verified
+    # LiteLLM mapping; 12-hour OpenAI retention is not Anthropic 1h ephemeral.
     for name, input_rate, output_rate, read_rate, write_rate in (
         ("gpt-6.2-sol", 2e-6, 1e-5, 1e-7, 2.5e-6),
         ("gpt-6.2-astra", 8e-6, 4e-5, 4e-7, 1e-5),
@@ -1681,9 +1682,7 @@ def test_service_lane_rates_and_gate_off_render(monkeypatch):
             assert row["cache_creation_input_token_cost"] == pytest.approx(
                 write_rate * multiplier
             )
-            assert row["cache_creation_input_token_cost_above_1hr"] == pytest.approx(
-                2 * write_rate * multiplier
-            )
+            assert "cache_creation_input_token_cost_above_1hr" not in row
             assert row["input_cost_per_token_above_272k_tokens"] == pytest.approx(
                 2 * input_rate * multiplier
             )
@@ -4387,7 +4386,7 @@ def test_gpt62_official_prices_win_over_stale_models_dev(monkeypatch, tmp_path):
     generated = litellm_config.build_rates_snapshot({})
     row = generated["models"]["gpt-6.2-astra"]
     assert row["input_cost_per_token"] == pytest.approx(8e-6)
-    assert row["cache_creation_input_token_cost_above_1hr"] == pytest.approx(2e-5)
+    assert "cache_creation_input_token_cost_above_1hr" not in row
     # Subscription gateway twins retain Responses mode and the official
     # estimate rather than inheriting a stale provider catalogue rate.
     twin = generated["models"]["chatgpt/gpt-6.2-astra"]

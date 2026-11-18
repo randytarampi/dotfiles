@@ -226,10 +226,6 @@ def builtin_rates(wire_model):
             "cache_creation_input_token_cost_above_272k_tokens",
             "cache_creation_input_token_cost_above_272k_tokens",
         ),
-        (
-            "cache_creation_input_token_cost_above_1hr",
-            "cache_creation_input_token_cost_above_1hr",
-        ),
     ):
         value = entry.get(source_key)
         if isinstance(value, (int, float, str)) and value is not None:
@@ -2003,7 +1999,6 @@ def compute_model_list(environ=None, previous_entries=None, *, anthropic_bridges
                         "output_cost_per_token",
                         "cache_read_input_token_cost",
                         "cache_creation_input_token_cost",
-                        "cache_creation_input_token_cost_above_1hr",
                         "input_cost_per_token_above_272k_tokens",
                         "output_cost_per_token_above_272k_tokens",
                         "cache_read_input_token_cost_above_272k_tokens",
