@@ -87,11 +87,15 @@ openwebui_service_env_sync() {
   local service_home
   local WEBUI_SECRET_KEY="" WEBUI_ADMIN_EMAIL="" WEBUI_ADMIN_PASSWORD=""
   local OPENWEBUI_API_KEY="" OPENWEBUI_PORT=""
+  local ENABLE_WEBSOCKET_SUPPORT="" ENABLE_TOOL_SERVERS=""
+  local ENABLE_TOOL_PERMISSIONS="" ENABLE_TOOL_PERMISSIONS_AUTO=""
   local OPENWEBUI_DEFAULT_LOCALE="${OPENWEBUI_DEFAULT_LOCALE:-}"
   local tmp
   service_home="$(dirname "$service_env")"
   mkdir -p "$service_home"
   local env_WEBUI_SECRET_KEY="" env_WEBUI_ADMIN_EMAIL="" env_WEBUI_ADMIN_PASSWORD="" env_OPENWEBUI_API_KEY="" env_OPENWEBUI_PORT="" env_OPENWEBUI_DEFAULT_LOCALE=""
+  local env_ENABLE_WEBSOCKET_SUPPORT="" env_ENABLE_TOOL_SERVERS=""
+  local env_ENABLE_TOOL_PERMISSIONS="" env_ENABLE_TOOL_PERMISSIONS_AUTO=""
   if [[ -f "$HOME/.env" ]]; then
     # shellcheck disable=SC1091
     source "$HOME/.env"
@@ -102,6 +106,10 @@ openwebui_service_env_sync() {
   env_OPENWEBUI_API_KEY="$OPENWEBUI_API_KEY"
   env_OPENWEBUI_PORT="$OPENWEBUI_PORT"
   env_OPENWEBUI_DEFAULT_LOCALE="$OPENWEBUI_DEFAULT_LOCALE"
+  env_ENABLE_WEBSOCKET_SUPPORT="$ENABLE_WEBSOCKET_SUPPORT"
+  env_ENABLE_TOOL_SERVERS="$ENABLE_TOOL_SERVERS"
+  env_ENABLE_TOOL_PERMISSIONS="$ENABLE_TOOL_PERMISSIONS"
+  env_ENABLE_TOOL_PERMISSIONS_AUTO="$ENABLE_TOOL_PERMISSIONS_AUTO"
   if [[ -f "$service_env" ]]; then
     # shellcheck disable=SC1090
     source "$service_env"
@@ -113,12 +121,22 @@ openwebui_service_env_sync() {
   unset OPENWEBUI_PORT
   [[ -n "$env_OPENWEBUI_PORT" ]] && OPENWEBUI_PORT="$env_OPENWEBUI_PORT"
   [[ -n "$env_OPENWEBUI_DEFAULT_LOCALE" ]] && OPENWEBUI_DEFAULT_LOCALE="$env_OPENWEBUI_DEFAULT_LOCALE"
+  [[ -n "$env_ENABLE_WEBSOCKET_SUPPORT" ]] && ENABLE_WEBSOCKET_SUPPORT="$env_ENABLE_WEBSOCKET_SUPPORT"
+  [[ -n "$env_ENABLE_TOOL_SERVERS" ]] && ENABLE_TOOL_SERVERS="$env_ENABLE_TOOL_SERVERS"
+  [[ -n "$env_ENABLE_TOOL_PERMISSIONS" ]] && ENABLE_TOOL_PERMISSIONS="$env_ENABLE_TOOL_PERMISSIONS"
+  [[ -n "$env_ENABLE_TOOL_PERMISSIONS_AUTO" ]] && ENABLE_TOOL_PERMISSIONS_AUTO="$env_ENABLE_TOOL_PERMISSIONS_AUTO"
   WEBUI_SECRET_KEY="${WEBUI_SECRET_KEY:-}"
   WEBUI_ADMIN_EMAIL="${WEBUI_ADMIN_EMAIL:-admin@localhost}"
   WEBUI_ADMIN_PASSWORD="${WEBUI_ADMIN_PASSWORD:-}"
   OPENWEBUI_API_KEY="${OPENWEBUI_API_KEY:-}"
   OPENWEBUI_PORT="${OPENWEBUI_PORT:-8080}"
   OPENWEBUI_DEFAULT_LOCALE="$(openwebui_default_locale)"
+  # Tether requires websockets and tool servers. Approval mode is visible, but
+  # automatic authorisation is deliberately disabled for privileged tools.
+  ENABLE_WEBSOCKET_SUPPORT="${ENABLE_WEBSOCKET_SUPPORT:-true}"
+  ENABLE_TOOL_SERVERS="${ENABLE_TOOL_SERVERS:-true}"
+  ENABLE_TOOL_PERMISSIONS="${ENABLE_TOOL_PERMISSIONS:-true}"
+  ENABLE_TOOL_PERMISSIONS_AUTO="${ENABLE_TOOL_PERMISSIONS_AUTO:-false}"
   if [[ -z "$WEBUI_SECRET_KEY" || -z "$WEBUI_ADMIN_PASSWORD" ]]; then
     command -v openssl >/dev/null 2>&1 || return 1
     if [[ -z "$WEBUI_SECRET_KEY" ]]; then
@@ -139,6 +157,10 @@ openwebui_service_env_sync() {
     printf 'OPENWEBUI_API_KEY=%q\n' "$OPENWEBUI_API_KEY"
     printf 'OPENWEBUI_PORT=%q\n' "$OPENWEBUI_PORT"
     printf 'DEFAULT_LOCALE=%q\n' "$OPENWEBUI_DEFAULT_LOCALE"
+    printf 'ENABLE_WEBSOCKET_SUPPORT=%q\n' "$ENABLE_WEBSOCKET_SUPPORT"
+    printf 'ENABLE_TOOL_SERVERS=%q\n' "$ENABLE_TOOL_SERVERS"
+    printf 'ENABLE_TOOL_PERMISSIONS=%q\n' "$ENABLE_TOOL_PERMISSIONS"
+    printf 'ENABLE_TOOL_PERMISSIONS_AUTO=%q\n' "$ENABLE_TOOL_PERMISSIONS_AUTO"
   } >"$tmp"
   chmod 600 "$tmp"
   if [[ -f "$service_env" ]] && cmp -s "$tmp" "$service_env"; then

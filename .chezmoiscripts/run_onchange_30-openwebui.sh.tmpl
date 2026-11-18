@@ -38,9 +38,10 @@ source "${LIB_DIR}/systemd_managed_unit.sh"
 # configs/opencode/openrouter-models.json: {{ include "configs/opencode/openrouter-models.json" | sha256sum }}
 # configs/opencode/opencode-models.json: {{ include "configs/opencode/opencode-models.json" | sha256sum }}
 # configs/opencode/ollama-cloud-models.json: {{ include "configs/opencode/ollama-cloud-models.json" | sha256sum }}
-# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.13.0" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}
+# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.13.4" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}
 # secret fingerprint: {{ env "WEBUI_SECRET_KEY" | sha256sum | trunc 12 }}:{{ env "WEBUI_ADMIN_PASSWORD" | sha256sum | trunc 12 }}:{{ env "OPENWEBUI_API_KEY" | sha256sum | trunc 12 }}
-# terminal fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_TERMINAL_VERSION" | default "0.14.7" }}:{{ env "OPENWEBUI_TERMINAL_PORT" | default "8123" }}:{{ env "OPEN_TERMINAL_API_KEY" | sha256sum | trunc 12 }}
+# Tether/WebUI permissions fingerprint: {{ env "ENABLE_TOOL_SERVERS" | default "true" }}:{{ env "ENABLE_WEBSOCKET_SUPPORT" | default "true" }}:{{ env "ENABLE_TOOL_PERMISSIONS" | default "true" }}:{{ env "ENABLE_TOOL_PERMISSIONS_AUTO" | default "false" }}
+# terminal fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_TERMINAL_VERSION" | default "0.17.20" }}:{{ env "OPENWEBUI_TERMINAL_PORT" | default "8123" }}:{{ env "OPEN_TERMINAL_API_KEY" | sha256sum | trunc 12 }}
 # computer fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_COMPUTER_VERSION" | default "0.9.21" }}:{{ env "OPENWEBUI_COMPUTER_PORT" | default "8124" }}
 
 load_env || warn "\$HOME/.env not found, skipping env load"
@@ -100,7 +101,7 @@ VENV_DIR="$OPENWEBUI_HOME/venv"
 DATA_DIR="$OPENWEBUI_HOME/data"
 LOG_DIR="$OPENWEBUI_HOME/logs"
 SERVICE_ENV="$OPENWEBUI_HOME/service.env"
-VERSION="${DOTFILES_OPENWEBUI_VERSION:-0.13.0}"
+VERSION="${DOTFILES_OPENWEBUI_VERSION:-0.13.4}"
 
 PYTHON_BIN=""
 for candidate in python3.11 python3.12; do
@@ -311,7 +312,7 @@ if [[ "$TERMINAL_GATE" != "1" ]]; then
   info "DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP='$TERMINAL_GATE' — skipping Open Terminal; preserved workspace and key material"
 else
   # No exit on gate-off: the cptr section below has its own independent sub-gate.
-  TERMINAL_VERSION="${DOTFILES_OPENWEBUI_TERMINAL_VERSION:-0.14.7}"
+  TERMINAL_VERSION="${DOTFILES_OPENWEBUI_TERMINAL_VERSION:-0.17.20}"
   if ! "$VENV_DIR/bin/python" -m pip install -q "open-terminal==${TERMINAL_VERSION}"; then
     warn "Open Terminal install failed; retrying once"
     sleep 2
@@ -333,6 +334,12 @@ port = ${OPENWEBUI_TERMINAL_PORT:-8123}
 file_browser_root = "${OPEN_TERMINAL_FILE_BROWSER_ROOT}"
 EOF
   chmod 600 "$TERMINAL_CONFIG"
+  # The launchd environment is intentionally clean; include managed CLI locations
+  # so authenticated Open Terminal can discover installed coding agents.
+  TERMINAL_AGENT_PATH="$VENV_DIR/bin"
+  for tool_dir in /opt/homebrew/bin /usr/local/bin "$HOME/.local/bin" "$HOME/.bun/bin" "$HOME/.cargo/bin" "$HOME/.npm-global/bin"; do
+    [[ -d "$tool_dir" ]] && TERMINAL_AGENT_PATH="${TERMINAL_AGENT_PATH}:$tool_dir"
+  done
   TERMINAL_PLIST="$(openwebui_terminal_service_plist)"
   cat >"$TERMINAL_PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -342,7 +349,7 @@ EOF
   <key>Label</key><string>com.openwebui.terminal</string>
   <key>ProgramArguments</key><array>
     <string>/bin/bash</string><string>-c</string>
-    <string>exec /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin:$VENV_DIR/bin" GLOBAL_LOG_LEVEL=INFO OPEN_TERMINAL_FILE_BROWSER_ROOT="$TERMINAL_WORKSPACE" /bin/bash --noprofile --norc -c 'set -a &amp;&amp; source "$TERMINAL_ENV" &amp;&amp; set +a &amp;&amp; exec "$VENV_DIR/bin/open-terminal" run --config "$TERMINAL_CONFIG"'</string>
+    <string>exec /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin:$TERMINAL_AGENT_PATH" GLOBAL_LOG_LEVEL=INFO OPEN_TERMINAL_FILE_BROWSER_ROOT="$TERMINAL_WORKSPACE" /bin/bash --noprofile --norc -c 'set -a &amp;&amp; source "$TERMINAL_ENV" &amp;&amp; set +a &amp;&amp; exec "$VENV_DIR/bin/open-terminal" run --config "$TERMINAL_CONFIG"'</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

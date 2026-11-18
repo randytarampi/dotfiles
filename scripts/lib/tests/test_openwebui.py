@@ -6079,7 +6079,28 @@ def test_openwebui_env_sync_sparse_environment(tmp_path, helper, filename):
             "OPENWEBUI_API_KEY",
             "OPENWEBUI_PORT",
             "DEFAULT_LOCALE",
+            "ENABLE_WEBSOCKET_SUPPORT",
+            "ENABLE_TOOL_SERVERS",
+            "ENABLE_TOOL_PERMISSIONS",
+            "ENABLE_TOOL_PERMISSIONS_AUTO",
         }
+
+
+def test_openwebui_tether_prerequisites_are_idempotent_and_overridable(tmp_path):
+    library = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
+    service = tmp_path / "service.env"
+    # A user-authored opt-out must survive both reconciliation passes.
+    (tmp_path / ".env").write_text("ENABLE_TOOL_SERVERS=false\\n")
+    cmd = f"source {shlex.quote(str(library))}; openwebui_service_env_sync {shlex.quote(str(service))}"
+    env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")}
+    assert subprocess.run(["bash", "-c", cmd], env=env).returncode == 0
+    first = service.read_bytes()
+    assert b"ENABLE_TOOL_SERVERS=false" in first
+    assert b"ENABLE_WEBSOCKET_SUPPORT=true" in first
+    assert b"ENABLE_TOOL_PERMISSIONS=true" in first
+    assert b"ENABLE_TOOL_PERMISSIONS_AUTO=false" in first
+    assert subprocess.run(["bash", "-c", cmd], env=env).returncode == 0
+    assert service.read_bytes() == first
 
 
 def test_openwebui_service_port_uses_retained_service_env(tmp_path):
