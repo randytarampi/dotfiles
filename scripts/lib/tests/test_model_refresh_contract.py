@@ -107,7 +107,11 @@ def test_kimi_pro_replaces_only_paid_kimi_seats():
 
 
 def test_gpt62_one_for_one_registry_migration_and_pricing():
-    paths = ("configs/opencode/openai-models.json", "configs/opencode/oh-my-opencode-slim.json", "configs/junie/model-groups.json")
+    paths = (
+        "configs/opencode/openai-models.json",
+        "configs/opencode/oh-my-opencode-slim.json",
+        "configs/junie/model-groups.json",
+    )
     for path in paths:
         content = (ROOT / path).read_text(encoding="utf-8")
         assert "gpt-6.1-sol" not in content
