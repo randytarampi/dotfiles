@@ -5,6 +5,7 @@ Live endpoint and installed-client inference remain owner-only acceptance checks
 """
 
 import json
+from math import isclose
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -119,11 +120,11 @@ def test_gpt62_one_for_one_registry_migration_and_pricing():
         assert "gpt-6.2-sol" in content
         assert "gpt-6.2-astra" in content
     rates = load("configs/litellm/model-rates.json")["models"]
-    assert rates["gpt-6.2-sol"]["input_cost_per_token"] == 2e-6
-    assert rates["gpt-6.2-sol"]["output_cost_per_token"] == 1e-5
-    assert rates["gpt-6.2-astra"]["input_cost_per_token"] == 8e-6
-    assert rates["gpt-6.2-astra"]["cache_read_input_token_cost"] == 4e-7
-    assert rates["gpt-6.2-astra"]["output_cost_per_token"] == 4e-5
+    assert isclose(rates["gpt-6.2-sol"]["input_cost_per_token"], 2e-6)
+    assert isclose(rates["gpt-6.2-sol"]["output_cost_per_token"], 1e-5)
+    assert isclose(rates["gpt-6.2-astra"]["input_cost_per_token"], 8e-6)
+    assert isclose(rates["gpt-6.2-astra"]["cache_read_input_token_cost"], 4e-7)
+    assert isclose(rates["gpt-6.2-astra"]["output_cost_per_token"], 4e-5)
 
 
 def test_webui_and_litellm_upgrade_pins_are_coherent():
