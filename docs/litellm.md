@@ -132,14 +132,14 @@ Run `PYTHONPATH=scripts/lib poetry run python -m free_classifier` for the offlin
 
 `DOTFILES_USE_OPENAI_SERVICE_LANES` defaults to `0`. When enabled, the generator expands only the genuine direct API-key `openai` route: the `OPENAI_API_KEY` identity and canonical `https://api.openai.com/v1` base URL must both match. OAuth/ChatGPT rows are never expanded. The curated allowlist is `gpt-6.2-sol`, `gpt-6.2-astra` and `gpt-6-luna`; each receives `-flex` and `-fast` aliases carrying request-body `service_tier` values `flex` and `fast`. A collision with an existing alias is an error. With the gate off, rendered output is identical to the unset-gate output. Requesting a tier does not guarantee account access to that tier. No model-specific minimum usage-tier prerequisite was verifiable; none is enforced here.
 
-Lane rates are 0.5x and 2x the base rate, retaining cache-read, cache-write and `cache_creation_input_token_cost` fields. The installed-runtime check verifies that `service_tier` survives `drop_params=True` with LiteLLM 1.102.1; if the check cannot verify this, setup logs an `UNVERIFIED` warning. This is bounded runtime evidence, not a guarantee across other LiteLLM versions.
+Lane rates are 0.5x and 2x the base rate, retaining cache-read, 30-minute cache-write, 12-hour cache-write and >272K long-context fields for GPT-6.2 Sol/Astra. Published long-context prices are applied to the full request after the input threshold; keep account- and region-specific charges as unverified. The installed-runtime check previously verified that `service_tier` survives `drop_params=True` with LiteLLM 1.102.1; if the check cannot verify this, setup logs an `UNVERIFIED` warning. This is bounded runtime evidence, not a guarantee across other LiteLLM versions.
 
 The documented standard short-context rates (input up to 272K tokens; USD per 1M tokens) are:
 
 | Model | Input | Cached input | Cache write | Output |
 |-------|------:|-------------:|-----------:|-------:|
 | `gpt-6.2-sol` | $2 | $0.10 | $2.50 | $10 |
-| `gpt-6.2-astra` | $10 | $1 | $12.50 | $50 |
+| `gpt-6.2-astra` | $8 | $0.40 | $10 | $40 |
 | `gpt-6-luna` | $0.10 | $0.01 | $0.125 | $0.50 |
 
 Flex is 0.5x and Fast is 2x these rates; cache fields are scaled likewise. For input above 272K, the documented long-context rule doubles input/cache rates and multiplies output by 1.5x.
@@ -189,3 +189,5 @@ The LTS includes fixes pertinent to this repository: large-body 429 retry memory
 **Preserved controls:** loopback binding; independent `DOTFILES_RUN_LITELLM_SETUP` and `DOTFILES_USE_LITELLM_PROXY` gates; dedicated client keys, private `service.env`, disabled-by-default admin UI and OAuth providers; existing provider retries/fallbacks; and no automatic deletion/re-issue of stranded keys. Never route an UNKNOWN zero-charge model to a paid fallback just to recover from a 429. GPT-6.2 Sol/Astra replace prior active model IDs, but actual API entitlements remain unverified. Service-lane flex/fast aliases remain gated and their discounted billing/availability is provisional until checked against the owner's account.
 
 **Owner-host acceptance:** capture installed version/health and private backups of database, `service.env` and client key metadata, without sharing credentials. Deploy the gated service, then verify exact installed LTS, unchanged client-key hashes, proxy aliases, authenticated Responses tool calls and streamed Messages/thinking/tool use; explicit missing-key/401 and 429/upstream-error paths; no unexpected paid egress; and two idempotent reconciliations. For rollback use the former pin **with its matching database backup**, never automatic key rotation or blind downgrade of an already migrated database.
+
+**Cost-source precedence:** GPT-6.2 Sol/Astra authoritative short/long-context rates are checked into `configs/litellm/model-rates.json` and must override stale models.dev prices for those six base/flex/fast identities during gateway configuration and bundled-cost-map reconciliation. Other model rates retain existing models.dev precedence. The standard 30-minute and 12-hour cache-write rates differ; 12-hour retention plus long-context handling and actual billed amounts require receipt verification. See [official model pricing](https://developers.openai.com/api/docs/pricing).
