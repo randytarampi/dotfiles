@@ -150,7 +150,6 @@ def host_facts():
     }
 
 
-
 def tool_version(name):
     """Return the tool's first version line, or ``unknown``.
 
@@ -297,7 +296,10 @@ def validate(receipt, expected_sha=None):
     if set(receipt["host"]) != hostkeys:
         raise ReceiptError("invalid host fields")
     # CPU models are not universally available (notably Windows and ARM Macs).
-    if any(not isinstance(v, str) or not v or len(v) > 200 for v in receipt["host"].values()):
+    if any(
+        not isinstance(v, str) or not v or len(v) > 200
+        for v in receipt["host"].values()
+    ):
         raise ReceiptError("invalid host fact value")
     if not isinstance(receipt["tools"], list):
         raise ReceiptError("tools must be an array")
@@ -327,7 +329,9 @@ def validate(receipt, expected_sha=None):
             raise ReceiptError("invalid exit_code")
         if item["outcome"] == "pass" and exit_code != 0:
             raise ReceiptError("pass requires exit_code 0")
-        if not isinstance(item["source"], str) or not STAGE_SOURCE.fullmatch(item["source"]):
+        if not isinstance(item["source"], str) or not STAGE_SOURCE.fullmatch(
+            item["source"]
+        ):
             raise ReceiptError("invalid stage source (use a short label, not a path)")
         elapsed = item["elapsed_seconds"]
         if elapsed is not None and (
