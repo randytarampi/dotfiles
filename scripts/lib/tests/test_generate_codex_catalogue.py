@@ -85,7 +85,7 @@ def test_catalogue_accepts_exactly_forty_served_ids_but_refuses_forty_one():
     [
         ["glm-5.3-flash:cloud"],
         ["ollama/kimi-k3:cloud", "kimi-k3:cloud"],
-        ["gpt-6-astra"],
+        ["gpt-6.2-astra"],
         ["Qwen3.8-27B-4bit", "Qwen3.8-27B-4bit"],
         ["model with spaces"],
         ["../danger"],
@@ -282,7 +282,7 @@ def test_launch_hosted_rows_are_copied_verbatim_and_fail_closed(tmp_path):
             {
                 "models": [
                     {
-                        "slug": "gpt-6-astra",
+                        "slug": "gpt-6.2-astra",
                         "display_name": "GPT-6-Astra",
                         "supported_in_api": False,
                     },
@@ -297,7 +297,7 @@ def test_launch_hosted_rows_are_copied_verbatim_and_fail_closed(tmp_path):
         encoding="utf-8",
     )
     rows = catalogue.load_launch_hosted_rows(launch)
-    assert [row["slug"] for row in rows] == ["gpt-6-astra"]
+    assert [row["slug"] for row in rows] == ["gpt-6.2-astra"]
     assert rows[0]["display_name"] == "GPT-6-Astra"
     bad = tmp_path / "bad.json"
     bad.write_text(json.dumps({"models": [{"slug": "x"}]}), encoding="utf-8")
@@ -310,25 +310,25 @@ def test_launch_hosted_rows_are_copied_verbatim_and_fail_closed(tmp_path):
 @pytest.mark.parametrize(
     "bad_hosted",
     [
-        {"slug": "gpt-6-astra", "display_name": "Astra"},
+        {"slug": "gpt-6.2-astra", "display_name": "Astra"},
         {
-            "slug": "gpt-6-astra",
+            "slug": "gpt-6.2-astra",
             "display_name": "Astra",
             "supported_in_api": None,
         },
         {
-            "slug": "gpt-6-astra",
+            "slug": "gpt-6.2-astra",
             "display_name": "Astra",
             "supported_in_api": "false",
         },
         {
-            "slug": "gpt-6-astra",
+            "slug": "gpt-6.2-astra",
             "display_name": "Astra",
             "supported_in_api": False,
             "provider": "litellm",
         },
         {
-            "slug": "gpt-6-astra",
+            "slug": "gpt-6.2-astra",
             "display_name": "Astra",
             "supported_in_api": False,
             "api_key": "synthetic-secret",
@@ -339,7 +339,7 @@ def test_launch_hosted_rows_are_copied_verbatim_and_fail_closed(tmp_path):
             "supported_in_api": False,
         },
         {
-            "slug": "gpt-6-astra",
+            "slug": "gpt-6.2-astra",
             "display_name": "",
             "supported_in_api": False,
         },
@@ -355,7 +355,7 @@ def test_launch_hosted_requires_explicit_provider_free_identity(tmp_path, bad_ho
 def test_launch_hosted_rejects_duplicate_and_zero_hosted_candidates(tmp_path):
     launch = tmp_path / "launch.json"
     hosted = {
-        "slug": "gpt-6-astra",
+        "slug": "gpt-6.2-astra",
         "display_name": "Astra",
         "supported_in_api": False,
     }
@@ -399,7 +399,7 @@ def test_combined_catalogue_prevents_gateway_spoof_and_overflow():
     result = catalogue.generate_catalogue(SERVED, ["ollama/glm-5.3-flash:cloud"], 65536)
     hosted = [
         {
-            "slug": "gpt-6-astra",
+            "slug": "gpt-6.2-astra",
             "display_name": "Astra",
             "supported_in_api": False,
         }
@@ -407,7 +407,7 @@ def test_combined_catalogue_prevents_gateway_spoof_and_overflow():
     merged = catalogue.append_launch_hosted_rows(result, hosted)
     assert [entry["slug"] for entry in merged["models"]] == [
         "ollama/glm-5.3-flash:cloud",
-        "gpt-6-astra",
+        "gpt-6.2-astra",
     ]
     assert len(result["models"]) == 1
     with pytest.raises(ValueError, match="overlap"):

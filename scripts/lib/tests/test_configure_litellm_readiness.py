@@ -186,8 +186,8 @@ def test_generation_requires_valid_runtime_only_when_emitting_enabled_lanes(
         CONFIGURE, "validate_service_lane_runtime", lambda: runtime_valid
     )
     entry = {
-        "model_name": "openai/gpt-6.1-sol" + (f"-{lane}" if lane else ""),
-        "litellm_params": {"model": "openai/gpt-6.1-sol"},
+        "model_name": "openai/gpt-6.2-sol" + (f"-{lane}" if lane else ""),
+        "litellm_params": {"model": "openai/gpt-6.2-sol"},
     }
     if lane:
         entry["litellm_params"]["service_tier"] = lane

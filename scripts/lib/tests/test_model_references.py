@@ -40,7 +40,7 @@ def test_openrouter_inner_slashes_and_tags_are_preserved():
 def test_direct_openai_ids_are_exact_versioned_and_strip_one_wrapper():
     requested = [
         ref("openai-direct", "openai-key", "openai/gpt-6-sol"),
-        ref("openai-direct", "openai-key", "openai/gpt-6.1-sol"),
+        ref("openai-direct", "openai-key", "openai/gpt-6.2-sol"),
         ref("zen-direct", "zen-key", "opencode/zen-model"),
     ]
     result = compare_references(
@@ -57,7 +57,7 @@ def test_direct_openai_ids_are_exact_versioned_and_strip_one_wrapper():
     )
     assert outcomes(result) == {
         "openai/gpt-6-sol": Outcome.MATCH,
-        "openai/gpt-6.1-sol": Outcome.MISSING,
+        "openai/gpt-6.2-sol": Outcome.MISSING,
         "opencode/zen-model": Outcome.MATCH,
     }
     assert openai_zen_direct_id("openai/opencode/model") == "opencode/model"
