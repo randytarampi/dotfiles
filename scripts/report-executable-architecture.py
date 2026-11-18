@@ -88,7 +88,9 @@ def pe_architecture(path):
             with open(candidate, "rb") as handle:
                 data = handle.read(MAX_HEADER_BYTES)
         except (OSError, ValueError):
-            last_error = "cannot read executable (details suppressed to protect host paths)"
+            last_error = (
+                "cannot read executable (details suppressed to protect host paths)"
+            )
             continue
         return pe_architecture_from_bytes(data)
     return "unknown", last_error
@@ -117,7 +119,6 @@ def resolve_bash(overrides):
             "resolution": "PATH bash may be a launcher; supply --path bash=RUNNING_SHELL",
         }
     return {"path": None, "resolution": "bash missing from PATH"}
-
 
 
 def resolve_tool(name, overrides):
