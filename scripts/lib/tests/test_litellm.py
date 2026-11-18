@@ -4361,6 +4361,40 @@ def test_models_dev_rates_fall_back_to_installed_map(monkeypatch):
     assert info == dict(CLAUDE_FIXTURE_ENTRY)
 
 
+def test_gpt62_official_prices_win_over_stale_models_dev(monkeypatch, tmp_path):
+    _seed_models_dev_fetch(
+        monkeypatch,
+        {
+            "openai": {
+                "models": {
+                    "gpt-6.2-astra": {
+                        "cost": {"input": 100, "output": 500, "cache_read": 10}
+                    }
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(litellm_config, "_BUILTIN_COST_MAP_LOADED", False)
+    monkeypatch.setattr(litellm_config, "BUILTIN_COST_MAP", {})
+    monkeypatch.setenv("LITELLM_ROOT", str(tmp_path / "no-installed-map"))
+    info = litellm_config.model_rates(
+        "openai", "gpt-6.2-astra", "openai/gpt-6.2-astra"
+    )
+    assert info["input_cost_per_token"] == pytest.approx(8e-6)
+    assert info["output_cost_per_token"] == pytest.approx(4e-5)
+    assert info["cache_creation_input_token_cost"] == pytest.approx(1e-5)
+    assert info["input_cost_per_token_above_272k_tokens"] == pytest.approx(1.6e-5)
+    generated = litellm_config.build_rates_snapshot({})
+    row = generated["models"]["gpt-6.2-astra"]
+    assert row["input_cost_per_token"] == pytest.approx(8e-6)
+    assert row["cache_creation_input_token_cost_above_1hr"] == pytest.approx(2e-5)
+    # Subscription gateway twins retain Responses mode and the official
+    # estimate rather than inheriting a stale provider catalogue rate.
+    twin = generated["models"]["chatgpt/gpt-6.2-astra"]
+    assert twin["mode"] == "responses"
+    assert twin["input_cost_per_token"] == pytest.approx(8e-6)
+
+
 def test_models_dev_rates_precedence_over_installed_map(monkeypatch):
     _seed_models_dev_fetch(
         monkeypatch,

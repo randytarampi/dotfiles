@@ -96,6 +96,9 @@ def classify_free_route(model_id, host, route_source, role):
 OPENAI_SERVICE_LANES_ENV = "DOTFILES_USE_OPENAI_SERVICE_LANES"
 LITELLM_SETUP_GATE = "DOTFILES_RUN_LITELLM_SETUP=1"
 OPENAI_SERVICE_LANE_MODELS = {"gpt-6.2-sol", "gpt-6.2-astra", "gpt-6-luna"}
+# 18 November 2026: these two new OpenAI families have authoritative prices
+# including their cache-retention and long-context variants.
+GPT62_OFFICIAL_PRICE_BASES = ("gpt-6.2-sol", "gpt-6.2-astra")
 OPENROUTER_FREE_TWINS_ENV = "DOTFILES_LITELLM_INCLUDE_OPENROUTER_FREE_TWINS"
 
 # Cloud providers whose live /v1/models catalogue the generator enumerates
@@ -207,6 +210,11 @@ def builtin_rates(wire_model):
         ("max_input_tokens", "max_input_tokens"),
         ("max_output_tokens", "max_output_tokens"),
         ("mode", "mode"),
+        ("input_cost_per_token_above_272k_tokens", "input_cost_per_token_above_272k_tokens"),
+        ("output_cost_per_token_above_272k_tokens", "output_cost_per_token_above_272k_tokens"),
+        ("cache_read_input_token_cost_above_272k_tokens", "cache_read_input_token_cost_above_272k_tokens"),
+        ("cache_creation_input_token_cost_above_272k_tokens", "cache_creation_input_token_cost_above_272k_tokens"),
+        ("cache_creation_input_token_cost_above_1hr", "cache_creation_input_token_cost_above_1hr"),
     ):
         value = entry.get(source_key)
         if isinstance(value, (int, float, str)) and value is not None:
@@ -299,6 +307,13 @@ def model_rates(provider, model_id, wire_model):
     API rates as an estimate — the plan bundle has no per-token price, and
     the user wants usage pages to show a comparable number for every lane.
     """
+    # GPT-6.2 prices were published after some models.dev snapshots and the
+    # managed LiteLLM release were built; do not let stale model metadata
+    # silently override these reviewed official rates.
+    if provider == "openai" and model_id in GPT62_OFFICIAL_PRICE_BASES:
+        official = builtin_rates(wire_model)
+        if official:
+            return official
     dev_provider = MODELS_DEV_WIRE_PROVIDERS.get(provider)
     if dev_provider:
         candidates = [model_id]
@@ -351,6 +366,25 @@ def build_rates_snapshot(environ=None):
                     for suffix in (":cloud", "-cloud"):
                         rates[f"{model_id}{suffix}"] = info
                         rates[f"ollama/{model_id}{suffix}"] = info
+    # The runtime snapshot is installed ahead of the checked-in fallback.
+    # Overlay the two newly released families here, or deployment could
+    # overwrite the reviewed official cost rows with stale models.dev prices.
+    official_map = _builtin_cost_map()
+    for base in GPT62_OFFICIAL_PRICE_BASES:
+        for suffix in ("", "-flex", "-fast"):
+            model_id = base + suffix
+            official = official_map.get(model_id)
+            if not isinstance(official, dict):
+                continue
+            rates[model_id] = dict(official)
+            if f"chatgpt/{model_id}" in rates:
+                # Retain the subscription response transport for a priced
+                # estimate; this is not an assertion of API billing.
+                rates[f"chatgpt/{model_id}"] = {
+                    **official,
+                    "mode": "responses",
+                    "litellm_provider": "chatgpt",
+                }
     # Provenance stamps the cache's data vintage (deterministic inside the
     # 24h cache window); empty when the fetch degraded.
     fetched = ""
@@ -1954,6 +1988,11 @@ def compute_model_list(environ=None, previous_entries=None, *, anthropic_bridges
                         "output_cost_per_token",
                         "cache_read_input_token_cost",
                         "cache_creation_input_token_cost",
+                        "cache_creation_input_token_cost_above_1hr",
+                        "input_cost_per_token_above_272k_tokens",
+                        "output_cost_per_token_above_272k_tokens",
+                        "cache_read_input_token_cost_above_272k_tokens",
+                        "cache_creation_input_token_cost_above_272k_tokens",
                     ):
                         value = lane_info.get(rate_key)
                         if isinstance(value, (int, float)):
