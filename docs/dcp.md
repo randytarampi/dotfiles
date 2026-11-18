@@ -14,7 +14,7 @@ No per-model config needed — the plugin reads context windows from provider co
 
 The LiteLLM-routed `poolside/laguna-s-2.1` OpenCode entry is conservatively advertised with ceiling limits of 262,112 tokens of context and 32,768 tokens of output, preserving any smaller positive limits already configured. This is a routed policy based on observed gateway behaviour, not a claim about Poolside's full native context window. At 67%, DCP's strong-compression nudge is about 175,615 tokens; with the output allowance, that remains below the observed 262,112-token gateway boundary. DCP nudges rely on the model choosing the compress tool, so they do not guarantee automatic compression before the limit. Direct Poolside entries retain their existing metadata.
 
-## Context Mode pilot
+## Context Mode integration
 
 The optional [Context Mode](context-mode.md) integration does not replace DCP. OpenCode's native automatic compaction remains disabled. Context Mode's native compaction hooks cannot be presumed to observe DCP-triggered compression until verified in a real session.
 
