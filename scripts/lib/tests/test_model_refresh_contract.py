@@ -124,3 +124,19 @@ def test_gpt62_one_for_one_registry_migration_and_pricing():
     assert rates["gpt-6.2-astra"]["input_cost_per_token"] == 8e-6
     assert rates["gpt-6.2-astra"]["cache_read_input_token_cost"] == 4e-7
     assert rates["gpt-6.2-astra"]["output_cost_per_token"] == 4e-5
+
+
+def test_webui_and_litellm_upgrade_pins_are_coherent():
+    webui = (ROOT / ".chezmoiscripts/run_onchange_30-openwebui.sh.tmpl").read_text()
+    litellm = (ROOT / ".chezmoiscripts/run_onchange_15-litellm.sh.tmpl").read_text()
+    caddy = (ROOT / ".chezmoiscripts/run_onchange_24-install-caddy.sh.tmpl").read_text()
+    template = (ROOT / "dot_dotfiles/shell/.env.example").read_text()
+    assert 'DOTFILES_OPENWEBUI_VERSION:-0.13.4' in webui
+    assert 'DOTFILES_OPENWEBUI_TERMINAL_VERSION:-0.17.20' in webui
+    assert 'DOTFILES_OPENWEBUI_COMPUTER_VERSION:-0.9.21' in webui
+    assert 'DOTFILES_LITELLM_VERSION:-1.108.11' in litellm
+    assert 'DOTFILES_OPENWEBUI_VERSION" | default "0.13.4"' in caddy
+    for version in ("0.13.4", "0.17.20", "0.9.21", "1.108.11"):
+        assert version in template
+    assert "ENABLE_TOOL_SERVERS" in template
+    assert "ENABLE_TOOL_PERMISSIONS_AUTO" in template
