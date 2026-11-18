@@ -298,10 +298,15 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
   # manifests that declare npm entries.
   for selected_manifest in "${selected_brewfiles[@]}"; do
     brew_bundle_filtered "$selected_manifest"
-  done
-  for selected_manifest in "${selected_npm_manifests[@]}"; do
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "$selected_manifest" ||
-      warn "npm package reconciliation failed for $(basename "$selected_manifest")"
+    # Keep the previous per-manifest ordering: an npm reconciliation follows
+    # its own bundle, not all bundles at the end. Do not widen the ignore key.
+    for selected_npm_manifest in "${selected_npm_manifests[@]}"; do
+      if [[ "$selected_npm_manifest" == "$selected_manifest" ]]; then
+        bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "$selected_manifest" ||
+          warn "npm package reconciliation failed for $(basename "$selected_manifest")"
+        break
+      fi
+    done
   done
 
 fi
