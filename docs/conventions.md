@@ -2,6 +2,34 @@
 
 This document is the canonical technical reference for script conventions. `AGENTS.md` delegates authority to it for CLI and environment interface policy. Reference material remains in the linked documentation; policy is kept here so the CLI and environment interfaces can be checked automatically.
 
+## Vocabulary
+
+One meaning per term. These words carry different evidence obligations, and using
+them loosely is how "it works" ends up meaning four different things.
+
+| Term | Means | Does not mean |
+|---|---|---|
+| **provider** | A service identity that serves models, e.g. `anthropic`, `ollama-cloud`, `openrouter` | A model, or a client |
+| **model ID** | The exact identifier the provider serves, e.g. `glm-5.3-flash` | A marketing version name |
+| **alias** / **route** | A name a client asks for, mapped to a provider + model ID by a gateway | That the mapping resolves, or that the provider accepted it |
+| **wire** | The protocol shape on the connection: OpenAI `chat_completions`, Anthropic `messages`, OpenAI `responses` | A provider, or a model |
+| **tier** / **preset** | A named selection of roles → model IDs, resolved by `tier_registry.py` | A guarantee about which model actually served a request |
+| **client** / **consumer** | The installed program that makes the request | That it is configured, or that a task succeeded |
+| **capability** | A specific operation a consumer can perform, e.g. tool calling, streaming, vision | Feature parity across consumers |
+| **gate** | A `DOTFILES_RUN_*` switch, default `0`, that enables optional work | That the feature is installed, healthy or reachable |
+| **installed** | The package or binary exists on this host | Configured, running, or working |
+| **CI-verified** | Required checks passed on an exact commit | That any installed client works |
+| **host-qualified** | A real operation succeeded on the intended host, with a receipt | That every path on that host works |
+| **owner-reported** | The owner said it worked; not independently replayed | Independent evidence |
+| **unsupported** | Deliberately not supported at this version, with a re-entry trigger | Broken-by-accident |
+| **credential** | A secret value read at runtime | The *name* of the variable that holds it |
+| **ready** / **healthy** | A protocol or consumer probe passed after an action | That the service manager accepted a command |
+
+The distinction that matters most in practice: **a generated configuration, a
+served model listing and a successful task are three different proofs.** A model
+that appears in `/v1/models` may still reject inference; a profile that parses
+may never load.
+
 ## Markdown layout
 
 Markdown prose is **not hard-wrapped at a fixed column count**. GitHub callout markers such as `> [!NOTE]`, `> [!TIP]` and `> [!IMPORTANT]` must remain on their own source lines, followed by separately quoted content lines; joining a marker with its body breaks alert rendering. Keep an ordinary paragraph or list-item sentence on one physical source line and allow the editor to soft-wrap it for display. Keep newlines that are semantically significant: headings, blank lines between blocks, separate list items, blockquotes, fenced or indented code, tables, reference definitions, front matter, and intentional hard breaks (two trailing spaces or an explicit line-break element). Never fold lines inside a code block or a table merely to satisfy this policy.
