@@ -321,6 +321,7 @@ Reply in the language and register the conversation is using. English prose uses
 | [docs/chat-frontend.md](docs/chat-frontend.md) | Unified multi-provider chat frontend (Open WebUI, implemented) — reconciler, deployment wiring, maintenance guidance |
 | [docs/modernization-roadmap.md](docs/modernization-roadmap.md) | Delivered modernization, active issue/acceptance map, consolidated Paseo follow-up, safety decisions and deferred platform work |
 | [docs/hardware-acceptance.md](docs/hardware-acceptance.md) | Self-hosted runner threat model, GO/NO-GO checklist and the event-contract rule; nothing registered |
+| [docs/gateway-recovery.md](docs/gateway-recovery.md) | Recovering the local AI stack from a stock terminal; rehearsal NOT RUN |
 | [docs/unmanaged-clients.md](docs/unmanaged-clients.md) | LiteLLM integration reference for Cursor, Gemini CLI, Claude Desktop Cowork, and VS Code Copilot |
 
 ---
