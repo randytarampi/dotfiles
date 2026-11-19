@@ -57,10 +57,13 @@ dedicated unprivileged account, with:
 - a dedicated machine or a rebuildable image, not the daily driver;
 - an explicit reboot/reimage procedure.
 
-`--ephemeral` removes the persistent-state class: the runner is torn down after
-one job and re-registered, so an artefact or cache foothold does not survive.
+`--ephemeral` unregisters the runner after one job; it does **not** erase the
+operating system or remove a foothold left on the machine. Re-registering the
+same board without rebuilding its execution environment preserves malicious
+files, services and processes. Treat the host as compromised after untrusted
+code runs, and use a disposable VM/image with a verified per-job reset.
 
-- Cost: one workflow file, one runner registration, a reimage habit.
+- Cost: a runner controller, per-job image reset, network isolation and recurring maintenance; not just a workflow file.
 - Risk: moderate. The board is a real host; isolation is configured, not
   structural.
 
@@ -76,10 +79,14 @@ a redacted receipt.
   exists to reduce.
 - Risk: lowest per-execution, highest per-maintenance.
 
-**Recommendation:** attempt **B** first, with the GO checklist. Fall back to
-**C** only if the boards cannot be isolated to the checklist's satisfaction.
-Fall back to **A** if neither is acceptable — `#275` can stay open as an
-owner-produced ledger, which is honest, just manual.
+**Recommendation:** for a public repository, prefer **C** (private control
+plane/pull verifier) when it can be kept simple; otherwise choose **A** until
+there is an explicitly approved isolation design. **B** is a conditional
+alternative only if the runner uses a disposable, rebuildable execution image
+that is reset between jobs, and the host is isolated from the home network and
+personal state. A dedicated account plus `--ephemeral` registration alone is
+**not sufficient**. If neither can be maintained safely, `#275` stays open with
+owner-produced receipts rather than inventing acceptance.
 
 ## Resolving the event contradiction
 
@@ -109,7 +116,7 @@ fallback is option A or C.
       password-manager access reachable from it.
 - [ ] Every hardware job triggers only on `schedule` or `workflow_dispatch`.
 - [ ] Every third-party action pinned to a full commit SHA.
-- [ ] Runner registered `--ephemeral`, or a documented reimage between jobs.
+- [ ] Runner registered `--ephemeral` **and** execution environment destroyed/reimaged between jobs (or equivalent independently checked isolation).
 - [ ] Network egress limited to what the test needs.
 - [ ] Reimage/reboot procedure written down, and exercised at least once.
 - [ ] Receipt publication uses the provenance rules in
