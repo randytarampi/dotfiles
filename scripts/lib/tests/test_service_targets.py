@@ -92,3 +92,42 @@ def test_no_rewritten_target_prints_unconditional_success():
         assert (
             phrase not in text
         ), f"unconditional success claim reintroduced: {phrase!r}"
+
+
+def test_linux_absent_optional_units_are_skipped_without_invoking_manager(tmp_path: Path):
+    """A working user systemd instance may have none of these optional units."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _write_stub(bin_dir / "uname", 'echo "Linux"\n')
+    trace = tmp_path / "manager-actions.txt"
+    _write_stub(
+        bin_dir / "systemctl",
+        'if [ "$2" = list-unit-files ]; then exit 0; fi\n'
+        'if [ "$2" = cat ]; then exit 1; fi\n'
+        'printf "%s\\n" "$*" >> "$STUB_TRACE"\n'
+        'exit 5\n',
+    )
+    env = dict(os.environ)
+    env["HOME"] = str(tmp_path)
+    env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
+    env["STUB_TRACE"] = str(trace)
+    targets = (
+        "opencode-start",
+        "opencode-stop",
+        "openwebui-stop",
+        "litellm-stop",
+        "meridian-restart",
+        "ddns-restart",
+    )
+    for target in targets:
+        result = subprocess.run(
+            ["make", "-s", "--no-print-directory", target],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, (target, result.stdout, result.stderr)
+        assert "SKIPPED" in result.stdout, (target, result.stdout)
+    assert not trace.exists(), "absent optional units must not be started or stopped"
