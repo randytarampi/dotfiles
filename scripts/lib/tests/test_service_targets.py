@@ -94,7 +94,9 @@ def test_no_rewritten_target_prints_unconditional_success():
         ), f"unconditional success claim reintroduced: {phrase!r}"
 
 
-def test_linux_absent_optional_units_are_skipped_without_invoking_manager(tmp_path: Path):
+def test_linux_absent_optional_units_are_skipped_without_invoking_manager(
+    tmp_path: Path,
+):
     """A working user systemd instance may have none of these optional units."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -105,7 +107,7 @@ def test_linux_absent_optional_units_are_skipped_without_invoking_manager(tmp_pa
         'if [ "$2" = list-unit-files ]; then exit 0; fi\n'
         'if [ "$2" = cat ]; then exit 1; fi\n'
         'printf "%s\\n" "$*" >> "$STUB_TRACE"\n'
-        'exit 5\n',
+        "exit 5\n",
     )
     env = dict(os.environ)
     env["HOME"] = str(tmp_path)
