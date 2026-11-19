@@ -48,20 +48,3 @@ if command -v ollama &>/dev/null; then
   PYTHONPATH="{{ .chezmoi.sourceDir }}/scripts/lib" python3 -m ollama_cloud_models --registry "$CONFIG_FILE" --cleanup || warn "Could not remove stale cloud stubs"
 fi
 ok "Stale cloud model stub cleanup complete"
-
-# ---------------------------------------------------------------------------
-# lazyskills CLI (skill discovery and management)
-#   macOS: brew cask (alvinunreal/tap/lazyskills)
-#   Linux: curl installer (https://lazyskills.sh/install)
-# ---------------------------------------------------------------------------
-info "Installing lazyskills CLI..."
-if command -v lazyskills &>/dev/null; then
-  ok "lazyskills CLI already installed"
-elif [[ "$(uname -s)" == "Darwin" ]]; then
-  # Brewfile.dev owns the cask; do not install it again through this gate.
-  warn "lazyskills missing — enable the dev package lane to install the Brewfile.dev cask"
-elif command -v curl &>/dev/null; then
-  curl -fsSL https://lazyskills.sh/install | sh || warn "lazyskills curl install failed"
-else
-  warn "Cannot install lazyskills — see scripts/install-skills.sh for manual instructions"
-fi

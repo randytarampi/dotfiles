@@ -182,7 +182,6 @@ brew "shared-mime-info"
 brew "zlib"
 
 # --- CLI casks ---
-cask "alvinunreal/tap/lazyskills"
 cask "antigravity-cli"
 cask "claude-code"
 cask "codex"
