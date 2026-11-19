@@ -428,7 +428,6 @@
         "configure-opencode.py",
         "configure-meridian.py",
         "configure-codex.py",
-        "configure-mozart-router.py",
         "configure-agent-guidance.py",
         "configure-codegraph.py",
         "configure-skills.py",
@@ -624,20 +623,6 @@
         "--help",
         "--dry-run",
         "--no-backup"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/configure-mozart-router.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run"
       ],
       "positional_operand": null,
       "child_scripts": []

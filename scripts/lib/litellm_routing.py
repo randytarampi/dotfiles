@@ -4,6 +4,9 @@ import re
 import json
 from urllib.parse import urlsplit
 
+# Mozart was retired as a managed router in 2026-11-19. Its names stay reserved
+# because a persisted or migrated config can still reference them: retiring a
+# product does not make a historical routing alias safe to point at.
 RESERVED_ROUTING_COMPONENTS = {"mozart", ".mozart", "mozart-router"}
 ROUTING_FIELDS = ("model", "api_base", "api_key", "gateway", "model_provider")
 ENDPOINT_FIELDS = {"api_base", "gateway"}
@@ -23,7 +26,7 @@ def _endpoint(value):
 
 
 def is_litellm_loop_target(value, *, field, port=4000):
-    """Return whether *value* is a Mozart or self-routing target.
+    """Return whether *value* is a self-routing target or a retired Mozart alias.
 
     Reserved names are matched as complete routing components, never as
     arbitrary substrings. Host/port matching is limited to endpoint fields.

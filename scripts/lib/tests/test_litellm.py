@@ -3803,7 +3803,7 @@ def test_cloud_provider_routes_use_recorded_upstreams(
         {"model_name": "bad", "litellm_params": {"model": "mozart-router/default"}},
     ],
 )
-def test_render_rejects_mozart_and_self_routing(entry):
+def test_render_rejects_retired_mozart_alias_and_self_routing(entry):
     with pytest.raises(litellm_config.RoutingInvariantError):
         litellm_config.render_config(entries=[entry])
 
@@ -3832,15 +3832,6 @@ def test_generator_uses_litellm_port_override():
     }
     with pytest.raises(litellm_config.RoutingInvariantError):
         litellm_config.render_config(environ={"LITELLM_PORT": "4100"}, entries=[entry])
-
-
-def test_mozart_template_has_no_litellm_gateway():
-    template = Path(__file__).resolve().parents[3] / "configs/mozart-router/mozart.json"
-    config = json.loads(template.read_text(encoding="utf-8"))
-    assert all(
-        "127.0.0.1:4000" not in json.dumps(gateway)
-        for gateway in config.get("gateways", {}).values()
-    )
 
 
 def _fake_prisma_venv(tmp_path):

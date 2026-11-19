@@ -19,8 +19,11 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # for the @latest OpenCode Context Mode plugin.
 # 2026-11-18: Open WebUI/Terminal and LiteLLM version pins plus the four
 # Tether-related, commented service-default overrides; no active assignments.
+# 2026-11-19: removed the two commented Mozart entries
+# (DOTFILES_RUN_MOZART_SETUP and MOZART_CONFIG) when the router retired; no
+# other assignment line changed, added or reordered.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "6d9e1f276d9d565fc4e5ec3c2e0f064bd6cb4b10383532a809937f45343c232b"
+    "219420c907d23955428264a24d6fc7a2fc452be8976431ccc922c4b4428648d0"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 

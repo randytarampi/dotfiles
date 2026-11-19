@@ -2748,50 +2748,6 @@ def test_pi_omlx_provider_is_absent_when_gate_is_off():
         assert configure_pi.build_local_provider("omlx", ["chat"]) is None
 
 
-def test_mozart_injects_local_engine_gateways(monkeypatch):
-    """N-engine contract: gate-active engines land as Mozart gateways via
-    the registry, deduped by base URL."""
-    mozart = _load_script("configure_mozart_router", "configure-mozart-router.py")
-    gateways = {"ollama-cloud": {"baseUrl": "http://localhost:11434/v1"}}
-    with (
-        patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "1"}, clear=False),
-        patch.dict(
-            local_engines.LOCAL_ENGINES["omlx"],
-            {
-                "health_check": lambda: (True, "ok"),
-                "base_url": lambda: "http://127.0.0.1:8000",
-            },
-        ),
-    ):
-        mozart.inject_local_engine_gateways(gateways)
-    assert gateways["omlx"]["baseUrl"] == "http://127.0.0.1:8000/v1"
-    assert gateways["omlx"]["adapter"] == "generic-openai"
-    assert gateways["omlx"]["enabled"] is True
-    # Dedupe: a gateway already pointing at the same base URL wins
-    gateways2 = {"existing": {"baseUrl": "http://127.0.0.1:8000/v1"}}
-    with (
-        patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "1"}, clear=False),
-        patch.dict(
-            local_engines.LOCAL_ENGINES["omlx"],
-            {
-                "health_check": lambda: (True, "ok"),
-                "base_url": lambda: "http://127.0.0.1:8000",
-            },
-        ),
-    ):
-        mozart.inject_local_engine_gateways(gateways2)
-    assert "omlx" not in gateways2
-    # Unreachable engine → skipped
-    fake = dict(local_engines.LOCAL_ENGINES["omlx"])
-    fake["health_check"] = lambda: (False, "down")
-    monkeypatch.setitem(local_engines.LOCAL_ENGINES, "unreachable", fake)
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("DOTFILES_RUN_OMLX_SETUP", None)
-        gateways3 = {}
-        mozart.inject_local_engine_gateways(gateways3)
-    assert "unreachable" not in gateways3
-
-
 @pytest.mark.parametrize("discovered", [[], None])
 def test_sync_turboquant_kv_applies_ollama_kv_cache_type(tmp_path, discovered):
     """OLLAMA_KV_CACHE_TYPE drives oMLX per-model TurboQuant (q8_0→8, q4_0→4)."""

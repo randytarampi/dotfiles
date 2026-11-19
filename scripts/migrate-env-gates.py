@@ -16,7 +16,7 @@ Design:
       shell code. Never prints secret values.
     - Renames: replaces old gate key with new gate key on the same line,
       preserving the value and comment.
-    - Inherits: for newly-split gates (e.g., MOZART split from MCP_SETUP),
+    - Inherits: for newly-split gates (e.g., CODEGRAPH split from MCP_SETUP),
       if the new gate is absent, it inherits the value of its predecessor.
     - Removes: deprecated gates that have no current equivalent are commented
       out with a migration note.
@@ -85,11 +85,6 @@ MIGRATIONS = [
     ("DOTFILES_RUN_MERIDIAN_LAUNCHD", "DOTFILES_RUN_MERIDIAN_SETUP", None),
     ("DOTFILES_RUN_OPENCODE_PLUGINS_SETUP", "DOTFILES_RUN_OPENCODE_TOOLS_SETUP", None),
     # Gate splits (new gate inherits from shared predecessor if absent)
-    (
-        "DOTFILES_RUN_MOZART_SETUP_OLD",
-        "DOTFILES_RUN_MOZART_SETUP",
-        "DOTFILES_RUN_MCP_SETUP",
-    ),
     ("DOTFILES_RUN_CODEGRAPH_SETUP_OLD", "DOTFILES_RUN_CODEGRAPH_SETUP", None),
     (
         "DOTFILES_RUN_AGENT_GUIDANCE_SETUP_OLD",

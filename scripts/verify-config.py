@@ -226,7 +226,7 @@ def validate_caddyfile(path: Path) -> tuple[Optional[bool], str]:
 
 
 def validate_litellm_routing_text(config_text: str, port: int = 4000) -> bool:
-    """Return false when LiteLLM config points at Mozart or its own port."""
+    """Return false when LiteLLM config points at its own port or a retired Mozart alias."""
     return routing_config_text_is_safe(config_text, port=port)
 
 
@@ -338,7 +338,7 @@ def validate_litellm_service_env(
     except ValueError:
         routing_port = 4000
     if not validate_litellm_routing_text(config_text, routing_port):
-        problems.append("LiteLLM config: Mozart/self-routing loop detected")
+        problems.append("LiteLLM config: Mozart-alias/self-routing loop detected")
     refs = set(re.findall(r"os\.environ/([A-Z][A-Z0-9_]*)", config_text))
     core_env = {
         "LITELLM_MASTER_KEY",
@@ -1070,13 +1070,6 @@ CHECKS = [
         [
             HOME / ".config/opencode/mcp",
             HOME / ".pi/agent/mcp-adapter.json",
-        ],
-    ),
-    (
-        "DOTFILES_RUN_MOZART_SETUP",
-        "Mozart router config",
-        [
-            HOME / ".mozart/mozart.json",
         ],
     ),
     (

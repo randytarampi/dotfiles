@@ -81,16 +81,6 @@ def test_cursor_key_is_opt_in_and_transport_remains_unverified():
     assert "UNVERIFIED" in row["classification_status"]
 
 
-def test_mozart_is_existing_consumer_with_evidence():
-    row = next(
-        row for row in litellm_config.CLIENT_REGISTRY if row["client"] == "mozart"
-    )
-    assert row["classification"] == "eligible"
-    assert row["classification_status"] == "existing-consumer"
-    assert row["credential_policy"] == "no-credential"
-    assert all(":" in pointer for pointer in row["evidence"])
-
-
 def test_hermes_is_config_only_with_pool_delivery_deferred():
     row = next(
         row for row in litellm_config.CLIENT_REGISTRY if row["client"] == "hermes"

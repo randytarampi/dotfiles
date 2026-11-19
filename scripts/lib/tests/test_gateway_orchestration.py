@@ -9,7 +9,7 @@ import subprocess
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-SKIPS = "cleanup,npm-packages,secrets,aws,mcps,cortex,meridian,codex,mozart,agent-guidance,codegraph,codegraph-indexes,ollama-daemon,skills,ddns,caddy,opencode-restart"
+SKIPS = "cleanup,npm-packages,secrets,aws,mcps,cortex,meridian,codex,agent-guidance,codegraph,codegraph-indexes,ollama-daemon,skills,ddns,caddy,opencode-restart"
 
 
 def _write(path, text):
