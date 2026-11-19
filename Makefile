@@ -340,23 +340,29 @@ caddy-restart: ## Restart Caddy service (system-level)
 # acp-agents.json, etc.).
 
 opencode-start: ## Start OpenCode Web service
-	@echo "Starting OpenCode Web..."
-	@if [ "$$(uname)" = "Darwin" ]; then \
-		launchctl bootstrap "gui/$$(id -u)" ~/Library/LaunchAgents/com.opencode.web.plist 2>/dev/null || true; \
-		launchctl kickstart -k "gui/$$(id -u)/com.opencode.web" 2>/dev/null || true; \
-	else \
-		systemctl --user start opencode-web 2>/dev/null || true; \
-	fi
-	@echo "OpenCode Web started."
+	@$(LOAD_ENV); . scripts/lib/service_result.sh; \
+	if [ "$$(uname)" = "Darwin" ]; then \
+		. scripts/lib/opencode_service.sh; \
+		opencode_service_start "gui/$$(id -u)" "$$HOME/Library/LaunchAgents/com.opencode.web.plist" \
+			|| { svc_failed "OpenCode Web LaunchAgent did not become ready"; exit 1; }; \
+		svc_healthy "OpenCode Web (/api/info)"; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		if ! svc_user_systemd_available; then svc_skip "no user systemd session"; \
+		elif systemctl --user start opencode-web 2>/dev/null && systemctl --user is-active --quiet opencode-web; then \
+			svc_applied "opencode-web"; \
+		else svc_failed "opencode-web did not start"; exit 1; fi; \
+	else svc_skip "OpenCode Web is unsupported on this platform"; fi
 
 opencode-stop: ## Stop OpenCode Web service
-	@echo "Stopping OpenCode Web..."
-	@if [ "$$(uname)" = "Darwin" ]; then \
-		launchctl bootout "gui/$$(id -u)/com.opencode.web" 2>/dev/null || true; \
-	else \
-		systemctl --user stop opencode-web 2>/dev/null || true; \
-	fi
-	@echo "OpenCode Web stopped."
+	@. scripts/lib/service_result.sh; \
+	if [ "$$(uname)" = "Darwin" ]; then \
+		. scripts/lib/opencode_service.sh; opencode_service_stop "gui/$$(id -u)"; \
+		svc_applied "OpenCode Web LaunchAgent unloaded"; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		if ! svc_user_systemd_available; then svc_skip "no user systemd session"; \
+		elif systemctl --user stop opencode-web 2>/dev/null; then svc_applied "opencode-web stopped"; \
+		else svc_failed "opencode-web stop failed"; exit 1; fi; \
+	else svc_skip "OpenCode Web is unsupported on this platform"; fi
 
 opencode-restart: opencode-stop opencode-start ## Restart OpenCode Web service
 	@echo "OpenCode Web restarted."
@@ -374,7 +380,13 @@ openwebui-start: ## Start Open WebUI service
 
 openwebui-stop: ## Stop Open WebUI service
 	@echo "Stopping Open WebUI..."
-	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_service_stop; elif [ "$$(uname)" = "Linux" ]; then systemctl --user stop open-webui.service 2>/dev/null || true; fi
+	@. scripts/lib/service_result.sh; \
+	if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_service_stop && svc_applied "Open WebUI stopped"; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		if ! svc_user_systemd_available; then svc_skip "no user systemd session"; \
+		elif systemctl --user stop open-webui.service 2>/dev/null; then svc_applied "open-webui stopped"; \
+		else svc_failed "open-webui stop failed"; exit 1; fi; \
+	else svc_skip "Open WebUI is unsupported on this platform"; fi
 
 openwebui-restart: ## Restart Open WebUI service
 	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]; then echo "Open WebUI gate is off — skipping"; exit 0; fi; \
@@ -404,13 +416,21 @@ openwebui-computer-stop: ## Stop the cptr service
 
 openwebui-computer-restart: openwebui-computer-stop openwebui-computer-start ## Restart cptr
 
-# LiteLLM is an independent loopback gateway and intentionally does not join services-restart.
+# LiteLLM is an independent loopback gateway. It does participate in
+# services-restart, so restarting "all services" interrupts every client that
+# routes through it — restart it deliberately, not as a side effect.
 litellm-start: ## Start LiteLLM gateway
 	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_LITELLM_SETUP:-0}" != "1" ]; then echo "LiteLLM gate is off — skipping"; exit 0; fi; \
 	if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/litellm_service.sh && litellm_service_start; elif [ "$$(uname)" = "Linux" ]; then systemctl --user start litellm.service 2>/dev/null || echo "systemd user session unavailable — skipping"; fi
 
 litellm-stop: ## Stop LiteLLM gateway
-	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/litellm_service.sh && litellm_service_stop; elif [ "$$(uname)" = "Linux" ]; then systemctl --user stop litellm.service 2>/dev/null || true; fi
+	@. scripts/lib/service_result.sh; \
+	if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/litellm_service.sh && litellm_service_stop && svc_applied "LiteLLM gateway stopped"; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		if ! svc_user_systemd_available; then svc_skip "no user systemd session"; \
+		elif systemctl --user stop litellm.service 2>/dev/null; then svc_applied "litellm stopped"; \
+		else svc_failed "litellm stop failed"; exit 1; fi; \
+	else svc_skip "LiteLLM gateway is unsupported on this platform"; fi
 
 litellm-restart: litellm-stop litellm-start ## Restart LiteLLM gateway
 
@@ -444,40 +464,55 @@ openwebui-backup: ## Snapshot Open WebUI data and retain the five newest backups
 	echo "Open WebUI backup written: $$archive (manual integrity check: sqlite3 <extracted>/data/webui.db 'PRAGMA integrity_check;')"
 
 meridian-restart: ## Restart Meridian proxy service
-	@if [ "$$(uname)" = "Darwin" ]; then \
-		launchctl bootout "gui/$$(id -u)/com.meridian.proxy" 2>/dev/null || true; \
-		sleep 1; \
-		launchctl bootstrap "gui/$$(id -u)" ~/Library/LaunchAgents/com.meridian.proxy.plist 2>/dev/null || true; \
+	@. scripts/lib/service_result.sh; \
+	if [ "$$(uname)" = "Darwin" ]; then \
+		unit="gui/$$(id -u)/com.meridian.proxy"; plist="$$HOME/Library/LaunchAgents/com.meridian.proxy.plist"; \
+		launchctl bootout "$$unit" 2>/dev/null || true; sleep 1; \
+		if launchctl bootstrap "gui/$$(id -u)" "$$plist" 2>/dev/null && launchctl print "$$unit" >/dev/null 2>&1; then \
+			svc_applied "Meridian proxy"; \
+		else svc_failed "Meridian proxy failed to reload ($$unit)"; exit 1; fi; \
 	elif [ "$$(uname)" = "Linux" ]; then \
-		systemctl --user restart meridian-proxy 2>/dev/null || true; \
-	fi
-	@echo "Meridian restarted."
+		if ! svc_user_systemd_available; then svc_skip "no user systemd session"; \
+		elif systemctl --user restart meridian-proxy 2>/dev/null; then svc_applied "meridian-proxy"; \
+		else svc_failed "meridian-proxy restart failed"; exit 1; fi; \
+	else svc_skip "Meridian proxy is unsupported on this platform"; fi
 
 ddns-restart: ## Restart all ddns-route53 services
-	@if [ "$$(uname)" = "Darwin" ]; then \
-		for plist in ~/Library/LaunchAgents/com.crazymax.ddns-route53.*.plist; do \
-			[ -f "$$plist" ] || continue; \
-			label=$$(basename "$$plist" .plist); \
-			launchctl bootout "gui/$$(id -u)/$$label" 2>/dev/null || true; \
-			sleep 1; \
-			launchctl bootstrap "gui/$$(id -u)" "$$plist" 2>/dev/null || true; \
+	@. scripts/lib/service_result.sh; \
+	if [ "$$(uname)" = "Darwin" ]; then \
+		found=0; failed=0; \
+		for plist in "$$HOME"/Library/LaunchAgents/com.crazymax.ddns-route53.*.plist; do \
+			[ -f "$$plist" ] || continue; found=1; \
+			label=$$(basename "$$plist" .plist); unit="gui/$$(id -u)/$$label"; \
+			launchctl bootout "$$unit" 2>/dev/null || true; sleep 1; \
+			if launchctl bootstrap "gui/$$(id -u)" "$$plist" 2>/dev/null && launchctl print "$$unit" >/dev/null 2>&1; then \
+				svc_applied "$$label"; \
+			else svc_failed "$$label failed to reload"; failed=1; fi; \
 		done; \
+		if [ "$$found" = "0" ]; then svc_skip "no ddns-route53 LaunchAgents installed"; fi; \
+		[ "$$failed" = "0" ] || exit 1; \
 	elif [ "$$(uname)" = "Linux" ]; then \
-		systemctl --user restart 'ddns-route53-*' 2>/dev/null || true; \
-	fi
-	@echo "DDNS Route53 agents restarted."
+		if ! svc_user_systemd_available; then svc_skip "no user systemd session"; \
+		elif systemctl --user restart 'ddns-route53-*' 2>/dev/null; then svc_applied "ddns-route53 services"; \
+		else svc_failed "ddns-route53 restart failed"; exit 1; fi; \
+	else svc_skip "ddns-route53 restart is unsupported on this platform"; fi
 
 ollama-env-restart: ## Re-apply Ollama daemon environment variables
-	@if [ "$$(uname)" = "Darwin" ]; then \
-		launchctl kickstart -k "gui/$$(id -u)/com.dotfiles.ollama-env" 2>/dev/null || true; \
+	@. scripts/lib/service_result.sh; \
+	if [ "$$(uname)" = "Darwin" ]; then \
+		unit="gui/$$(id -u)/com.dotfiles.ollama-env"; \
+		if ! launchctl print "$$unit" >/dev/null 2>&1; then svc_skip "$$unit is not loaded"; \
+		elif launchctl kickstart -k "$$unit" 2>/dev/null; then svc_applied "Ollama daemon environment re-applied"; \
+		else svc_failed "Ollama daemon environment re-apply failed"; exit 1; fi; \
 	elif [ "$$(uname)" = "Linux" ]; then \
 		if systemctl list-unit-files 2>/dev/null | grep -q ollama.service; then \
-			sudo systemctl restart ollama 2>/dev/null || true; \
+			sudo systemctl restart ollama 2>/dev/null || { svc_failed "system ollama restart failed (sudo denied or unit error)"; exit 1; }; \
+			svc_applied "system ollama"; \
 		elif systemctl --user list-unit-files 2>/dev/null | grep -q ollama.service; then \
-			systemctl --user restart ollama 2>/dev/null || true; \
-		fi; \
-	fi
-	@echo "Ollama env re-applied."
+			systemctl --user restart ollama 2>/dev/null || { svc_failed "user ollama restart failed"; exit 1; }; \
+			svc_applied "user ollama"; \
+		else svc_skip "ollama.service is not installed"; fi; \
+	else svc_skip "Ollama environment re-apply is unsupported on this platform"; fi
 
 omlx-restart: ## Restart the oMLX Homebrew service
 	@if brew services list 2>/dev/null | grep -qE '^omlx[[:space:]]'; then \
