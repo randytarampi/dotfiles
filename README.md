@@ -61,6 +61,9 @@ AI clients share policy and discovery inputs where supported, but each has its o
 
 ## Documentation by task
 
+The complete catalogue, grouped by task, is [the documentation index](docs/README.md);
+these are the most common entry points.
+
 | Task | Canonical guide |
 | --- | --- |
 | Install, upgrade or troubleshoot the host | [Installation](docs/install.md), [clean-host acceptance](docs/clean-bootstrap.md) and [orchestration](docs/orchestration.md) |

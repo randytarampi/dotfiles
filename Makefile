@@ -242,8 +242,8 @@ check-templates-scripts: ## Render and lint all run_onchange shell templates
 check-mcp-parity: ## Verify MCP registry templates and config files are in parity
 	@python3 scripts/check-mcp-parity.py
 
-check-docs-drift: ## Check for documentation drift between AGENTS.md, README.md, and docs/
-	@python3 scripts/check-docs-drift.py
+check-docs-drift: ## Check documentation reachability and link validity from AGENTS.md/README.md
+	@python3 scripts/check-docs-drift.py --strict
 
 check-plugin-consistency: ## Verify plugin arrays match between install script and config generator
 	@python3 scripts/check-plugin-consistency.py

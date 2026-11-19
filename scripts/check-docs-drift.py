@@ -27,6 +27,45 @@ GENERATED_PATHS = (
 )
 
 
+def referenced_docs(document, text):
+    """Return the docs/*.md paths a document links to, resolved from its own directory."""
+    found = set()
+    for match in MARKDOWN_LINK_PATTERN.finditer(text):
+        target = clean_target(match.group(1))
+        if not target:
+            continue
+        candidate = Path(target)
+        resolved = candidate if candidate.is_absolute() else (document.parent / target)
+        try:
+            relative = resolved.resolve().relative_to(REPO_ROOT.resolve())
+        except (OSError, ValueError):
+            continue
+        if relative.suffix == ".md" and relative.parts[0] == "docs":
+            found.add(str(relative))
+    return found
+
+
+def reachable_docs(roots):
+    """Transitive closure of document links starting from *roots*.
+
+    Counting only direct references from AGENTS.md and README.md understates
+    reachability: a guide linked from another guide is still findable. What
+    matters is whether a reader can get there at all from an entry point.
+    """
+    seen = set()
+    frontier = list(roots)
+    while frontier:
+        document = frontier.pop()
+        if document in seen or not document.exists():
+            continue
+        seen.add(document)
+        for target in referenced_docs(document, document.read_text(encoding="utf-8")):
+            path = REPO_ROOT / target
+            if path.exists() and path not in seen:
+                frontier.append(path)
+    return seen
+
+
 def clean_target(target):
     """Return a local link target, or None for external/non-file targets."""
     target = target.strip().strip("<>")
@@ -147,11 +186,21 @@ def main():
         else set()
     )
 
-    for doc_path in sorted(actual_docs - docs_referenced):
+    reachable = {str(path.relative_to(REPO_ROOT)) for path in reachable_docs(DOCUMENTS)}
+    orphans = actual_docs - reachable
+    for doc_path in sorted(orphans):
         warnings += 1
         logger.warning(
-            "Documentation file is not referenced by AGENTS.md or README.md: %s",
+            "Documentation file is unreachable from AGENTS.md or README.md: %s",
             doc_path,
+        )
+    directly_linked = actual_docs & docs_referenced
+    reachable_only = reachable & actual_docs - directly_linked
+    if reachable_only:
+        logger.info(
+            "Reachable only through another document (%d): %s",
+            len(reachable_only),
+            ", ".join(sorted(reachable_only)),
         )
 
     for doc_path in sorted(docs_referenced - actual_docs):
