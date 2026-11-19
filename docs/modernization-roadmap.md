@@ -29,9 +29,11 @@ The owner reports sustained working LiteLLM connections in **Codex CLI, Junie, I
 
 ## 4. Paseo
 
-Paseo's implementation history and the operator-only safety runbook are in the
-[delivery ledger](delivery-ledger-2026-11.md).
-The live constraints are [paseo-security.md](paseo-security.md).
+Implementation history and the operator-only safety runbook are in the
+[delivery ledger](delivery-ledger-2026-11.md). These component guides stay live:
+[paseo-acp.md](paseo-acp.md), [paseo-mcp.md](paseo-mcp.md), [xcode-mcp.md](xcode-mcp.md),
+[paseo-voice.md](paseo-voice.md), [paseo-metadata.md](paseo-metadata.md),
+[paseo-security.md](paseo-security.md).
 
 ## 5. Local-model, data and client boundaries
 
