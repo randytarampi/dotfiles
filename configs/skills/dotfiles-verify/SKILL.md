@@ -13,16 +13,16 @@ Before claiming work is done in the dotfiles repo, run the applicable checks bel
 
 ## 1. Format Python files
 
-For Python changes, format/check only the touched Python files. Use the installed `black` executable; do not reformat unrelated files.
+For Python changes, format/check only the touched Python files, using the Poetry-pinned `black` that `make fix` and `make lint` also use. Do not invoke a PATH `black`: a different version can reformat source into a state the pinned lint then rejects. Do not reformat unrelated files.
 
 ```sh
-black --check path/to/touched.py [other/touched.py ...]
+poetry run black --check path/to/touched.py [other/touched.py ...]
 ```
 
 If any files need reformatting:
 
 ```sh
-black path/to/touched.py [other/touched.py ...]
+poetry run black path/to/touched.py [other/touched.py ...]
 ```
 
 ## 2. Run the repo's standard verify command
