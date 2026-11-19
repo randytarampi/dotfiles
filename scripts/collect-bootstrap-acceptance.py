@@ -280,8 +280,12 @@ def validate_driver_evidence(receipt):
         value = provenance.get(key)
         if value is None:
             continue
+        if key in {"run_id", "artifact_id"} and type(value) is int and value > 0:
+            return
         if not isinstance(value, str) or not value.strip() or len(value) > 512:
-            raise ReceiptError(f"provenance.{key} must be a non-empty short string")
+            raise ReceiptError(
+                f"provenance.{key} must be a non-empty short string or positive numeric ID"
+            )
         return
     claimants = sorted(
         name
