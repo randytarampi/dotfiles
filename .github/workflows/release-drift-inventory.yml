@@ -1,0 +1,36 @@
+name: Release drift inventory
+
+# Read-only. Compares the versions pinned in the deploy templates against the
+# latest upstream releases and publishes a table to the job summary.
+#
+# It deliberately does not open a pull request, edit a manifest, or touch a
+# runtime. An updater that writes a rolling draft PR is a later change and
+# should only exist once this inventory has proven useful and quiet.
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    name: inventory
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compare pinned versions to upstream releases
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          python3 scripts/release-drift-inventory.py | tee "$RUNNER_TEMP/inventory.md"
+          {
+            echo "## Release drift inventory"
+            echo
+            cat "$RUNNER_TEMP/inventory.md"
+            echo
+            echo "Read-only: nothing was updated. \`UNKNOWN\` means the upstream source"
+            echo "was unreachable, not that the package is current."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -47,6 +47,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/check-plugin-consistency.py",  # Makefile-only verification tool
     "scripts/precommit-text-hygiene.py",  # Staged-file commit hook helper; never a chezmoi deploy or config input
     "scripts/precommit-json-check.py",  # JSON validation hook; reads multiple staged paths without changing them
+    "scripts/release-drift-inventory.py",  # Read-only CI release inventory; never a chezmoi deploy input
     "scripts/verify-worktree-ready.py",  # Makefile-only worktree preflight helper
     "scripts/lib/worktree_readiness.py",  # Makefile-only helper; not deployed config input
     "scripts/lib/poetry_readiness.py",  # Makefile-only helper; not deployed config input

@@ -340,6 +340,20 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/release-drift-inventory.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--json"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/litellm-diagnose.py",
       "capabilities": [
         "public",
