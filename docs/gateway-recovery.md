@@ -25,10 +25,8 @@ assistant is behind the same broken gateway.
 
 ## Preconditions to have before you need this
 
-- A private backup of the last-known-good `~/.local/share/litellm` (config,
-  `service.env`, runtime rates).
-- The pinned LiteLLM version you last qualified, recorded somewhere that is not
-  the gateway.
+- A private, access-controlled, **verified restore set** for the last-known-good `~/.local/share/litellm` (configuration, `service.env`, rates **and the qualified virtual environment or its exact offline install artifacts**). A configuration-only backup cannot undo an incompatible Python package upgrade. Do not place this backup in Git or public CI artifacts.
+- The last-known-good LiteLLM and dependency versions, including Prisma and Pillow, plus a local copy of the install artifacts or a tested restore procedure. A version string alone cannot recover a machine without network access.
 - Working `git`, a shell, and your normal user account. No agents required.
 
 ## Procedure
@@ -51,13 +49,13 @@ again — it applies the whole tree and can deepen the hole.
    ```
    `GATE-OFF` means the gate is off, not that it broke.
 
-3. **Restore the gateway alone.** Put back the backed-up `service.env`,
-   `config.yaml` and runtime rates, then restart only that service:
+3. **Restore the executable runtime as well as its configuration.** First inspect the installed version and the configured service gate without changing them. If the outage followed a LiteLLM upgrade or failed patch, restoring only `service.env`, `config.yaml` and rates **will not restore** the prior Python package or repair its in-venv patch. On an isolated recovery host, use the verified private backup of the *previously working* virtual environment, or rebuild a replacement virtual environment from the qualified, locally cached wheels and recorded dependencies, then atomically activate that restored runtime. Do not overwrite an in-use virtual environment in place or guess an older version from the current source default. Confirm ownership and file modes and retain the failed runtime for diagnosis; stop if neither a known-good runtime nor reproducible wheels exist.
+
+   Restore the backed-up configuration and service environment together with that runtime, then restart **only** LiteLLM:
    ```sh
    make litellm-restart
    ```
-   Restarting all services restarts the thing you are trying to fix, plus
-   everything else. Don't.
+   The `DOTFILES_RUN_LITELLM_SETUP` gate must be enabled and the expected service unit present. This Make target is a service restart, **not** a package downgrade, virtual-environment repair or roll-forward deployment. Restarting all services restarts the thing you are trying to fix, plus everything else.
 
 4. **Wait, then probe.** The proxy needs roughly 20–40 seconds before it listens.
    An immediate `curl` returning `000` in ~0.001 s is "not yet listening", not a
@@ -84,10 +82,9 @@ or isolated host** — never the primary gateway:
 1. Capture baseline: config file list, pinned version, key file **names only**.
 2. Simulate the fault: corrupt the in-venv patch target or point the gateway at
    an incompatible layout.
-3. Perform the procedure above using only the backup and Git.
+3. Perform the procedure above using the private backup, local package artifacts and Git; prove that the previously working *runtime* was restored, not just its configuration.
 4. Record: elapsed operator time, every manual step, and what was preserved.
-5. Success criterion: a working authenticated model listing within **15 minutes**,
-   with no AI agent, no bot credential, and no full redeploy.
+5. Success criterion: a working authenticated model listing **and one previously working client request** within a *provisional* **15-minute target**; measure and revise the target from the rehearsal. No AI agent, bot credential or full redeploy. Record recovery failures honestly.
 
 Record the result as a receipt per
 [bootstrap-acceptance-receipts.md](bootstrap-acceptance-receipts.md) and link it
