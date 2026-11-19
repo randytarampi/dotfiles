@@ -320,6 +320,7 @@ Reply in the language and register the conversation is using. English prose uses
 | [docs/capability-matrix.md](docs/capability-matrix.md) | Per-tool providers, MCP, ACP, skills, presets, guidance, Meridian, and local fallback support |
 | [docs/chat-frontend.md](docs/chat-frontend.md) | Unified multi-provider chat frontend (Open WebUI, implemented) — reconciler, deployment wiring, maintenance guidance |
 | [docs/modernization-roadmap.md](docs/modernization-roadmap.md) | Delivered modernization, active issue/acceptance map, consolidated Paseo follow-up, safety decisions and deferred platform work |
+| [docs/hardware-acceptance.md](docs/hardware-acceptance.md) | Self-hosted runner threat model, GO/NO-GO checklist and the event-contract rule; nothing registered |
 | [docs/unmanaged-clients.md](docs/unmanaged-clients.md) | LiteLLM integration reference for Cursor, Gemini CLI, Claude Desktop Cowork, and VS Code Copilot |
 
 ---

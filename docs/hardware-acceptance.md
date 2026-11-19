@@ -1,0 +1,123 @@
+# Hardware acceptance and the self-hosted runner decision
+
+**Status: NOT REGISTERED. No runner exists, and none should be added until the
+GO criteria below are satisfied and the owner records the decision.**
+
+This document exists because the obvious way to get recurring evidence from the
+owner's Raspberry Pi and Pine64 boards — register them as GitHub Actions
+self-hosted runners — is also a way to hand arbitrary code execution to anything
+that can get a workflow onto a public repository.
+
+## The problem being solved
+
+`#275` wants native hardware evidence. Today the only producer of that evidence
+is a person typing results, which is why the issue has never closed. Automating
+it needs *something* that runs on the board and publishes a receipt.
+
+## Why a repository-scoped runner is not automatically safe
+
+The repository is public. GitHub's own guidance recommends against self-hosted
+runners for public repositories, and the reasons are structural rather than
+about which events a job listens on:
+
+| Vector | Why an `if:` guard does not close it |
+|---|---|
+| Workflow edits | A merged PR can change any workflow. The guard is in the code being changed. |
+| `workflow_run` | A workflow triggered by another workflow can inherit a different trust level than expected. |
+| Reusable workflows | A called workflow can come from elsewhere than the caller. |
+| Compromised action | A pinned action's tag can be re-pointed unless pinned to a SHA; a compromised action executes as the runner. |
+| Artifacts and caches | Untrusted content written by one job can be read by a later one on a persistent runner. |
+| Persistent state | Unlike hosted runners, the machine survives between jobs, so any foothold persists. |
+| Fork PRs | The classic entry point. Mitigations exist, but they are filters, not isolation. |
+| Lateral movement | Even a personal board on a home network is a foothold on that network. |
+
+A repository-scoped label is not a sandbox. `permissions: contents: read` limits
+the *token*, not the *process*.
+
+## Options, with their real costs
+
+### A. Hosted runners only (no hardware automation)
+
+GitHub-hosted runners stay the only execution surface. Hardware evidence remains
+owner-produced by hand, guided by
+[bootstrap-acceptance-receipts.md](bootstrap-acceptance-receipts.md).
+
+- Cost: `#275` never closes on automation; recurring owner attention.
+- Risk: lowest. Nothing new executes on the owner's hardware.
+
+### B. Ephemeral self-hosted runner *(recommended if the hardware can be isolated)*
+
+Register the board as a **repository-scoped, `--ephemeral`** runner on a
+dedicated unprivileged account, with:
+
+- every job restricted to `schedule` and `workflow_dispatch` — never
+  `pull_request`, `pull_request_target`, or an unvetted `workflow_run`;
+- all third-party actions pinned to full commit SHAs;
+- no repository or personal secrets reachable from the job;
+- a dedicated machine or a rebuildable image, not the daily driver;
+- an explicit reboot/reimage procedure.
+
+`--ephemeral` removes the persistent-state class: the runner is torn down after
+one job and re-registered, so an artefact or cache foothold does not survive.
+
+- Cost: one workflow file, one runner registration, a reimage habit.
+- Risk: moderate. The board is a real host; isolation is configured, not
+  structural.
+
+### C. Private control plane or pull-based verifier
+
+The public repository keeps hosted runners. A **private** acceptance repository
+(or a service on the board that polls) holds the hardware test definition, fetches
+only a reviewed immutable SHA, runs it under a locked-down account, and publishes
+a redacted receipt.
+
+- Cost: a second repository, a second identity, a credential-upload story, and
+  another thing to maintain — which is the failure mode this whole programme
+  exists to reduce.
+- Risk: lowest per-execution, highest per-maintenance.
+
+**Recommendation:** attempt **B** first, with the GO checklist. Fall back to
+**C** only if the boards cannot be isolated to the checklist's satisfaction.
+Fall back to **A** if neither is acceptable — `#275` can stay open as an
+owner-produced ledger, which is honest, just manual.
+
+## Resolving the event contradiction
+
+An earlier draft of this programme said "self-hosted jobs are restricted to
+`schedule` and `workflow_dispatch`" and then specified a canary "triggered on
+`push` to `main`". Those cannot both be true.
+
+**Rule: one explicit event contract per trust domain.**
+
+- **Hardware runners (untrusted input surface):** `schedule` and
+  `workflow_dispatch` only.
+- **Post-merge canary (trusted input):** may run on `push` to `main`, but only
+  after the trusted control plane has confirmed `ci/required` passed on the
+  immutable SHA. A public `workflow_run` event must not itself confer privilege.
+
+A post-merge canary is **not** a pre-merge required check. It can mark a
+promotion unsafe; it cannot block a merge.
+
+## GO checklist
+
+All must hold before registering anything. Any failure is a NO-GO, and the
+fallback is option A or C.
+
+- [ ] Dedicated, expendable hardware — not the daily driver, not holding private
+      user files or production credentials.
+- [ ] Dedicated unprivileged OS account; no personal SSH keys, cloud tokens or
+      password-manager access reachable from it.
+- [ ] Every hardware job triggers only on `schedule` or `workflow_dispatch`.
+- [ ] Every third-party action pinned to a full commit SHA.
+- [ ] Runner registered `--ephemeral`, or a documented reimage between jobs.
+- [ ] Network egress limited to what the test needs.
+- [ ] Reimage/reboot procedure written down, and exercised at least once.
+- [ ] Receipt publication uses the provenance rules in
+      [bootstrap-acceptance-receipts.md](bootstrap-acceptance-receipts.md).
+- [ ] Owner has read this document and recorded the residual risk they accept.
+
+## What is not authorised by this document
+
+Registering a runner, opening an inbound port, storing a broad `gh` token on a
+board, or attaching the primary workstation. This is a decision framework, not a
+licence.
