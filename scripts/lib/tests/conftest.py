@@ -49,6 +49,24 @@ def provisioning_write_boundary(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def isolate_environment():
+    """Restore ``os.environ`` after every test.
+
+    Several suites call ``env.load_env()`` against the real ``~/.env``, which
+    writes host ``DOTFILES_RUN_*`` gates into ``os.environ`` and leaks them into
+    later tests. The leak only surfaced on hosts whose gates are enabled, where
+    it made ``make test`` fail. Keep each test hermetic instead of relying on
+    unexported gates.
+    """
+    baseline = dict(os.environ)
+    try:
+        yield
+    finally:
+        os.environ.clear()
+        os.environ.update(baseline)
+
+
+@pytest.fixture(autouse=True)
 def assume_v2_opencode_host(monkeypatch):
     """Emitter suites run on machines with any installed OpenCode host; the
     native v2 emitter contract applies. Gate tests override

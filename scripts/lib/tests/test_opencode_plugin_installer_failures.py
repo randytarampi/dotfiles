@@ -41,6 +41,7 @@ def run_installer(
         "PATH": f"{bin_dir}:{Path(__import__('sys').executable).parent}:/usr/bin:/bin",
         "PYTHONPATH": str(REPO_ROOT / "scripts/lib"),
         "DOTFILES_RUN_OPENCODE_TOOLS_SETUP": "1",
+        "DOTFILES_RUN_CONTEXT_MODE_SETUP": "0",
         "DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE": update_gate,
         "DOTFILES_RUN_OPENCODE_MEMORY_SETUP": "0",
         "DOTFILES_RUN_VOICE_SETUP": "0",
