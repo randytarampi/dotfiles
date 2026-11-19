@@ -83,6 +83,13 @@ def classify(pinned: str, latest: str) -> str:
     return "BEHIND" if pinned_key < latest_key else "AHEAD"
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Never forward the GitHub token to a redirected destination."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def latest_release(repo: str, token: str | None, timeout: float = 15.0) -> str:
     """Return the latest tag, or UNKNOWN when the source is unreachable."""
     request = urllib.request.Request(
@@ -95,7 +102,11 @@ def latest_release(repo: str, token: str | None, timeout: float = 15.0) -> str:
     if token:
         request.add_header("Authorization", f"Bearer {token}")
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        # urllib's default redirect handler copies request headers to the new
+        # destination, including Authorization; never redirect a token-bearing
+        # release-metadata request to a different host.
+        opener = urllib.request.build_opener(_NoRedirectHandler())
+        with opener.open(request, timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except (urllib.error.URLError, OSError, ValueError, TimeoutError):
         return UNKNOWN
