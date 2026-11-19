@@ -320,7 +320,8 @@ Reply in the language and register the conversation is using. English prose uses
 | [docs/cortex.md](docs/cortex.md) | Snowflake Cortex Code specialist, MCP, ACP, and skills |
 | [docs/capability-matrix.md](docs/capability-matrix.md) | Per-tool providers, MCP, ACP, skills, presets, guidance, Meridian, and local fallback support |
 | [docs/chat-frontend.md](docs/chat-frontend.md) | Unified multi-provider chat frontend (Open WebUI, implemented) — reconciler, deployment wiring, maintenance guidance |
-| [docs/modernization-roadmap.md](docs/modernization-roadmap.md) | Delivered modernization, active issue/acceptance map, consolidated Paseo follow-up, safety decisions and deferred platform work |
+| [docs/modernization-roadmap.md](docs/modernization-roadmap.md) | Live contract, current programme and open decisions. Historical delivery evidence is not kept here |
+| [docs/delivery-ledger-2026-11.md](docs/delivery-ledger-2026-11.md) | Dated delivery, merge and acceptance evidence moved out of the roadmap; preserved verbatim, not a live plan |
 | [docs/hardware-acceptance.md](docs/hardware-acceptance.md) | Self-hosted runner threat model, GO/NO-GO checklist and the event-contract rule; nothing registered |
 | [docs/gateway-recovery.md](docs/gateway-recovery.md) | Recovering the local AI stack from a stock terminal; rehearsal NOT RUN |
 | [docs/unmanaged-clients.md](docs/unmanaged-clients.md) | LiteLLM integration reference for Cursor, Gemini CLI, Claude Desktop Cowork, and VS Code Copilot |
