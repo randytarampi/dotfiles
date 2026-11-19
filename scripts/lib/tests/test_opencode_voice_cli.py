@@ -240,6 +240,8 @@ def test_dcp_removes_stale_forms_without_addition():
         "other",
     ]
     assert [entry for entry in entries if not module.is_dcp_entry(entry)] == ["other"]
+    assert not module.is_dcp_entry("-@tarquinen/opencode-dcp@latest")
+    assert not module.is_dcp_entry({"package": "-@tarquinen/opencode-dcp"})
 
 
 def test_dcp_main_only_removes_stale_registration(tmp_path, monkeypatch):
@@ -554,3 +556,33 @@ def test_dcp_reconcile_is_idempotent_with_private_atomic_file(tmp_path, monkeypa
     assert module.main() is None
     assert cli.read_bytes() == expected
     assert cli.stat().st_mtime_ns == mtime
+
+
+def test_dcp_reconcile_preserves_user_disable_directives(tmp_path, monkeypatch):
+    module = _load("dcp_preserve_disable", ROOT / "configure-opencode-dcp.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module.sys, "argv", ["dcp", "--no-backup"])
+    (tmp_path / "opencode.json").write_text(
+        '{"plugins":["@tarquinen/opencode-dcp@latest"]}'
+    )
+    for name, key in (("tui.json", "plugin"), ("cli.json", "plugins")):
+        original = {
+            key: [
+                "@tarquinen/opencode-dcp@latest",
+                "-@tarquinen/opencode-dcp@latest",
+                {"package": "-@tarquinen/opencode-dcp"},
+                "@renjfk/opencode-voice@latest",
+            ],
+            "user": "keep",
+        }
+        (tmp_path / name).write_text(json.dumps(original))
+    assert module.main() is None
+    for name, key in (("tui.json", "plugin"), ("cli.json", "plugins")):
+        result = json.loads((tmp_path / name).read_text())
+        assert result["user"] == "keep"
+        assert result[key] == [
+            "-@tarquinen/opencode-dcp@latest",
+            {"package": "-@tarquinen/opencode-dcp"},
+            "@renjfk/opencode-voice@latest",
+        ]
