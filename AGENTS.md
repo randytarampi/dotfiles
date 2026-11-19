@@ -299,6 +299,7 @@ Reply in the language and register the conversation is using. English prose uses
 
 | Doc | Content |
 |-----|---------|
+| [docs/README.md](docs/README.md) | Documentation index: every guide grouped by task. New documents belong here |
 | [docs/conventions.md](docs/conventions.md) | CLI capability contract, arg forwarding, env-var taxonomy, cross-language parity, enforcement |
 | [docs/telemetry.md](docs/telemetry.md) | Per-tool telemetry opt-out dispositions, env var reference, fleet registry |
 | [docs/tiers.md](docs/tiers.md) | Tier definitions, per-tier role/variant tables, local model classification, fallback chains, variant policy, Ollama Cloud models |
