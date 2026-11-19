@@ -34,7 +34,7 @@ repos:
 
       - id: json-syntax
         name: JSON syntax
-        entry: python3 -m json.tool
+        entry: python3 scripts/precommit-json-check.py
         language: system
         types: [json]
         pass_filenames: true
