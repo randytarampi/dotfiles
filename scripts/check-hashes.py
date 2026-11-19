@@ -45,6 +45,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/verify-local-service-readiness.py",  # Read-only anonymous loopback diagnostic; explicit operator gate, never a deployed config input
     "scripts/summarize-local-utility-benchmarks.py",  # Offline operator-supplied JSON summarizer; reads local benchmark evidence, never a deployed config input
     "scripts/check-plugin-consistency.py",  # Makefile-only verification tool
+    "scripts/precommit-text-hygiene.py",  # Staged-file commit hook helper; never a chezmoi deploy or config input
     "scripts/verify-worktree-ready.py",  # Makefile-only worktree preflight helper
     "scripts/lib/worktree_readiness.py",  # Makefile-only helper; not deployed config input
     "scripts/lib/poetry_readiness.py",  # Makefile-only helper; not deployed config input
