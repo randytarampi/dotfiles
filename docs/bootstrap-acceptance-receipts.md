@@ -20,16 +20,20 @@ produced it. One of these `provenance` fields satisfies the requirement:
 
 | Field | Use |
 |---|---|
-| `run_url` | Immutable CI run URL — preferred, because it is independently fetchable |
+| `run_url` | Reference to a CI run — preferred for independent verification, but **not validated or fetched by this command** |
 | `run_id` | Run identifier when a URL is not available |
 | `artifact_id` | Uploaded artifact identifier |
-| `driver` | Named driver for an owner-host run with no CI record |
+| `driver` | Free-text operator assertion for an owner-host run. **Not authenticated or tamper-proof**; do not treat this alone as qualification |
 
 A receipt with no `pass` claims (everything `not_run` or `not_applicable`) needs
 no provenance — it is an inventory, not an acceptance claim.
 
 Citing a receipt in an issue is not the same as closing it. A schema-valid
-all-pass record with no run reference must not close an issue by itself, and
-`make receipt-validate` is deliberately **not** part of `make verify`: a clean
+all-pass record with no run reference must not close an issue by itself. A
+populated `run_url`, `run_id`, `artifact_id` or `driver` is likewise **not proof**
+that the named run exists, was performed on the claimed host, or tested the
+recorded source SHA. For issue closure, independently inspect the run/artifact
+and require explicit consumer and negative-case evidence; retain UNKNOWN if
+verification is unavailable. `make receipt-validate` is deliberately **not** part of `make verify`: a clean
 CI checkout cannot produce a host receipt, so requiring one there would either
 fail everywhere or be permanently not-applicable.
