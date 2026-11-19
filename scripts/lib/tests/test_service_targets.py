@@ -84,6 +84,7 @@ def test_no_rewritten_target_prints_unconditional_success():
     text = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
     for phrase in (
         "OpenCode Web started.",
+        "OpenCode Web restarted.",
         "Meridian restarted.",
         "DDNS Route53 agents restarted.",
         "Ollama env re-applied.",
