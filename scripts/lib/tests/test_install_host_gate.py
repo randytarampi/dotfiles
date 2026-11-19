@@ -49,6 +49,7 @@ def run_installer(tmp_path, version=None, *, missing=False, status=0, twice=Fals
         "HOME": str(home),
         "PATH": f"{stubs}:{Path(__import__('sys').executable).parent}:{Path('/usr/bin')}:{Path('/bin')}",
         "DOTFILES_RUN_OPENCODE_TOOLS_SETUP": "1",
+        "DOTFILES_RUN_CONTEXT_MODE_SETUP": "0",
         "DOTFILES_RUN_OPENCODE_MEMORY_SETUP": "0",
         "DOTFILES_RUN_VOICE_SETUP": "0",
         "PYTHONPATH": str(ROOT / "scripts/lib"),
@@ -89,7 +90,8 @@ def test_v2_installs_manifest_plugins_and_is_idempotent(tmp_path):
     expected = [
         f"plugin add {spec}"
         for spec in active_plugin_specs(
-            ROOT / "configs/opencode/opencode-plugins.json"
+            ROOT / "configs/opencode/opencode-plugins.json",
+            environ={"DOTFILES_RUN_CONTEXT_MODE_SETUP": "0"},
         )[1:]
     ] + ["plugin add @renjfk/opencode-voice@latest"]
     assert calls == expected * 2
