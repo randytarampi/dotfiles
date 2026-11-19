@@ -512,18 +512,31 @@ omlx-restart: ## Restart the oMLX Homebrew service
 # Multiple OpenCode sessions can conflict on the same port. This target
 # clears the paste backend port so a fresh session can bind.
 plannotator-restart: ## Restart Plannotator paste service
-	@echo "Restarting Plannotator..."
-	@if [ "$$(uname)" = "Darwin" ]; then \
-		lsof -ti:19433 | xargs kill -9 2>/dev/null || true; \
-		launchctl bootout "gui/$$(id -u)/com.plannotator.paste" 2>/dev/null || true; \
-		sleep 1; \
-		launchctl bootstrap "gui/$$(id -u)" ~/Library/LaunchAgents/com.plannotator.paste.plist 2>/dev/null || true; \
+	@. scripts/lib/service_result.sh; \
+	if [ "$$(uname)" = "Darwin" ]; then \
+		unit="gui/$$(id -u)/com.plannotator.paste"; plist="$$HOME/Library/LaunchAgents/com.plannotator.paste.plist"; \
+		if [ ! -f "$$plist" ]; then svc_skip "no managed Plannotator paste LaunchAgent at $$plist"; \
+		else \
+			launchctl bootout "$$unit" 2>/dev/null || true; \
+			freed=0; \
+			for i in 1 2 3 4 5; do \
+				if ! lsof -ti:19433 >/dev/null 2>&1; then freed=1; break; fi; \
+				sleep 1; \
+			done; \
+			if [ "$$freed" != "1" ]; then \
+				holder=$$(lsof -nP -iTCP:19433 -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $$1" (pid "$$2")"}'); \
+				svc_failed "port 19433 is still held by $${holder:-an unidentified process}; refusing to kill a process the service manager does not own"; exit 1; \
+			fi; \
+			if launchctl bootstrap "gui/$$(id -u)" "$$plist" 2>/dev/null && launchctl print "$$unit" >/dev/null 2>&1; then \
+				svc_applied "Plannotator paste service"; \
+			else svc_failed "Plannotator paste service failed to reload ($$unit)"; exit 1; fi; \
+		fi; \
 	elif [ "$$(uname)" = "Linux" ]; then \
-		systemctl --user restart plannotator-paste 2>/dev/null || true; \
-	else \
-		lsof -ti:19433 | xargs kill -9 2>/dev/null || true; \
-	fi
-	@echo "Plannotator restarted."
+		if ! svc_user_systemd_available; then svc_skip "no user systemd session"; \
+		elif ! systemctl --user cat plannotator-paste >/dev/null 2>&1; then svc_skip "plannotator-paste unit is not installed"; \
+		elif systemctl --user restart plannotator-paste 2>/dev/null; then svc_applied "plannotator-paste"; \
+		else svc_failed "plannotator-paste restart failed"; exit 1; fi; \
+	else svc_skip "Plannotator paste service is unsupported on this platform"; fi
 
 services-restart: opencode-restart openwebui-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart litellm-restart ## Restart all services
 
