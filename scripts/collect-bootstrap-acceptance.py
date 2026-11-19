@@ -268,15 +268,20 @@ def _stage_outcomes(stage_value):
 
 
 def validate_driver_evidence(receipt):
-    """A stage claiming `pass` must carry immutable execution provenance.
+    """Require a non-empty *claimed* driver reference for recorded passes.
 
-    Schema validity proves shape, not that a command ran: an all-pass record
-    can be authored by hand. Without a reference to the run that produced it,
-    such a receipt is an assertion by its author, not evidence — so it must
-    not be cited as host qualification.
+    This is not attestation: references can be fabricated and must be checked
+    independently before a receipt can qualify an installed host.
     """
-    provenance = receipt.get("provenance") or {}
-    if any(provenance.get(key) for key in DRIVER_EVIDENCE_KEYS):
+    provenance = receipt.get("provenance")
+    if not isinstance(provenance, dict):
+        raise ReceiptError("provenance must be a JSON object")
+    for key in DRIVER_EVIDENCE_KEYS:
+        value = provenance.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, str) or not value.strip() or len(value) > 512:
+            raise ReceiptError(f"provenance.{key} must be a non-empty short string")
         return
     claimants = sorted(
         name
