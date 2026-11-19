@@ -70,7 +70,11 @@ def test_release_inventory_refuses_redirected_token_request(monkeypatch):
     blocker = DRIFT._NoRedirectHandler()
     assert (
         blocker.redirect_request(
-            request, None, 302, "redirect", {},
+            request,
+            None,
+            302,
+            "redirect",
+            {},
             "https://untrusted.example/collect",
         )
         is None
@@ -82,7 +86,11 @@ def test_release_inventory_refuses_redirected_token_request(monkeypatch):
         def open(self, req, timeout):
             assert req.get_header("Authorization") == "Bearer sentinel-token"
             raise urllib.error.HTTPError(
-                req.full_url, 302, "redirect denied", {}, None,
+                req.full_url,
+                302,
+                "redirect denied",
+                {},
+                None,
             )
 
     def make_opener(*handlers):
