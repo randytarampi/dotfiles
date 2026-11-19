@@ -56,3 +56,39 @@ def test_render_includes_status_and_source():
     ]
     rendered = DRIFT.render(rows)
     assert "| litellm | 1.0.0 | 1.1.0 | BEHIND |" in rendered
+
+
+def test_release_inventory_refuses_redirected_token_request(monkeypatch):
+    """Default urllib redirects copy Authorization; inventory must never follow."""
+    import urllib.error
+    import urllib.request
+
+    request = urllib.request.Request(
+        "https://api.github.com/repos/BerriAI/litellm/releases/latest",
+        headers={"Authorization": "Bearer sentinel-token"},
+    )
+    blocker = DRIFT._NoRedirectHandler()
+    assert (
+        blocker.redirect_request(
+            request, None, 302, "redirect", {},
+            "https://untrusted.example/collect",
+        )
+        is None
+    )
+
+    calls = []
+
+    class RejectRedirectOpener:
+        def open(self, req, timeout):
+            assert req.get_header("Authorization") == "Bearer sentinel-token"
+            raise urllib.error.HTTPError(
+                req.full_url, 302, "redirect denied", {}, None,
+            )
+
+    def make_opener(*handlers):
+        calls.extend(handlers)
+        return RejectRedirectOpener()
+
+    monkeypatch.setattr(DRIFT.urllib.request, "build_opener", make_opener)
+    assert DRIFT.latest_release("BerriAI/litellm", "sentinel-token") == "UNKNOWN"
+    assert any(isinstance(h, DRIFT._NoRedirectHandler) for h in calls)
