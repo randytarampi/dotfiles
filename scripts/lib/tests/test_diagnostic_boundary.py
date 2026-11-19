@@ -55,7 +55,7 @@ def test_master_key_never_reaches_the_summary(gate_on):
     )
     code, summary = DIAGNOSE_MOD.diagnose(SENTINEL)
     assert SENTINEL not in summary
-    assert code in (0, 1)
+    assert code == 0, "the test must reach the healthy authenticated path"
 
 
 def test_gate_off_summary_is_closed_vocabulary(monkeypatch):
