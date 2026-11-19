@@ -80,7 +80,7 @@ def test_stale_sha_is_still_rejected_with_provenance():
         "just-a-string",
         {"driver": "   "},
         {"driver": True},
-        {"run_id": 12345},
+        {"run_id": -1},
         {"driver": "x" * 513},
     ],
 )
@@ -95,4 +95,11 @@ def test_valid_short_named_owner_driver_is_a_reference_not_attestation():
     """An owner-reported run still needs independent evidence before closure."""
     receipt = _all_pass(_receipt())
     receipt["provenance"]["driver"] = "owner-host-rehearsal"
+    COLLECT.validate_driver_evidence(receipt)
+
+
+@pytest.mark.parametrize("key", ["run_id", "artifact_id"])
+def test_positive_numeric_ci_identifiers_are_valid_references(key):
+    receipt = _all_pass(_receipt())
+    receipt["provenance"][key] = 12345
     COLLECT.validate_driver_evidence(receipt)
