@@ -26,9 +26,9 @@ if SCRIPT_DIR not in sys.path:
 LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR, "lib")
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
-import logger
-from file_utils import backup_file
-from env import load_env
+import logger  # noqa: E402
+from file_utils import backup_file  # noqa: E402
+from env import load_env  # noqa: E402
 
 DCP_PLUGIN_KEY = "@tarquinen/opencode-dcp"
 
