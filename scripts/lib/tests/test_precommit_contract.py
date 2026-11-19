@@ -106,3 +106,41 @@ def test_text_hygiene_exempts_markdown_hard_breaks(tmp_path: Path):
         check=False,
     )
     assert result.returncode == 0, "Markdown two-space hard breaks must be allowed"
+
+
+def test_json_hook_checks_all_files_without_overwriting_any(tmp_path: Path):
+    """python -m json.tool with two operands overwrites the second JSON file."""
+    hook = next(h for h in _hooks() if h["id"] == "json-syntax")
+    assert hook["entry"] == "python3 scripts/precommit-json-check.py"
+    first = tmp_path / "first.json"
+    second = tmp_path / "second.json"
+    first.write_text('{"first": 1}', encoding="utf-8")
+    second.write_text('{"second": 2}', encoding="utf-8")
+    original = (first.read_bytes(), second.read_bytes())
+    helper = REPO_ROOT / "scripts" / "precommit-json-check.py"
+    result = subprocess.run(
+        [sys.executable, str(helper), str(first), str(second)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (first.read_bytes(), second.read_bytes()) == original
+
+
+def test_json_hook_rejects_invalid_second_file_without_overwriting_it(tmp_path: Path):
+    first = tmp_path / "first.json"
+    second = tmp_path / "second.json"
+    first.write_text('{"first": 1}', encoding="utf-8")
+    second.write_text("{invalid", encoding="utf-8")
+    original = (first.read_bytes(), second.read_bytes())
+    helper = REPO_ROOT / "scripts" / "precommit-json-check.py"
+    result = subprocess.run(
+        [sys.executable, str(helper), str(first), str(second)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "invalid JSON" in result.stderr
+    assert (first.read_bytes(), second.read_bytes()) == original
