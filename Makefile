@@ -319,20 +319,37 @@ caddy-deploy: ## Generate Caddyfile and restart Caddy (root LaunchDaemon)
 	@sudo launchctl bootstrap system /Library/LaunchDaemons/com.caddy.proxy.plist
 
 caddy-validate: ## Validate Caddyfile syntax
-	@caddy validate --config "$$(brew --prefix)/etc/caddy/Caddyfile" || echo "Caddyfile validation failed (is Caddy installed?)"
+	@. scripts/lib/service_result.sh; \
+	if ! command -v caddy >/dev/null 2>&1; then svc_skip "caddy is not installed"; exit 0; fi; \
+	if ! command -v brew >/dev/null 2>&1; then svc_skip "brew is required to locate the managed Caddyfile"; exit 0; fi; \
+	config="$$(brew --prefix)/etc/caddy/Caddyfile"; \
+	if [ ! -f "$$config" ]; then svc_skip "no managed Caddyfile at $$config"; exit 0; fi; \
+	if caddy validate --config "$$config" 2>&1; then svc_applied "Caddyfile syntax valid"; \
+	else svc_failed "Caddyfile validation failed ($$config)"; exit 1; fi
 
 caddy-reload: ## Hot-reload Caddy config
-	@sudo "$$(brew --prefix)/bin/caddy" reload --force --config "$$(brew --prefix)/etc/caddy/Caddyfile" || echo "Caddy reload failed"
+	@. scripts/lib/service_result.sh; \
+	if ! command -v brew >/dev/null 2>&1; then svc_skip "brew is required to locate caddy"; exit 0; fi; \
+	bin="$$(brew --prefix)/bin/caddy"; config="$$(brew --prefix)/etc/caddy/Caddyfile"; \
+	if [ ! -x "$$bin" ]; then svc_skip "caddy is not installed at $$bin"; exit 0; fi; \
+	if [ ! -f "$$config" ]; then svc_skip "no managed Caddyfile at $$config"; exit 0; fi; \
+	if sudo "$$bin" reload --force --config "$$config" 2>&1; then svc_applied "Caddy reloaded"; \
+	else svc_failed "Caddy reload failed (privilege or configuration error)"; exit 1; fi
 
 caddy-restart: ## Restart Caddy service (system-level)
-	@if [ "$$(uname)" = "Darwin" ]; then \
-		sudo launchctl bootout system/com.caddy.proxy 2>/dev/null || true; \
-		sleep 2; \
-		sudo launchctl bootstrap system/ /Library/LaunchDaemons/com.caddy.proxy.plist 2>/dev/null || true; \
+	@. scripts/lib/service_result.sh; \
+	if [ "$$(uname)" = "Darwin" ]; then \
+		unit="system/com.caddy.proxy"; plist="/Library/LaunchDaemons/com.caddy.proxy.plist"; \
+		if [ ! -f "$$plist" ]; then svc_skip "no managed Caddy LaunchDaemon at $$plist"; exit 0; fi; \
+		sudo launchctl bootout "$$unit" 2>/dev/null || true; sleep 2; \
+		if sudo launchctl bootstrap system "$$plist" 2>/dev/null && launchctl print "$$unit" >/dev/null 2>&1; then \
+			svc_applied "Caddy LaunchDaemon"; \
+		else svc_failed "Caddy LaunchDaemon failed to reload ($$unit)"; exit 1; fi; \
 	elif [ "$$(uname)" = "Linux" ]; then \
-		sudo systemctl restart caddy 2>/dev/null || true; \
-	fi
-	@echo "Caddy restarted."
+		if ! systemctl list-unit-files 2>/dev/null | grep -q '^caddy'; then svc_skip "caddy.service is not installed"; exit 0; fi; \
+		if sudo systemctl restart caddy 2>/dev/null; then svc_applied "caddy.service"; \
+		else svc_failed "caddy.service restart failed"; exit 1; fi; \
+	else svc_skip "Caddy is unsupported on this platform"; fi
 
 # ─── Service management ───────────────────────────────────────────────────────
 # OpenCode Web does not pick up config changes automatically — restart is
