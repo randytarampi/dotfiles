@@ -324,6 +324,7 @@ Reply in the language and register the conversation is using. English prose uses
 | [docs/delivery-ledger-2026-11.md](docs/delivery-ledger-2026-11.md) | Dated delivery, merge and acceptance evidence moved out of the roadmap; preserved verbatim, not a live plan |
 | [docs/hardware-acceptance.md](docs/hardware-acceptance.md) | Self-hosted runner threat model, GO/NO-GO checklist and the event-contract rule; nothing registered |
 | [docs/gateway-recovery.md](docs/gateway-recovery.md) | Recovering the local AI stack from a stock terminal; rehearsal NOT RUN |
+| [docs/web-chat-brief.md](docs/web-chat-brief.md) | Paste-ready brief for browser chat tools with no host or repository access |
 | [docs/unmanaged-clients.md](docs/unmanaged-clients.md) | LiteLLM integration reference for Cursor, Gemini CLI, Claude Desktop Cowork, and VS Code Copilot |
 
 ---
