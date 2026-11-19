@@ -43,8 +43,11 @@ DCP_CONFIG_TARGETS = (
 
 def is_dcp_entry(entry) -> bool:
     if isinstance(entry, str):
-        value = entry.removeprefix("-")
-        return value == DCP_PLUGIN_KEY or value.startswith(DCP_PLUGIN_KEY + "@")
+        # A leading "-" is an intentional disable directive, not a
+        # duplicate registration. Preserve it in the user's TUI config.
+        if entry.startswith("-"):
+            return False
+        return entry == DCP_PLUGIN_KEY or entry.startswith(DCP_PLUGIN_KEY + "@")
     if isinstance(entry, dict):
         return is_dcp_entry(entry.get("package", ""))
     if isinstance(entry, (list, tuple)) and entry:
