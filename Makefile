@@ -354,7 +354,7 @@ opencode-stop: ## Stop OpenCode Web service
 	else svc_skip "OpenCode Web is unsupported on this platform"; fi
 
 opencode-restart: opencode-stop opencode-start ## Restart OpenCode Web service
-	@echo "OpenCode Web restarted."
+	@# Each prerequisite reports SKIPPED, APPLIED, HEALTHY or FAILED; do not claim restart after a skip.
 
 openwebui-start: ## Start Open WebUI service
 	@echo "Starting Open WebUI..."
