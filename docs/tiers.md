@@ -489,7 +489,7 @@ This makes project presets **orthogonal** to the global tier: a project using `-
 
 ## Ollama Cloud Models
 
-Ollama Cloud presets use `deepseek-v4.1-flash`, `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3.1-pro`, and `kimi-k2.7-code` — the exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts have a 3-slot concurrency limit (3 concurrent requests per account, regardless of how many distinct models are used). Model lists are not hardcoded in mozart-router config — the GenericOpenAIAdapter auto-discovers available models from each gateway's `/v1/models` endpoint.
+Ollama Cloud presets use `deepseek-v4.1-flash`, `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3.1-pro`, and `kimi-k2.7-code` — the exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts have a 3-slot concurrency limit (3 concurrent requests per account, regardless of how many distinct models are used). Model lists are not hardcoded in generated provider configuration; each gateway's `/v1/models` endpoint is the discovery source.
 
 > [!IMPORTANT]
 > All presets define an explicit observer, and observers may use Ollama Cloud models. `image_routing: "auto"` routes image attachments to the observer: the hook strips them from the main conversation and saves files to disk, so orchestrators never receive image bytes and accumulated-image payloads stay out of the main conversation (mitigating [anomalyco/opencode#43119](https://github.com/anomalyco/opencode/issues/43119)). Ollama Cloud catalog modalities are preserved for observer sessions.

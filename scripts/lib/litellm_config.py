@@ -818,25 +818,6 @@ CLIENT_REGISTRY = [
         "defer",
         "configuration scaffold only; credential-pool delivery and live transport remain unqualified",
     ),
-    _client_row(
-        "mozart",
-        "not-applicable",
-        ["Mozart router configured"],
-        ["GenericOpenAI gateways"],
-        "scripts/configure-mozart-router.py",
-        ["DOTFILES_USE_LITELLM_PROXY=1"],
-        "provider-specific api_key_env",
-        "standard client-adapter path; provider keys only when env set at generation",
-        "eligible",
-        "no-credential",
-        "existing-consumer",
-        evidence=[
-            "scripts/configure-mozart-router.py:46",
-            "scripts/configure-mozart-router.py:62",
-            "scripts/lib/litellm_routing.py:25",
-            "docs/mozart.md:7",
-        ],
-    ),
 ]
 
 # Free classification is catalogue policy only, never a billing guarantee.
@@ -859,7 +840,12 @@ class RoutingInvariantError(ValueError):
 
 
 def validate_routing_entries(entries, *, port=4000):
-    """Reject entries that route LiteLLM back through Mozart or itself."""
+    """Reject entries that route LiteLLM back through itself or a retired Mozart alias.
+
+    Mozart was retired as a managed router in 2026-11-19, but a persisted or
+    migrated config can still name it. The denylist stays so a historical alias
+    cannot become a live loop target.
+    """
     # Single shared validator: generator and doctor must not keep parallel
     # field-selection implementations that could drift apart (Oracle L2).
     if not routing_entries_are_safe(entries, port=port):

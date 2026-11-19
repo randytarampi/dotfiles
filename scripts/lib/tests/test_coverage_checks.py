@@ -121,20 +121,22 @@ def test_migrate_env_renames_and_inherits_gate_values():
     module = load_script("migrate-env-gates")
     lines = [
         "DOTFILES_RUN_PI=1\n",
-        "DOTFILES_RUN_MCP_SETUP='0'\n",
+        "DOTFILES_RUN_CADDY_SETUP='0'\n",
         "DOTFILES_OPENCODE_TIER='openai' # keep comment\n",
         "SMALLCODE_ENABLED=1\n",
     ]
     migrated, changes = module.migrate_env(lines)
     text = "".join(migrated)
     assert "DOTFILES_RUN_PI_SETUP=1" in text
-    assert "DOTFILES_RUN_MOZART_SETUP='0'  # inherited" in text
+    assert "DOTFILES_RUN_DDNS_SETUP='0'" in text
     assert "DOTFILES_OPENCODE_TIER='omo-slim-openai' # keep comment" in text
     assert "SMALLCODE_ENABLED" not in text
     assert any(
         "DOTFILES_RUN_PI → DOTFILES_RUN_PI_SETUP" in change for change in changes
     )
-    assert any("inherited from DOTFILES_RUN_MCP_SETUP" in change for change in changes)
+    assert any(
+        "inherited from DOTFILES_RUN_CADDY_SETUP" in change for change in changes
+    )
 
 
 def test_verify_ci_assets_reports_missing_and_valid_assets(tmp_path, capsys):

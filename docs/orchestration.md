@@ -32,7 +32,6 @@ flowchart TD
         C2[configure-mcps.py]
         C4[configure-all.sh]
         C5[configure-agent-guidance.py]
-        C6[configure-mozart-router.py]
         C7[configure-caddy.py]
         C8[configure-skills.py]
     end
@@ -97,7 +96,6 @@ sequenceDiagram
     Configure->>Configure: configure-opencode.py (tier, models)
     Configure->>Configure: configure-meridian.py (plugin injection + SDK features)
     Configure->>Configure: configure-codex.py (only if CLI, profile, or explicit gate exists)
-    Configure->>Configure: configure-mozart-router.py
     Configure->>Configure: configure-agent-guidance.py
     Configure->>Configure: codegraph install
     Configure->>Configure: configure-codegraph.py
@@ -234,7 +232,6 @@ The companion stamps predate the current shared guidance and still describe stas
 | 18 | configure-pi | run_onchange | Pi providers, subagents, MCP, and skills | `DOTFILES_RUN_PI_SETUP` |
 | — | [context_mode_native.py](../scripts/lib/context_mode_native.py) | configure-all.sh (final step) | Upstream native hooks, MCP and bundled skills for detected Context Mode clients; skipped in project mode, `--dry-run` only plans | `DOTFILES_RUN_CONTEXT_MODE_SETUP` |
 | 10, 18 | install/configure-cortex | run_onchange | Snowflake Cortex Code CLI and native config | `DOTFILES_RUN_CORTEX_SETUP` |
-| 17 | configure-mozart-router | run_onchange | Mozart router config | `DOTFILES_RUN_MOZART_SETUP` |
 | 19 | configure-codegraph | run_onchange | CodeGraph MCP registration | `DOTFILES_RUN_CODEGRAPH_SETUP` |
 | 20 | configure-agent-guidance | run_onchange | Agent guidance distribution | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` |
 | 21 | migrate-acme-ddns | run_once | Decommission legacy ACME/DDNS setup | `DOTFILES_RUN_CADDY_SETUP` |
@@ -298,7 +295,6 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_OPENCODE_SETUP` | 0 | Script 16 (OpenCode tier, models, voice) |
 | `DOTFILES_RUN_MCP_SETUP` | 0 | Script 15 (`run_onchange_15-configure-mcp.sh.tmpl`, MCP config) |
 | `DOTFILES_RUN_XCODE_MCP_SETUP` | 0 | Explicit macOS-only Xcode bridge, requires `xcrun mcpbridge` and enabled Xcode external-agent access; no background adoption. |
-| `DOTFILES_RUN_MOZART_SETUP` | 0 | Script 17 (Mozart router) |
 | `DOTFILES_RUN_SECRETS_SETUP` | 0 | Script 14 + `configure-all.sh` (secrets distribution via configure-secrets.py; inherits from `DOTFILES_RUN_OPENCODE_SETUP`) |
 | `DOTFILES_RUN_AWS_CONFIG_SETUP` | 0 | `configure-all.sh` (non-secret AWS CLI config baseline) |
 | `DOTFILES_RUN_DOCKER_CONFIG_SETUP` | 0 | `configure-all.sh` (non-secret Docker CLI config baseline) |
@@ -335,7 +331,6 @@ graph LR
     S1_5 --> S15[15 MCP]
     S15 --> S16[16 opencode]
     S16 --> S3_5[3.5 meridian plugin]
-    S3_5 --> S17[17 mozart]
     S16 --> S19[19 codegraph]
     S16 --> S20[20 agent guidance]
     S20 --> S27[27 ollama daemon]

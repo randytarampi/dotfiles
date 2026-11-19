@@ -136,7 +136,6 @@ Trust the local root CA with `caddy trust`, or install the root certificate manu
 | Service | Why not exposed |
 |---------|------------------|
 | JetBrains MCP | IDE control plane; exposing it would grant remote IDE control. |
-| Mozart | Router config, not a network service. |
 | CodeGraph | stdio MCP only; no LAN HTTP server. |
 
 ## Environment variables

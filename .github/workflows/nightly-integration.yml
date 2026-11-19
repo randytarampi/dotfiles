@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         # Configuration-only families: each has a postcondition below. Package
-        # installs (Pi, Mozart), unavailable-prerequisite probes (CodeGraph),
+        # installs (Pi), unavailable-prerequisite probes (CodeGraph),
         # services, security hardening, and system-default families are excluded.
         include:
           - gate: DOTFILES_RUN_OPENCODE_SETUP

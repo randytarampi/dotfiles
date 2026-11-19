@@ -125,7 +125,7 @@ IFS=',' read -ra _skip_list <<<"$SKIP_STEPS"
 # empty array as unset under set -u; CI runs with system bash 3.2.
 for _skip in ${_skip_list[@]+"${_skip_list[@]}"}; do
   case "$_skip" in
-  cleanup | npm-packages | secrets | aws | junie | mcps | opencode | pi | cortex | meridian | codex | mozart | agent-guidance | codegraph | codegraph-indexes | ollama-daemon | skills | context-mode | ddns | caddy | paseo-web | openwebui | litellm | opencode-restart | "") ;;
+  cleanup | npm-packages | secrets | aws | junie | mcps | opencode | pi | cortex | meridian | codex | agent-guidance | codegraph | codegraph-indexes | ollama-daemon | skills | context-mode | ddns | caddy | paseo-web | openwebui | litellm | opencode-restart | "") ;;
   *)
     printf 'Error: unknown skip step: %s\n' "$_skip" >&2
     exit 2
@@ -479,16 +479,6 @@ elif codex_configuration_requested; then
   run_step "Codex configuration" poetry --directory "$DOTFILES_DIR" run python "$SCRIPT_DIR/configure-codex.py"
 else
   info "Codex CLI absent, no profile or explicit setup gate — skipping Codex configuration (Poetry not required)"
-fi
-
-# 4. Mozart router
-if [[ "$COMMON_DRY_RUN" == "1" ]]; then
-  info "Skipping Mozart configuration (dry-run mode)"
-elif ! step_skipped mozart && [[ "${DOTFILES_RUN_MOZART_SETUP:-0}" == "1" ]]; then
-  info "Configuring Mozart router..."
-  run_step "Mozart configuration" python3 "$SCRIPT_DIR/configure-mozart-router.py"
-else
-  info "DOTFILES_RUN_MOZART_SETUP not set — skipping Mozart configuration"
 fi
 
 # 7. Agent guidance distribution (writes ~/AGENTS.md and 6 other agent files)
