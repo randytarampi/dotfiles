@@ -81,10 +81,10 @@ def _caddyfile(tmp_path: Path) -> None:
     cfg.write_text("{}\n", encoding="utf-8")
 
 
-def test_validate_skips_without_a_managed_caddyfile(tmp_path: Path):
+def test_explicit_validate_fails_without_a_managed_caddyfile(tmp_path: Path):
     result = _run("caddy-validate", tmp_path, uname="Darwin", caddy_ok=True)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "SKIPPED" in result.stdout
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "FAILED" in result.stderr
 
 
 def test_validate_fails_on_invalid_config(tmp_path: Path):
@@ -133,3 +133,15 @@ def test_no_swallowed_failure_or_unconditional_success():
     # The old shape reported failure and still exited 0.
     assert '|| echo "Caddy reload failed"' not in text
     assert '|| echo "Caddyfile validation failed' not in text
+
+
+def test_explicit_reload_fails_without_a_managed_caddyfile(tmp_path: Path):
+    result = _run("caddy-reload", tmp_path, uname="Darwin", caddy_ok=True)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "FAILED" in result.stderr
+
+
+def test_explicit_validate_missing_binary_is_failure_not_success(tmp_path: Path):
+    _caddyfile(tmp_path)
+    result = _run("caddy-validate", tmp_path, uname="Darwin", caddy_ok=False)
+    assert result.returncode != 0
