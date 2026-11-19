@@ -125,13 +125,11 @@ To verify repository and script health offline:
   # Install standard dev dependencies (black, shellcheck, shfmt, pre-commit)
   brew bundle --file Brewfile.dev
 
-  # Set up local hooks
-  pre-commit install
+  # Set up the staged, check-only commit hooks (opt-in)
+  make hooks-install
 
-  # Run verification
+  # Run full verification
   make verify
-  # or
-  pre-commit run --all-files
   ```
 - **Windows (PowerShell 7 / Git Bash):**
   ```powershell
@@ -139,14 +137,12 @@ To verify repository and script health offline:
   # Or install manually:
   winget install GnuWin32.Make OpenJS.NodeJS Python.Python.3.12 psf.black koalaman.shellcheck mvdan.shfmt
 
-  # Set up local hooks
+  # Set up the staged, check-only commit hooks (opt-in)
   pip install pre-commit
-  pre-commit install
+  make hooks-install
 
-  # Run verification (native PowerShell or Git Bash / WSL for Unix utility compatibility)
+  # Run full verification (native PowerShell or Git Bash / WSL for Unix utility compatibility)
   make verify
-  # or
-  pre-commit run --all-files
   ```
 
 ---

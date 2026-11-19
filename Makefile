@@ -8,7 +8,7 @@ help: ## Show this help
 bootstrap-smoke: ## Run isolated Linux L0 deployment twice (no real HOME writes)
 	@bash tests/bootstrap/smoke.sh
 
-.PHONY: check-review-bundles lint fix env drift migrate migrate-preview stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-templates-scripts check-mcp-parity check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-setup caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart openwebui-start openwebui-stop openwebui-restart openwebui-backup openwebui-terminal-start openwebui-terminal-stop openwebui-terminal-restart openwebui-computer-start openwebui-computer-stop openwebui-computer-restart litellm-start litellm-stop litellm-restart openwebui-backup-timer-start openwebui-backup-timer-stop plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup anchor-review-ref vibeguard-audit
+.PHONY: check-review-bundles lint fix env drift migrate migrate-preview stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-templates-scripts check-mcp-parity check-plugin-consistency check-actionlint verify reset symlinks hooks-install test test-shell test-tier-registry caddy-setup caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart openwebui-start openwebui-stop openwebui-restart openwebui-backup openwebui-terminal-start openwebui-terminal-stop openwebui-terminal-restart openwebui-computer-start openwebui-computer-stop openwebui-computer-restart litellm-start litellm-stop litellm-restart openwebui-backup-timer-start openwebui-backup-timer-stop plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup anchor-review-ref vibeguard-audit
 
 anchor-review-ref: ## Refresh the main review dispatcher's trusted_ref from reachable origin/main
 	@python3 scripts/anchor-review-ref.py $(if $(filter 1 true yes,$(DRY_RUN)),--dry-run,)
@@ -259,6 +259,14 @@ reset: ## Clear chezmoi script state (forces re-run of all scripts on next deplo
 
 symlinks: ## Create symlinks for repository scripts
 	@bash scripts/setup-bin-symlinks.sh "$(CURDIR)/scripts"
+
+hooks-install: ## Install the staged commit checks (opt-in; idempotent)
+	@command -v pre-commit >/dev/null 2>&1 || { echo "pre-commit not installed. Install it with 'brew install pre-commit' or 'pipx install pre-commit'."; exit 1; }
+	@if [ -n "$$(git config --get core.hooksPath)" ]; then \
+		echo "core.hooksPath is set to '$$(git config --get core.hooksPath)' — installing there."; \
+	fi
+	@pre-commit install
+	@echo "Staged commit checks installed. Whole-tree formatting stays 'make fix'; full acceptance stays 'make verify'."
 
 test: ## Run the Python test suite
 	@PYTHONPATH=scripts/lib poetry run python -m pytest scripts/lib/tests/ -q
