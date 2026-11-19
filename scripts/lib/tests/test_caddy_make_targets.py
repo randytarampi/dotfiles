@@ -145,3 +145,76 @@ def test_explicit_validate_missing_binary_is_failure_not_success(tmp_path: Path)
     _caddyfile(tmp_path)
     result = _run("caddy-validate", tmp_path, uname="Darwin", caddy_ok=False)
     assert result.returncode != 0
+
+
+# --- #355: unprivileged validation must not be labelled a syntax failure ---
+
+PKI_ERROR = (
+    '{"level":"error","msg":"loading tls app module: provision pki: '
+    "loading intermediate cert: open "
+    "/Users/x/Library/Application Support/Caddy/pki/authorities/local/"
+    'intermediate.crt: permission denied"}'
+)
+
+
+def _run_with_caddy(tmp_path, caddy_body, *, uname="Darwin"):
+    """Run the target with a caddy stub that emits an arbitrary body."""
+    env = _env(tmp_path, uname=uname, caddy_ok=True)
+    _write_stub(tmp_path / "bin" / "caddy", caddy_body)
+    return subprocess.run(
+        ["make", "-s", "--no-print-directory", "caddy-validate"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _caddyfile_for(tmp_path):
+    cfg = tmp_path / "etc" / "caddy" / "Caddyfile"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text("{}\n", encoding="utf-8")
+
+
+def test_root_pki_unreadable_is_unknown_not_failed(tmp_path):
+    _caddyfile_for(tmp_path)
+    result = _run_with_caddy(tmp_path, f'printf "%s\\n" {PKI_ERROR!r} >&2\nexit 1\n')
+    assert result.returncode != 0, "UNKNOWN must still be a non-zero exit"
+    assert "UNKNOWN" in result.stderr
+    assert "FAILED" not in result.stderr
+    assert "#355" in result.stderr
+
+
+def test_unrelated_permission_error_stays_failed(tmp_path):
+    _caddyfile_for(tmp_path)
+    result = _run_with_caddy(
+        tmp_path,
+        'printf "%s\\n" "open /etc/other.conf: permission denied" >&2\nexit 1\n',
+    )
+    assert result.returncode != 0
+    assert "FAILED" in result.stderr
+    assert "UNKNOWN" not in result.stderr
+
+
+def test_valid_config_reports_applied(tmp_path):
+    _caddyfile_for(tmp_path)
+    result = _run_with_caddy(tmp_path, "exit 0\n")
+    assert result.returncode == 0
+    assert "APPLIED" in result.stdout
+
+
+def test_missing_caddyfile_message_names_the_real_path(tmp_path):
+    """Regression: a single $ in the recipe let make expand $c, printing 'onfig'."""
+    env = _env(tmp_path, uname="Darwin", caddy_ok=True)
+    result = subprocess.run(
+        ["make", "-s", "--no-print-directory", "caddy-validate"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "onfig" not in result.stderr, "make-expanded $c: path was mangled"
+    assert "Caddyfile" in result.stderr
