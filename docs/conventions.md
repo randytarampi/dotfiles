@@ -68,6 +68,43 @@ Orchestrating scripts declare `failure_policy`: `aggregate` (continue on child f
 
 Config shadowing is prohibited: two variables must not represent the same concept without a documented relationship.
 
+### Provider base-URL and host overrides
+
+Official SDK environment variables override hardcoded provider URLs across all scripts, taking priority over the `BASE_URLS` defaults in `scripts/lib/constants.py`.
+
+| Env var | Provider | Default | Notes |
+|---|---|---|---|
+| `ANTHROPIC_BASE_URL` | Anthropic | `https://api.anthropic.com/v1` | Also signals Meridian usage when set |
+| `OPENAI_BASE_URL` | OpenAI | `https://api.openai.com/v1` | OpenAI SDK standard |
+| `OLLAMA_CLOUD_BASE_URL` | Ollama Cloud | `https://ollama.com/v1` | Repo-owned, not an official SDK variable |
+
+Resolution order in `constants.py` via `get_provider_base_url(provider)`: env override → `BASE_URLS` default → local Ollama fallback.
+
+Local services resolve host and port the same way:
+
+| Service | Host env | Port env | Default |
+|---|---|---|---|
+| Local Ollama | `OLLAMA_LOCAL_HOST` | `OLLAMA_LOCAL_PORT` | `localhost:11434` |
+| Official Ollama | `OLLAMA_HOST` | — | `http://localhost:11434`; scheme+host[:port], overrides the pair above |
+| Meridian proxy | `MERIDIAN_HOST` | `MERIDIAN_PORT` | `127.0.0.1:3456` |
+
+Use the helpers rather than re-deriving these: `get_ollama_local_base_url()`, `get_meridian_base_url()` and `is_meridian_configured()`. `is_meridian_configured()` returns true when `MERIDIAN_API_KEY` or `ANTHROPIC_BASE_URL` is set, and is the canonical Meridian detection — do not duplicate it.
+
+### Declarative override keys in JSON configs
+
+`configs/junie/model-groups.json` supports two keys that are resolved and stripped before the config is written:
+
+| Key | Format | Purpose |
+|---|---|---|
+| `baseUrlEnv` | Env var name | If the named variable is set, overrides `baseUrl` |
+| `hostEnvAlt` | Env var name | Alternative host variable in scheme+host[:port] form (e.g. `OLLAMA_HOST`); takes priority over `hostEnv`/`portEnv` |
+
+`scripts/generate-jetbrains-profiles.py` performs the resolution. The keys are stripped from output because Junie does not understand them.
+
+### Canonical Ollama Cloud routing
+
+Ollama Cloud identities use the separate `ollama-cloud/<id>` provider and route directly to `https://ollama.com/v1` with `OLLAMA_API_KEY` in direct mode. When `DOTFILES_USE_LITELLM_PROXY=1`, a client adapter maps that unchanged identity to its exact LiteLLM alias; a missing gateway, key or alias is a configuration error, never a silent direct fallback. `check_ollama_daemon()` is a daemon-health and sign-in probe for consumers that genuinely use installed local `:cloud` models (notably the voice exception) — it does not change provider routing. Cloud stub pulls stay with the install script.
+
 ## Markdown file names
 
 All non-platform-owned Markdown filenames must be **lowercase kebab case**: `name.md`, `name-with-parts.md`. An underscore, uppercase letter or mixed-case extension is invalid. This applies to `docs/`, configuration documentation and `.github/ISSUE_TEMPLATE/` templates. Rename a Markdown file and its consumers together, including relative links, absolute repository links pointing at current files, literal paths in scripts, fixture expectations and workflows. Keep immutable historical GitHub commit links pointing to their *historical* filename.
