@@ -1603,6 +1603,7 @@
         "--out",
         "--force",
         "--source-sha",
+        "--require-driver",
         "--repo",
         "--environment-kind",
         "--manifest"
