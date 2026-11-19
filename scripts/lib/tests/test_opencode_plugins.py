@@ -73,6 +73,19 @@ def test_context_mode_permission_rules_are_explicit_and_not_global(monkeypatch):
     )
 
 
+def test_cached_vibeguard_ids_stay_disabled_after_manifest_removal():
+    checker = load_checker()
+    manifest = checker.active_plugin_specs()
+    assert not any("vibeguard" in entry.lower() for entry in manifest)
+    source = (ROOT / "scripts/configure-opencode.py").read_text(encoding="utf-8")
+    for directive in ('"-opencode-vibeguard.*"', '"-vibeguard.*"'):
+        assert source.count(directive) == 1
+        assert source.index('"-opencode-mem"') < source.index(directive)
+        assert source.index(directive) < source.index("*meridian_preserved,")
+    # This evaluates the emitted plugin list, not just the manifest.
+    assert checker.parse_config_plugins(checker.CONFIG_SCRIPT) == manifest
+
+
 def test_legacy_memory_plugin_stays_retired_with_old_gate(monkeypatch):
     checker = load_checker()
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_MEMORY_SETUP", "1")
