@@ -1,15 +1,48 @@
+# Staged, check-only checks for the commit transaction.
+#
+# The previous configuration ran whole-tree `make fix` (a mutator) followed by
+# whole-repo `make lint` on every commit through two `always_run` hooks. That
+# charged every commit for validation it could not affect, and a mutating
+# whole-tree pass can rewrite or strand unstaged work.
+#
+# These hooks receive filenames, so they only see what is staged, and none of
+# them writes. Whole-tree formatting is `make fix`; full acceptance is
+# `make verify` locally and `ci-verify` plus tests in CI. Neither belongs here.
 repos:
   - repo: local
     hooks:
-      - id: make-fix
-        name: make fix
-        entry: make fix
+      - id: python-format-check
+        name: black (Poetry-pinned, check only)
+        entry: poetry run black --check
         language: system
-        pass_filenames: false
-        always_run: true
-      - id: make-lint
-        name: make lint
-        entry: make lint
+        types: [python]
+        pass_filenames: true
+
+      - id: shell-format-check
+        name: shfmt (diff only)
+        entry: shfmt -i 2 -d
         language: system
-        pass_filenames: false
-        always_run: true
+        types: [shell]
+        pass_filenames: true
+
+      - id: shell-lint
+        name: shellcheck
+        entry: shellcheck --severity=warning --exclude=SC1090,SC1091,SC2148
+        language: system
+        types: [shell]
+        pass_filenames: true
+
+      - id: json-syntax
+        name: JSON syntax
+        entry: python3 -m json.tool
+        language: system
+        types: [json]
+        pass_filenames: true
+
+      - id: text-hygiene
+        name: whitespace, conflict markers, final newline
+        entry: python3 scripts/precommit-text-hygiene.py
+        language: system
+        types: [text]
+        exclude: \.md$
+        pass_filenames: true
