@@ -30,6 +30,10 @@ CHEZMOI_SOURCE := $(CURDIR)
 ENV_FILE ?= $(HOME)/.env
 ENV_EXAMPLE ?= dot_dotfiles/shell/.env.example
 SHFMT ?= $(shell if command -v shfmt >/dev/null 2>&1; then command -v shfmt; elif command -v brew >/dev/null 2>&1 && [ -x "$$(brew --prefix)/bin/shfmt" ]; then printf "%s/bin/shfmt" "$$(brew --prefix)"; fi)
+# Single formatter authority: fix and lint must resolve black identically.
+# A PATH black of a different version silently reformatting source into a
+# state that the Poetry-pinned lint then rejects is the regression this avoids.
+POETRY_BLACK ?= poetry run black
 define LOAD_ENV
 set -a; [ -f "$(ENV_FILE)" ] && . "$(ENV_FILE)"; set +a
 endef
@@ -70,7 +74,7 @@ lint: ## Run repository lint and syntax checks
 	@echo "Checking heredocs in .chezmoiscripts..."
 	@python3 scripts/check-heredocs.py
 	@echo "Checking Python formatting with black (dry-run)..."
-	@poetry run black --check --diff scripts/ scripts/lib/
+	@$(POETRY_BLACK) --check --diff scripts/ scripts/lib/
 
 fix: ## Format shell and Python files and normalize non-Markdown text files
 	@if [ -n "$(SHFMT)" ]; then \
@@ -79,12 +83,13 @@ fix: ## Format shell and Python files and normalize non-Markdown text files
 		echo "shfmt not found. Install it with 'brew install shfmt' or 'winget install mvdan.shfmt'."; \
 		exit 1; \
 	fi
-	@if command -v black >/dev/null 2>&1; then \
-		black scripts/ scripts/lib/; \
-		chmod +x scripts/*.py; \
-	else \
-		echo "black not installed; skipping python formatting"; \
-	fi
+	@echo "Formatting Python with the Poetry-pinned black..."
+	@$(POETRY_BLACK) scripts/ scripts/lib/ || { \
+		echo "Python formatting failed or the Poetry environment is unavailable."; \
+		echo "Run 'poetry install --with test,tooling' and retry; Python formatting is not optional."; \
+		exit 1; \
+	}
+	@chmod +x scripts/*.py
 	@echo "Stripping trailing whitespaces and fixing EOF newlines..."
 	@python3 -c 'exec("import sys, glob, os\n" \
 	"for ext in [\"*.py\", \"*.sh\", \"*.json\", \"*.tmpl\", \"*.yml\", \"*.yaml\"]:\n" \
