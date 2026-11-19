@@ -86,8 +86,11 @@ def write_config_atomic(path: str, payload: Any) -> None:
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", prefix=f".{os.path.basename(path)}.",
-            dir=directory, delete=False,
+            mode="w",
+            encoding="utf-8",
+            prefix=f".{os.path.basename(path)}.",
+            dir=directory,
+            delete=False,
         ) as handle:
             temporary = handle.name
             # NamedTemporaryFile uses a private (0600) newly-created file.
