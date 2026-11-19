@@ -240,6 +240,11 @@ check-mcp-parity: ## Verify MCP registry templates and config files are in parit
 check-docs-drift: ## Check for documentation drift between AGENTS.md, README.md, and docs/
 	@python3 scripts/check-docs-drift.py
 
+receipt-validate: ## Validate a host acceptance receipt and require execution provenance
+	@test -n "$(RECEIPT)" || { echo "RECEIPT=<path to receipt JSON> is required"; exit 2; }
+	@python3 scripts/collect-bootstrap-acceptance.py --validate "$(RECEIPT)" \
+		$(if $(SOURCE_SHA),--source-sha "$(SOURCE_SHA)",) --require-driver
+
 check-plugin-consistency: ## Verify plugin arrays match between install script and config generator
 	@python3 scripts/check-plugin-consistency.py
 

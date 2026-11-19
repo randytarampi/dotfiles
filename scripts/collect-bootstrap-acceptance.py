@@ -255,6 +255,42 @@ def reject_secrets(value, where="root"):
         raise ReceiptError("receipt contains a credential-like value or personal path")
 
 
+DRIVER_EVIDENCE_KEYS = ("run_url", "run_id", "artifact_id", "driver")
+
+
+def _stage_outcomes(stage_value):
+    """Return the outcome claims for a stage, which may hold retry attempts."""
+    if isinstance(stage_value, list):
+        return [item.get("outcome") for item in stage_value if isinstance(item, dict)]
+    if isinstance(stage_value, dict):
+        return [stage_value.get("outcome")]
+    return []
+
+
+def validate_driver_evidence(receipt):
+    """A stage claiming `pass` must carry immutable execution provenance.
+
+    Schema validity proves shape, not that a command ran: an all-pass record
+    can be authored by hand. Without a reference to the run that produced it,
+    such a receipt is an assertion by its author, not evidence — so it must
+    not be cited as host qualification.
+    """
+    provenance = receipt.get("provenance") or {}
+    if any(provenance.get(key) for key in DRIVER_EVIDENCE_KEYS):
+        return
+    claimants = sorted(
+        name
+        for name, value in (receipt.get("stages") or {}).items()
+        if "pass" in _stage_outcomes(value)
+    )
+    if claimants:
+        raise ReceiptError(
+            "stages claim pass without execution provenance ("
+            + ", ".join(claimants)
+            + "); supply provenance.run_url from the producing run"
+        )
+
+
 def validate(receipt, expected_sha=None):
     keys = {
         "schema_version",
@@ -404,6 +440,11 @@ def main():
     parser.add_argument("--out")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--source-sha")
+    parser.add_argument(
+        "--require-driver",
+        action="store_true",
+        help="reject a receipt whose pass claims lack execution provenance",
+    )
     parser.add_argument("--repo", default=".")
     parser.add_argument(
         "--environment-kind",
@@ -416,6 +457,8 @@ def main():
         if args.validate:
             receipt = json.loads(Path(args.validate).read_text(encoding="utf-8"))
             validate(receipt, args.source_sha)
+            if args.require_driver:
+                validate_driver_evidence(receipt)
             print("receipt valid")
             return 0
         result = inspect(
