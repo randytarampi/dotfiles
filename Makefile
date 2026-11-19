@@ -335,6 +335,7 @@ opencode-start: ## Start OpenCode Web service
 		svc_healthy "OpenCode Web (/api/info)"; \
 	elif [ "$$(uname)" = "Linux" ]; then \
 		if ! svc_user_systemd_available; then svc_skip "no user systemd session"; \
+		elif ! systemctl --user cat opencode-web >/dev/null 2>&1; then svc_skip "opencode-web unit is not installed"; \
 		elif systemctl --user start opencode-web 2>/dev/null && systemctl --user is-active --quiet opencode-web; then \
 			svc_applied "opencode-web"; \
 		else svc_failed "opencode-web did not start"; exit 1; fi; \
@@ -347,6 +348,7 @@ opencode-stop: ## Stop OpenCode Web service
 		svc_applied "OpenCode Web LaunchAgent unloaded"; \
 	elif [ "$$(uname)" = "Linux" ]; then \
 		if ! svc_user_systemd_available; then svc_skip "no user systemd session"; \
+		elif ! systemctl --user cat opencode-web >/dev/null 2>&1; then svc_skip "opencode-web unit is not installed"; \
 		elif systemctl --user stop opencode-web 2>/dev/null; then svc_applied "opencode-web stopped"; \
 		else svc_failed "opencode-web stop failed"; exit 1; fi; \
 	else svc_skip "OpenCode Web is unsupported on this platform"; fi
@@ -371,6 +373,7 @@ openwebui-stop: ## Stop Open WebUI service
 	if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_service_stop && svc_applied "Open WebUI stopped"; \
 	elif [ "$$(uname)" = "Linux" ]; then \
 		if ! svc_user_systemd_available; then svc_skip "no user systemd session"; \
+		elif ! systemctl --user cat open-webui.service >/dev/null 2>&1; then svc_skip "open-webui.service is not installed"; \
 		elif systemctl --user stop open-webui.service 2>/dev/null; then svc_applied "open-webui stopped"; \
 		else svc_failed "open-webui stop failed"; exit 1; fi; \
 	else svc_skip "Open WebUI is unsupported on this platform"; fi
@@ -415,6 +418,7 @@ litellm-stop: ## Stop LiteLLM gateway
 	if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/litellm_service.sh && litellm_service_stop && svc_applied "LiteLLM gateway stopped"; \
 	elif [ "$$(uname)" = "Linux" ]; then \
 		if ! svc_user_systemd_available; then svc_skip "no user systemd session"; \
+		elif ! systemctl --user cat litellm.service >/dev/null 2>&1; then svc_skip "litellm.service is not installed"; \
 		elif systemctl --user stop litellm.service 2>/dev/null; then svc_applied "litellm stopped"; \
 		else svc_failed "litellm stop failed"; exit 1; fi; \
 	else svc_skip "LiteLLM gateway is unsupported on this platform"; fi
@@ -460,6 +464,7 @@ meridian-restart: ## Restart Meridian proxy service
 		else svc_failed "Meridian proxy failed to reload ($$unit)"; exit 1; fi; \
 	elif [ "$$(uname)" = "Linux" ]; then \
 		if ! svc_user_systemd_available; then svc_skip "no user systemd session"; \
+		elif ! systemctl --user cat meridian-proxy >/dev/null 2>&1; then svc_skip "meridian-proxy unit is not installed"; \
 		elif systemctl --user restart meridian-proxy 2>/dev/null; then svc_applied "meridian-proxy"; \
 		else svc_failed "meridian-proxy restart failed"; exit 1; fi; \
 	else svc_skip "Meridian proxy is unsupported on this platform"; fi
@@ -480,6 +485,7 @@ ddns-restart: ## Restart all ddns-route53 services
 		[ "$$failed" = "0" ] || exit 1; \
 	elif [ "$$(uname)" = "Linux" ]; then \
 		if ! svc_user_systemd_available; then svc_skip "no user systemd session"; \
+		elif ! systemctl --user list-unit-files 'ddns-route53-*' --no-legend 2>/dev/null | grep -q '^ddns-route53-'; then svc_skip "no ddns-route53 units installed"; \
 		elif systemctl --user restart 'ddns-route53-*' 2>/dev/null; then svc_applied "ddns-route53 services"; \
 		else svc_failed "ddns-route53 restart failed"; exit 1; fi; \
 	else svc_skip "ddns-route53 restart is unsupported on this platform"; fi
