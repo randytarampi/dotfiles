@@ -323,7 +323,7 @@ caddy-validate: ## Validate Caddyfile syntax
 	if ! command -v caddy >/dev/null 2>&1; then svc_failed "caddy is not installed; cannot validate"; exit 1; fi; \
 	if ! command -v brew >/dev/null 2>&1; then svc_failed "brew is required to locate the managed Caddyfile"; exit 1; fi; \
 	config="$$(brew --prefix)/etc/caddy/Caddyfile"; \
-	if [ ! -f "$config" ]; then svc_failed "no managed Caddyfile at $config"; exit 1; fi; \
+	if [ ! -f "$$config" ]; then svc_failed "no managed Caddyfile at $config"; exit 1; fi; \
 	if caddy validate --config "$$config" 2>&1; then svc_applied "Caddyfile syntax valid"; \
 	else svc_failed "Caddyfile validation failed ($$config)"; exit 1; fi
 
@@ -331,8 +331,8 @@ caddy-reload: ## Hot-reload Caddy config
 	@. scripts/lib/service_result.sh; \
 	if ! command -v brew >/dev/null 2>&1; then svc_failed "brew is required to locate caddy"; exit 1; fi; \
 	bin="$$(brew --prefix)/bin/caddy"; config="$$(brew --prefix)/etc/caddy/Caddyfile"; \
-	if [ ! -x "$bin" ]; then svc_failed "caddy is not installed at $bin"; exit 1; fi; \
-	if [ ! -f "$config" ]; then svc_failed "no managed Caddyfile at $config"; exit 1; fi; \
+	if [ ! -x "$$bin" ]; then svc_failed "caddy is not installed at $bin"; exit 1; fi; \
+	if [ ! -f "$$config" ]; then svc_failed "no managed Caddyfile at $config"; exit 1; fi; \
 	if sudo "$$bin" reload --force --config "$$config" 2>&1; then svc_applied "Caddy reloaded"; \
 	else svc_failed "Caddy reload failed (privilege or configuration error)"; exit 1; fi
 
