@@ -272,6 +272,76 @@ def test_dcp_main_keeps_tui_entry_when_manifest_missing(tmp_path, monkeypatch):
     assert json.loads((tmp_path / "tui.json").read_text()) == source
 
 
+def test_dcp_main_cleans_cli_json_and_preserves_other_plugins(tmp_path, monkeypatch):
+    module = _load("dcp_cli_reconcile", ROOT / "configure-opencode-dcp.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module.sys, "argv", ["dcp", "--no-backup"])
+    (tmp_path / "opencode.json").write_text(
+        '{"plugins": ["@tarquinen/opencode-dcp@latest"]}'
+    )
+    cli = {
+        "plugins": [
+            {"package": "oh-my-opencode-slim"},
+            {"package": "@tarquinen/opencode-dcp@3.2.0"},
+            {"package": "@renjfk/opencode-voice@latest", "options": {"model": "x"}},
+        ],
+        "theme": "dark",
+    }
+    (tmp_path / "cli.json").write_text(json.dumps(cli))
+    assert module.main() is None
+    assert json.loads((tmp_path / "cli.json").read_text()) == {
+        "plugins": [
+            {"package": "oh-my-opencode-slim"},
+            {"package": "@renjfk/opencode-voice@latest", "options": {"model": "x"}},
+        ],
+        "theme": "dark",
+    }
+
+
+def test_dcp_main_cleans_array_root_cli_json(tmp_path, monkeypatch):
+    module = _load("dcp_cli_array", ROOT / "configure-opencode-dcp.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module.sys, "argv", ["dcp", "--no-backup"])
+    (tmp_path / "opencode.json").write_text(
+        '{"plugins": ["@tarquinen/opencode-dcp@latest"]}'
+    )
+    (tmp_path / "cli.json").write_text(
+        json.dumps([{"package": "@tarquinen/opencode-dcp@3.2.0"}, "other"])
+    )
+    assert module.main() is None
+    assert json.loads((tmp_path / "cli.json").read_text()) == ["other"]
+
+
+def test_dcp_main_keeps_cli_entry_when_manifest_missing(tmp_path, monkeypatch):
+    module = _load("dcp_cli_guard", ROOT / "configure-opencode-dcp.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module.sys, "argv", ["dcp", "--no-backup"])
+    cli = {"plugins": [{"package": "@tarquinen/opencode-dcp@3.2.0"}]}
+    (tmp_path / "cli.json").write_text(json.dumps(cli))
+    assert module.main() is None
+    assert json.loads((tmp_path / "cli.json").read_text()) == cli
+
+
+def test_dcp_main_cleans_singular_plugin_key_in_cli_json(tmp_path, monkeypatch):
+    module = _load("dcp_cli_singular", ROOT / "configure-opencode-dcp.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module.sys, "argv", ["dcp", "--no-backup"])
+    (tmp_path / "opencode.json").write_text(
+        '{"plugins": ["@tarquinen/opencode-dcp@latest"]}'
+    )
+    cli = {"plugin": [{"package": "@tarquinen/opencode-dcp@3.2.0"}], "theme": "dark"}
+    (tmp_path / "cli.json").write_text(json.dumps(cli))
+    assert module.main() is None
+    assert json.loads((tmp_path / "cli.json").read_text()) == {
+        "plugin": [],
+        "theme": "dark",
+    }
+
+
 def test_verify_cli_json_parseable_or_absent(tmp_path, monkeypatch, capsys):
     module = _load("verify_for_cli", ROOT / "verify-config.py")
     monkeypatch.setattr(module, "HOME", tmp_path)

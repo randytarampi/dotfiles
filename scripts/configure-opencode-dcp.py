@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 """
 OpenCode DCP configuration reconciler.
-
-Removes obsolete DCP entries from ~/.config/opencode/tui.json. Registration
-and TUI loading are owned by the opencode.json plugin manifest.
-
-tui.json is a SHARED file: each TUI plugin has its own configure-opencode-*.py
-that defensively merges only its own entry. This script does NOT touch voice
-or any other plugin's entry.
-
+Removes obsolete DCP entries from the shared TUI/client configs
+(~/.config/opencode/tui.json and cli.json). Registration and loading are owned
+by the opencode.json plugin manifest.
+tui.json and cli.json are SHARED files: each TUI plugin has its own
+configure-opencode-*.py that defensively merges only its own entry. This script
+does NOT touch voice or any other plugin's entry.
 Usage:
   configure-opencode-dcp.py [--dry-run] [--no-backup]
-
 Environment variables:
   OPENCODE_DIR  - Override config directory
 """
@@ -28,12 +25,19 @@ if SCRIPT_DIR not in sys.path:
 LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR, "lib")
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
-
 import logger
 from file_utils import backup_file, write_text_file
 from env import load_env
 
 DCP_PLUGIN_KEY = "@tarquinen/opencode-dcp"
+
+# TUI/client config files that may carry a stale DCP entry. tui.json uses the
+# singular "plugin" key; cli.json uses "plugins" and may have an array root.
+# Both spellings are checked so a v1-era cli.json entry cannot survive.
+DCP_CONFIG_TARGETS = (
+    ("tui.json", ("plugin",)),
+    ("cli.json", ("plugins", "plugin")),
+)
 
 
 def is_dcp_entry(entry) -> bool:
@@ -48,9 +52,36 @@ def is_dcp_entry(entry) -> bool:
     return False
 
 
+def clean_entry_list(payload: Any, keys: tuple[str, ...]) -> tuple[Any, bool]:
+    """Remove DCP entries from a config payload without touching other entries.
+
+    Accepts either an array root (cli.json) or an object root whose plugin list
+    lives under one of ``keys`` (tui.json uses "plugin", cli.json uses
+    "plugins" and historically "plugin"). Returns the new payload and whether
+    anything changed.
+    """
+    if isinstance(payload, list):
+        filtered = [entry for entry in payload if not is_dcp_entry(entry)]
+        return filtered, filtered != payload
+    if isinstance(payload, dict):
+        updated = dict(payload)
+        changed = False
+        for key in keys:
+            raw_plugins = updated.get(key, [])
+            existing = (
+                list(raw_plugins) if isinstance(raw_plugins, (list, tuple)) else []
+            )
+            filtered = [entry for entry in existing if not is_dcp_entry(entry)]
+            if filtered != existing:
+                updated[key] = filtered
+                changed = True
+        return (updated, True) if changed else (payload, False)
+    return payload, False
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Remove obsolete DCP registration from tui.json."
+        description="Remove obsolete DCP registration from tui.json and cli.json."
     )
     parser.add_argument(
         "--dry-run",
@@ -60,7 +91,7 @@ def main():
     parser.add_argument(
         "--no-backup",
         action="store_true",
-        help="Skip backup of existing tui.json",
+        help="Skip backups of existing tui.json/cli.json",
     )
     args = parser.parse_args()
 
@@ -69,34 +100,15 @@ def main():
         config_dir_path = os.path.abspath(os.path.expanduser(opencode_dir))
     else:
         config_dir_path = os.path.join(os.path.expanduser("~"), ".config", "opencode")
-
     env_path = os.path.join(config_dir_path, ".env")
     if not load_env(env_path):
         home_env = os.path.expanduser("~/.env")
         load_env(home_env)
 
-    output_path = os.path.join(config_dir_path, "tui.json")
-
-    existing_plugins: list[Any] = []
-    existing_config: dict[str, Any] = {}
-    if os.path.exists(output_path):
-        try:
-            with open(output_path, "r", encoding="utf-8") as f:
-                loaded_config = json.load(f)
-            if isinstance(loaded_config, dict):
-                existing_config = loaded_config
-                raw_plugins = existing_config.get("plugin", [])
-                existing_plugins = (
-                    list(raw_plugins) if isinstance(raw_plugins, (list, tuple)) else []
-                )
-        except Exception:
-            existing_plugins = []
-            existing_config = {}
-
-    # Only remove the tui.json entry when the v2 replacement is actually in
-    # place: opencode.json's plugins array must register DCP. A standalone
-    # run against a config that lacks the manifest registration must not
-    # strip DCP's only registration.
+    # Only remove the DCP entries when the v2 replacement is actually in place:
+    # opencode.json's plugins array must register DCP. A standalone run against
+    # a config that lacks the manifest registration must not strip DCP's only
+    # registration.
     replacement_registered = False
     opencode_json = os.path.join(config_dir_path, "opencode.json")
     try:
@@ -116,51 +128,66 @@ def main():
     except (OSError, json.JSONDecodeError) as error:
         logger.warning(
             "Could not confirm DCP registration in opencode.json (%s); "
-            "keeping the tui.json DCP entry in place",
+            "keeping the shared config DCP entries in place",
             error,
         )
+
     if not replacement_registered:
         logger.warning(
             "DCP is not registered in opencode.json's plugins array; "
-            "not removing the tui.json DCP entry (replacement not working)"
+            "not removing the shared config DCP entries (replacement not working)"
         )
         return
 
-    filtered_plugins = [entry for entry in existing_plugins if not is_dcp_entry(entry)]
-    tui_config = existing_config or {}
-    changed = filtered_plugins != existing_plugins
-    if changed:
-        tui_config["plugin"] = filtered_plugins
+    changed_files: list[str] = []
+    for filename, keys in DCP_CONFIG_TARGETS:
+        output_path = os.path.join(config_dir_path, filename)
+        if not os.path.exists(output_path):
+            continue
+        try:
+            with open(output_path, "r", encoding="utf-8") as handle:
+                existing_payload = json.load(handle)
+        except (OSError, json.JSONDecodeError) as error:
+            logger.warning(
+                "Could not read %s (%s); leaving it untouched", filename, error
+            )
+            continue
 
-    if not changed:
-        logger.info("No obsolete DCP tui.json registration to remove")
-        return
+        updated_payload, changed = clean_entry_list(existing_payload, keys)
+        if not changed:
+            logger.info("No obsolete DCP %s registration to remove", filename)
+            continue
 
-    if args.dry_run:
-        print("# Dry-run: remove obsolete tui.json DCP entry")
-        print(f"# Config dir: {config_dir_path}")
-        print(json.dumps(filtered_plugins, indent=2))
-        return
+        if args.dry_run:
+            print(f"# Dry-run: remove obsolete DCP entry from {filename}")
+            print(f"# Config dir: {config_dir_path}")
+            print(json.dumps(updated_payload, indent=2))
+            changed_files.append(filename)
+            continue
 
-    if os.path.exists(output_path) and not args.no_backup:
-        backup_path = backup_file(output_path, enabled=True)
-        if backup_path:
-            logger.info(f"Backed up existing tui.json to {backup_path}")
+        if not args.no_backup:
+            backup_path = backup_file(output_path, enabled=True)
+            if backup_path:
+                logger.info(f"Backed up existing {filename} to {backup_path}")
+        try:
+            write_text_file(
+                output_path,
+                json.dumps(updated_payload, indent=2) + "\n",
+                backup=False,
+            )
+            logger.info(f"{filename} written to {output_path}")
+            changed_files.append(filename)
+        except Exception as e:
+            logger.critical(f"Failed to write {filename}: {e}")
+            sys.exit(1)
 
-    try:
-        write_text_file(
-            output_path,
-            json.dumps(tui_config, indent=2) + "\n",
-            backup=False,
+    if changed_files:
+        verb = "Would remove" if args.dry_run else "Removed"
+        logger.info(
+            "%s obsolete DCP registration from %s; plugin loading is owned by opencode.json",
+            verb,
+            ", ".join(changed_files),
         )
-        logger.info(f"tui.json written to {output_path}")
-    except Exception as e:
-        logger.critical(f"Failed to write tui.json: {e}")
-        sys.exit(1)
-
-    logger.info(
-        "Removed obsolete DCP registration from tui.json; plugin loading is owned by opencode.json"
-    )
 
 
 if __name__ == "__main__":
