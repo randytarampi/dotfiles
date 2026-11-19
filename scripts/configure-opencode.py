@@ -1697,6 +1697,12 @@ def main():
                 # after their manifest entry disappears. Disable the retired
                 # memory plugin explicitly; never delete its user-owned data.
                 "-opencode-mem",
+                # OpenCode v2 also loads previously installed package plugins
+                # from its cache. Manifest removal alone does not disable the
+                # broken VibeGuard pre-tool hook on already provisioned hosts.
+                # Cover both the package-derived and short plugin IDs.
+                "-opencode-vibeguard.*",
+                "-vibeguard.*",
                 # Upstream Meridian registration, preserved verbatim; keep
                 # this last for the existing registration-order contract.
                 *meridian_preserved,
