@@ -53,7 +53,7 @@ spec, expected, current_only, check_exit = sys.argv[1:]
 # "opencode-"/"-v2" decoration ("opencode-tokenscope-v2" -> "tokenscope").
 # Match any of these derived forms; the exactly-one-match + version/status
 # strictness stays. Git-source plugins may also print a short SHA version
-# ("opencode-vibeguard 934823e (current)").
+# ("example-git-plugin 934823e (current)").
 spec_base = spec.rsplit("@", 1)[0]
 names = {spec_base, spec_base.rsplit("/", 1)[-1]}
 unscoped = spec_base.rsplit("/", 1)[-1]

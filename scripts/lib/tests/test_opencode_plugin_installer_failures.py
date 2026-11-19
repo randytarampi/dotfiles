@@ -54,7 +54,7 @@ def run_installer(
     ("opencode_script", "npx_exit", "update_gate", "should_pass"),
     [
         (
-            'if [[ $1 == plugin && $2 == add ]]; then exit 0; fi\nif [[ $1 == plugin && $2 == check ]]; then case "$3" in github:*) echo \'opencode-vibeguard-v2 3.2.0 (current)\' ;; *) echo "${3%@*} 3.2.0 (current)" ;; esac; exit 0; fi\n',
+            'if [[ $1 == plugin && $2 == add ]]; then exit 0; fi\nif [[ $1 == plugin && $2 == check ]]; then case "$3" in github:*) echo \'example-git-plugin 3.2.0 (current)\' ;; *) echo "${3%@*} 3.2.0 (current)" ;; esac; exit 0; fi\n',
             "0",
             "0",
             True,
@@ -73,7 +73,7 @@ def run_installer(
             False,
         ),
         (
-            'if [[ $1 == plugin && $2 == add ]]; then exit 0; fi\nif [[ $1 == plugin && $2 == check ]]; then case "$3" in github:*) echo \'opencode-vibeguard-v2 3.2.0 (current)\' ;; *) echo "${3%@*} 3.2.0 (latest)" ;; esac; exit 0; fi\n',
+            'if [[ $1 == plugin && $2 == add ]]; then exit 0; fi\nif [[ $1 == plugin && $2 == check ]]; then case "$3" in github:*) echo \'example-git-plugin 3.2.0 (current)\' ;; *) echo "${3%@*} 3.2.0 (latest)" ;; esac; exit 0; fi\n',
             "0",
             "0",
             True,
@@ -116,7 +116,7 @@ def test_omo_probe_drops_inherited_exporter_settings_only(tmp_path, monkeypatch)
         tmp_path,
         opencode_script=(
             "if [[ $1 == plugin && $2 == check ]]; then "
-            'case "$3" in github:*) echo "opencode-vibeguard-v2 3.2.0 (current)" ;; '
+            'case "$3" in github:*) echo "example-git-plugin 3.2.0 (current)" ;; '
             '*) echo "${3%@*} 3.2.0 (current)" ;; esac; fi\n'
         ),
         npx_script=(
@@ -181,7 +181,7 @@ def test_nonzero_check_exit_fails_closed_on_check_failures(
     script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
 if [[ $1 == plugin && $2 == check ]]; then
   case "$3" in
-    github:*) name=opencode-vibeguard-v2 ;;
+    github:*) name=example-git-plugin ;;
     *) name="${3%@*}" ;;
   esac
   if [[ "$3" == "__FAILED_SPEC__" ]]; then
@@ -204,7 +204,7 @@ fi
 @pytest.mark.parametrize(
     ("sha_spec", "should_pass"),
     [
-        ("github:AxeForce/opencode-vibeguard-v2#main", True),
+        ("github:owner/example-git-plugin#main", True),
         ("@tarquinen/opencode-dcp@latest", False),
     ],
 )
@@ -215,14 +215,14 @@ def test_git_sha_version_is_only_valid_for_github_plugins(
 if [[ $1 == plugin && $2 == check ]]; then
   if [[ "$3" == "__SHA_SPEC__" ]]; then
     case "$3" in
-      github:*) name=opencode-vibeguard-v2 ;;
+      github:*) name=example-git-plugin ;;
       *) name="${3%@*}" ;;
     esac
     echo "$name 934823e (current)"
     exit 0
   fi
   case "$3" in
-    github:*) name=opencode-vibeguard-v2 ;;
+    github:*) name=example-git-plugin ;;
     *) name="${3%@*}" ;;
   esac
   echo "$name 3.2.0 (current)"
@@ -254,7 +254,7 @@ _GATE_EPILOGUE = "fi\n"
 # plugins print the bare repo name; scoped packages print the bare scope.
 _GATE_RESOLVE_OK = (
     '    case "$3" in\n'
-    "        github:*) name=opencode-vibeguard-v2 ;;\n"
+    "        github:*) name=example-git-plugin ;;\n"
     '        *) name="${3%@*}" ;;\n'
     "    esac\n"
 )
@@ -329,7 +329,7 @@ def test_live_v2_check_output_shapes(
         + "    esac\n"
         + '    echo "'
         + (
-            "opencode-vibeguard-v2 3.2.0 (current)"
+            "example-git-plugin 3.2.0 (current)"
             if target_spec.startswith("github")
             else "${3%@*} 3.2.0 (current)"
         )
@@ -430,7 +430,7 @@ def test_persistent_context_error_fails_closed(tmp_path):
 
 def test_successful_update_recheck_uses_same_current_line_parser(tmp_path):
     script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
-if [[ $1 == plugin && $2 == check ]]; then case "$3" in github:*) echo 'opencode-vibeguard-v2 3.2.0 (current)' ;; *) echo "${3%@*} 3.2.0 (current)" ;; esac; exit 0; fi
+if [[ $1 == plugin && $2 == check ]]; then case "$3" in github:*) echo 'example-git-plugin 3.2.0 (current)' ;; *) echo "${3%@*} 3.2.0 (current)" ;; esac; exit 0; fi
 if [[ $1 == plugin && $2 == update ]]; then exit 0; fi
 """
     result = run_installer(tmp_path, opencode_script=script, update_gate="1")
@@ -454,7 +454,7 @@ if [[ $1 == plugin && $2 == check ]]; then
     version=3.2.1; status=__POST_STATUS__
   fi
   case "$3" in
-    github:*) name=opencode-vibeguard-v2 ;;
+    github:*) name=example-git-plugin ;;
     *) name="${3%@*}" ;;
   esac
   echo "$name $version ($status)"
@@ -491,15 +491,15 @@ def test_git_cache_probe_layout_detectable(tmp_path):
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
     commit = "934823e5500f6af8270a45ba2d2f245bc6e4faa4"
-    package_dir = tmp_path / "npm/git-opencode-vibeguard-v2-6bc7939b2f86/1793529876908"
+    package_dir = tmp_path / "npm/git-example-git-plugin-6bc7939b2f86/1793529876908"
     package_dir.mkdir(parents=True)
     (package_dir / "package.json").write_text(
-        '{"name":"opencode-vibeguard-v2","resolved":"git+https://github.com/AxeForce/opencode-vibeguard-v2#'
+        '{"name":"example-git-plugin","resolved":"git+https://github.com/owner/example-git-plugin#'
         + commit
         + '"}'
     )
     assert module.is_plugin_installed(
-        "github:AxeForce/opencode-vibeguard-v2#" + commit, tmp_path
+        "github:owner/example-git-plugin#" + commit, tmp_path
     )
 
 
@@ -512,9 +512,9 @@ def test_git_cache_checker_fails_closed_for_missing_or_corrupt_metadata(tmp_path
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
     commit = "934823e5500f6af8270a45ba2d2f245bc6e4faa4"
-    spec_text = "github:AxeForce/opencode-vibeguard-v2#" + commit
+    spec_text = "github:owner/example-git-plugin#" + commit
     assert not module.is_plugin_installed(spec_text, tmp_path)
-    corrupt = tmp_path / "npm/git-opencode-vibeguard-v2-hash/1/package.json"
+    corrupt = tmp_path / "npm/git-example-git-plugin-hash/1/package.json"
     corrupt.parent.mkdir(parents=True)
     corrupt.write_text("{")
     assert not module.is_plugin_installed(spec_text, tmp_path)

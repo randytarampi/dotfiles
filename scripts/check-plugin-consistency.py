@@ -125,10 +125,9 @@ def check_cli_plugin_consistency(
 
 
 FORBIDDEN_SPEC_PREFIXES = (
-    # Retired v1-era packages (one-way migration): the original TokenScope,
-    # the original npm-line VibeGuard, and the removed Quota surfaces.
+    # Retired v1-era packages (one-way migration): the original TokenScope
+    # and the removed Quota surfaces.
     "@ramtinj95/opencode-tokenscope@",
-    "opencode-vibeguard@",
     "@slkiser/opencode-quota",
 )
 
@@ -429,8 +428,11 @@ def check_consistency(
     if any(spec.startswith("@ramtinj95/opencode-tokenscope@") for spec in expected):
         print("ERROR: forbidden legacy TokenScope plugin spec found")
         exit_code = 1
-    if any(spec.startswith("opencode-vibeguard@") for spec in expected):
-        print("ERROR: forbidden legacy VibeGuard plugin spec found")
+    if any("vibeguard" in str(spec).lower() for spec in expected):
+        print(
+            "ERROR: VibeGuard was removed on 2026-11-19 (its V2 pre-tool hook "
+            "aborted every tool call with nested arguments); do not register it"
+        )
         exit_code = 1
     if any(spec.startswith("@slkiser/opencode-quota") for spec in expected):
         print("ERROR: forbidden retired Quota plugin spec found")
