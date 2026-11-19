@@ -2,7 +2,7 @@
 
 Meridian is a local Anthropic-compatible proxy/router at `http://127.0.0.1:3456/v1`, also an OpenCode plugin (`@rynfar/meridian`). Gated by `DOTFILES_RUN_MERIDIAN_SETUP=1`. Uses Claude Code SDK OAuth (not `ANTHROPIC_API_KEY`).
 
-For Mozart router config (a separate component), see [mozart.md](mozart.md).
+Provider base-URL overrides, local host/port resolution and the JSON override keys live in [conventions.md](conventions.md).
 
 ## SDK Feature Toggles
 

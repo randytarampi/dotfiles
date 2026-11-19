@@ -303,7 +303,6 @@ Reply in the language and register the conversation is using. English prose uses
 | [docs/telemetry.md](docs/telemetry.md) | Per-tool telemetry opt-out dispositions, env var reference, fleet registry |
 | [docs/tiers.md](docs/tiers.md) | Tier definitions, per-tier role/variant tables, local model classification, fallback chains, variant policy, Ollama Cloud models |
 | [docs/model-updates.md](docs/model-updates.md) | Model update and registry maintenance guidance |
-| [docs/mozart.md](docs/mozart.md) | Mozart router gateways, unified Ollama routing, provider overrides, and JSON config convention |
 | [docs/litellm.md](docs/litellm.md) | LiteLLM proxy gateway config, keys, env contract |
 | [docs/meridian.md](docs/meridian.md) | Meridian proxy, SDK feature toggles, Sonnet context tier, OpenCode/Meridian context sync |
 | [docs/voice.md](docs/voice.md) | Voice plugin, tier-aware STT/TTS, dependencies, model defaults, config locations |
