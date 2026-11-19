@@ -1986,13 +1986,6 @@ def main():
             logger.info(f"[dry-run] Would write opencode.json to {output_path}")
         else:
             write_private_atomic(output_path, opencode_candidate)
-        vibeguard_src = os.path.join(
-            configs_dir_path, "opencode", "vibeguard.config.json"
-        )
-        if os.path.exists(vibeguard_src) and not args.dry_run:
-            shutil.copy(
-                vibeguard_src, os.path.join(config_dir_path, "vibeguard.config.json")
-            )
         summary_lines = [
             "OpenCode project config written!",
             "",
@@ -2007,11 +2000,7 @@ def main():
         return
 
     # global mode:
-    # 2. Write vibeguard.config.json
-    vibeguard_src = os.path.join(configs_dir_path, "opencode", "vibeguard.config.json")
-    # Vibeguard installation is deferred until all candidates validate.
-
-    # 3. Write oh-my-opencode-slim.json
+    # 2. Write oh-my-opencode-slim.json
     presets_json_path = os.path.join(
         configs_dir_path, "opencode", "oh-my-opencode-slim.json"
     )
@@ -2093,18 +2082,10 @@ def main():
             logger.critical("%s", error)
             sys.exit(1)
 
-    vibeguard_src = os.path.join(configs_dir_path, "opencode", "vibeguard.config.json")
-    if os.path.exists(vibeguard_src) and not args.dry_run:
-        shutil.copy(
-            vibeguard_src, os.path.join(config_dir_path, "vibeguard.config.json")
-        )
-    elif os.path.exists(vibeguard_src):
-        logger.info(f"[dry-run] Would copy vibeguard.config.json to {config_dir_path}")
-
     if args.mode == "project":
         return
 
-    # 3b. Generate and merge acpAgents (ACP-capable agent wrappers)
+    # 2b. Generate and merge acpAgents (ACP-capable agent wrappers)
     acp_agents_source_path = os.path.join(
         configs_dir_path, "opencode", "acp-agents.json"
     )
@@ -2172,7 +2153,7 @@ def main():
             logger.error(f"Failed to configure ACP agents: {e}")
             failures += 1
 
-    # 4. Set active tier
+    # 3. Set active tier
     if "tier" in skipped:
         logger.info("Skipping active tier configuration")
     else:
@@ -2186,7 +2167,7 @@ def main():
         logger.error(f"Failed to set active tier: {e}")
         failures += 1
 
-    # 5. Configure voice plugin (cli.json)
+    # 4. Configure voice plugin (cli.json)
     if "voice" in skipped:
         logger.info("Skipping voice plugin configuration")
     else:
@@ -2212,7 +2193,7 @@ def main():
         logger.error(f"Failed to configure voice plugin: {e}")
         failures += 1
 
-    # 5b. DCP: remove obsolete tui.json registration (manifest owns v2 loading)
+    # 4b. DCP: remove obsolete tui.json registration (manifest owns v2 loading)
     if "dcp" in skipped:
         logger.info("Skipping DCP TUI plugin configuration")
     else:
@@ -2239,7 +2220,6 @@ def main():
         f"Config written to: {config_dir_path}",
         "  • opencode.json (providers, MCP servers, plugins)",
         f"  • oh-my-opencode-slim.json (all presets, active: {args.preset})",
-        "  • vibeguard.config.json (sensitive-string redaction)",
         "  • acp-agents.json (ACP-capable agent wrappers — see ~/.config/opencode/oh-my-opencode-slim.json)",
         "  • cli.json (voice TUI-client plugin config)",
         "",

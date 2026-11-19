@@ -309,21 +309,18 @@ def test_cli_plugins_manifest_and_installer_agree():
 def test_git_spec_validation():
     loader = load_pinned_spec_loader()
     assert loader.is_pinned_spec(
-        "github:AxeForce/opencode-vibeguard-v2#934823e5500f6af8270a45ba2d2f245bc6e4faa4"
+        "github:owner/example-git-plugin#934823e5500f6af8270a45ba2d2f245bc6e4faa4"
     )
-    assert not loader.is_pinned_spec("github:AxeForce/repo#bad-ref!")
+    assert not loader.is_pinned_spec("github:owner/repo#bad-ref!")
     assert not loader.is_pinned_spec("github:owner/repo/sub#abc123")
 
 
 def test_replacement_plugins_are_present():
     plugins = load_checker().load_manifest()["plugins"]
     assert "@cheesecodestudio/opencode-tokenscope-v2@latest" in plugins
-    assert any(
-        item.startswith("github:AxeForce/opencode-vibeguard-v2#") for item in plugins
-    )
 
 
-def test_original_tokenscope_and_vibeguard_are_absent():
+def test_original_tokenscope_is_absent_and_vibeguard_is_fully_removed():
     manifest_text = (ROOT / "configs/opencode/opencode-plugins.json").read_text(
         encoding="utf-8"
     )
@@ -331,5 +328,5 @@ def test_original_tokenscope_and_vibeguard_are_absent():
         "@ramtinj95/opencode-tokenscope@" not in manifest_text
     ), "forbidden legacy TokenScope plugin spec found"
     assert (
-        "opencode-vibeguard@" not in manifest_text
-    ), "forbidden legacy VibeGuard plugin spec found"
+        "vibeguard" not in manifest_text.lower()
+    ), "VibeGuard was removed on 2026-11-19; do not register it"

@@ -6,7 +6,6 @@
     "@tarquinen/opencode-dcp@latest",
     "context-mode@latest",
     "@plannotator/opencode@latest",
-    "github:AxeForce/opencode-vibeguard-v2#main",
     "@cheesecodestudio/opencode-tokenscope-v2@latest"
   ],
   "cli_plugins": [

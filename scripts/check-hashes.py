@@ -52,7 +52,6 @@ NON_TRACKED_SCRIPTS = {
     "scripts/lib/worktree_readiness.py",  # Makefile-only helper; not deployed config input
     "scripts/lib/poetry_readiness.py",  # Makefile-only helper; not deployed config input
     "scripts/check-model-drift.py",  # Makefile-only verification tool
-    "scripts/check-vibeguard-audit.py",  # Opt-in manual audit pilot; never a deployed config input
     "scripts/litellm-costs.py",  # Makefile-only verification tool
     "scripts/lib/embedding_inventory.py",  # Library of the read-only #85 embedding inventory; not a deployed config input
     "scripts/detect-embedding-inventory.py",  # Owner-gated read-only H1 CLI; not a deployed configuration input

@@ -32,15 +32,7 @@ The repository generates and manages `~/.pi/agent/mcp-adapter.json` as the adapt
 
 Pi 0.87.1's startup guidance and adapter contract confirm that the adapter reads `mcp-adapter.json` for its own settings, imports, and overrides, and no longer reads Pi's `mcp.json`. The migration is complete: when MCP setup is enabled, the writer migrates an old `mcp.json` into `mcp-adapter.json`, merges both files with adapter entries winning duplicate server names, appends old-only servers, and removes the old file only after the content is accounted for. Pi's project `.pi/mcp.json` remains built-in Pi configuration; the installed adapter package provides no documented project-level adapter-file equivalent.
 
-Packages include `pi-web-access`, `pi-subagents`, `@plannotator/pi-extension`, the repo's configured `rpiv-*` extensions, and `@xzzpig/pi-vibeguard`. Skills are linked into `~/.pi/agent/skills` by the shared reconciler.
-
-### VibeGuard
-
-Pi installs the upstream extension using `pi install npm:@xzzpig/pi-vibeguard`. Its README describes pre-provider redaction as “Replaces configured sensitive strings with placeholders before requests are sent to the LLM provider,” then restoration in model output and before tool execution. The provider is intended not to see plaintext secrets; runtime verification is reserved for the machine-phase.
-
-The managed global config is `~/.pi/agent/vibeguard.config.json`, copied from `configs/pi/vibeguard.config.json` by `configure-pi.py`. Project mode writes `.pi/vibeguard.config.json` (not `.pi/agent/`); a project-root `vibeguard.config.json` takes precedence and is preserved. The extension's `PI_VIBEGUARD_CONFIG` environment override takes precedence over both managed locations, in which case the writer skips its VibeGuard config copy. Verify the effective file using the lookup order documented by the extension. Each managed copy uses a private atomic write and backs up an existing target unless `--no-backup` is selected. The config contains audited regex and built-in shapes, not raw secrets; `patterns.keywords` stays empty to avoid duplicating secret values outside `~/.env`. The extension documents the `/vibeguard:*` TUI command family.
-
-VibeGuard's `__VG_` placeholder family aligns with OpenCode's VibeGuard plugin, but this does not establish interchangeability with `@taehwandev/vibeguard`'s separate `rulesPath` format.
+Packages include `pi-web-access`, `pi-subagents`, `@plannotator/pi-extension`, and the repo's configured `rpiv-*` extensions. Skills are linked into `~/.pi/agent/skills` by the shared reconciler.
 
 ### Skill collision status
 
@@ -48,7 +40,7 @@ The repo-local `dotfiles-verify` skill uses valid folded YAML frontmatter and ke
 
 ### Package decisions
 
-`@xzzpig/pi-vibeguard` is approved baseline security parity, not an optional UI extension. `pi-edit-session-in-place` was removed from the managed package list on 2026-11-03: upstream unpublished it from npm on 2026-10-31, and `pi update --all` fails while the dead entry is requested. Already-installed copies remain until manually removed; dropping the managed entry does not guarantee updates succeed on those machines. The rewind hook is not enabled. The following packages are explicitly declined: `pi-side-chat`, `pi-intercom`, `pi-messenger`, `pi-interactive-shell`, `pi-rewind-hook`, `pi-custom-compaction`, and `pi-model-switch`.
+`pi-edit-session-in-place` was removed from the managed package list on 2026-11-03: upstream unpublished it from npm on 2026-10-31, and `pi update --all` fails while the dead entry is requested. Already-installed copies remain until manually removed; dropping the managed entry does not guarantee updates succeed on those machines. The rewind hook is not enabled. The following packages are explicitly declined: `pi-side-chat`, `pi-intercom`, `pi-messenger`, `pi-interactive-shell`, `pi-rewind-hook`, `pi-custom-compaction`, and `pi-model-switch`.
 
 ```sh
 pi
@@ -89,7 +81,7 @@ For local models, Pi advertises the minimum of the native context window (when k
 
 ## Context Mode
 
-When `DOTFILES_RUN_CONTEXT_MODE_SETUP=1`, `configure-pi.py` includes the upstream `npm:context-mode` native package alongside `pi-mcp-adapter`, `pi-subagents`, Plannotator, rpiv extensions and VibeGuard. Pi loads Context Mode's hooks and `ctx_*` tools in-process; no second MCP registration is needed. This is the same declarative package lane and existing setup gate as every other Pi extension. See [Context Mode](context-mode.md) for the full cross-agent architecture and verification.
+When `DOTFILES_RUN_CONTEXT_MODE_SETUP=1`, `configure-pi.py` includes the upstream `npm:context-mode` native package alongside `pi-mcp-adapter`, `pi-subagents`, Plannotator and rpiv extensions. Pi loads Context Mode's hooks and `ctx_*` tools in-process; no second MCP registration is needed. This is the same declarative package lane and existing setup gate as every other Pi extension. See [Context Mode](context-mode.md) for the full cross-agent architecture and verification.
 
 ## Managed preference defaults
 

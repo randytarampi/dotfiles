@@ -1326,7 +1326,6 @@ def test_opencode_main_missing_model_preserves_installed_managed_files(
     paths = {
         "opencode": config_dir / "opencode.json",
         "slim": config_dir / "oh-my-opencode-slim.json",
-        "vibeguard": config_dir / "vibeguard.config.json",
     }
     sentinels = {name: f"{name} sentinel\n".encode() for name in paths}
     for name, path in paths.items():
@@ -1337,7 +1336,6 @@ def test_opencode_main_missing_model_preserves_installed_managed_files(
     (configs / "opencode/oh-my-opencode-slim.json").write_text(
         json.dumps({"roles": {"x": {"model": "openai/missing"}}})
     )
-    (configs / "opencode/vibeguard.config.json").write_text("{}")
     monkeypatch.setattr(script, "SCRIPT_DIR", str(scripts))
     lock = home / ".cache/dotfiles/generation.lock"
     lock.parent.mkdir(parents=True, exist_ok=True)

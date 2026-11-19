@@ -4,7 +4,6 @@
 import argparse, copy, json, os, shlex, shutil, subprocess, sys
 from pathlib import Path
 import stat
-import tempfile
 
 CLOUD_TAG = ":cloud"
 
@@ -100,7 +99,6 @@ _BUILTIN_PACKAGES = frozenset()
 
 ROOT = Path(SCRIPT_DIR).parent
 SLIM = ROOT / "configs/opencode/oh-my-opencode-slim.json"
-VIBEGUARD_CONFIG = ROOT / "configs/pi/vibeguard.config.json"
 # Map OMO-Slim preset roles to the matching pi-subagents built-in. The six
 # built-ins have their own task contracts; a visual OMO observer is *not*
 # Pi's read-only code reviewer. Map only semantically matching roles. The
@@ -422,55 +420,6 @@ def _install_package(pkg, dry_run, mode):
         logger.info("Installed package: %s", source)
 
 
-def _copy_vibeguard_config(target, *, dry_run=False, no_backup=False):
-    target = Path(target)
-    if dry_run:
-        logger.info("Would copy %s to %s", VIBEGUARD_CONFIG, target)
-        return
-    if target.exists() and not no_backup:
-        backup_file(str(target), enabled=True)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
-    try:
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(VIBEGUARD_CONFIG.read_bytes())
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, target)
-    except Exception:
-        try:
-            os.close(fd)
-        except OSError:
-            pass
-        try:
-            os.unlink(temporary)
-        except FileNotFoundError:
-            pass
-        raise
-
-
-def _vibeguard_config_target(mode, agent_dir, project_root=Path(".")):
-    """Return the managed VibeGuard path, respecting upstream lookup order."""
-    override = os.environ.get("PI_VIBEGUARD_CONFIG")
-    if override:
-        logger.info(
-            "PI_VIBEGUARD_CONFIG=%s wins at lookup position 1; skipping managed config write",
-            override,
-        )
-        return None
-    if mode == "global":
-        return Path(agent_dir) / "vibeguard.config.json"
-    project_root = Path(project_root)
-    root_config = project_root / "vibeguard.config.json"
-    if root_config.exists():
-        logger.info(
-            "Project-root %s wins at lookup position 2; preserving it", root_config
-        )
-        return None
-    return project_root / ".pi/vibeguard.config.json"
-
-
 def _ensure_packages(packages, dry_run=False, mode="global"):
     """Ensure all configured packages are installed (idempotent).
 
@@ -781,7 +730,6 @@ def main():
         if args.mode == "global"
         else Path(".pi/agent")
     )
-    vibeguard_config_path = _vibeguard_config_target(args.mode, out)
     prev_settings = out / "settings.json"
     try:
         settings_snapshot = _settings_snapshot(prev_settings)
@@ -1217,7 +1165,6 @@ def main():
             "npm:@juicesharp/rpiv-ask-user-question",
             "npm:@juicesharp/rpiv-voice",
             "npm:@juicesharp/rpiv-i18n",
-            "npm:@xzzpig/pi-vibeguard",
             # Context Mode is a native Pi extension, not a second MCP server.
             *(
                 ["npm:context-mode"]
@@ -1521,12 +1468,6 @@ def main():
         if path.exists() and not args.no_backup:
             backup_file(str(path), enabled=True)
         write_text_file(str(path), text, backup=False)
-    if vibeguard_config_path is not None:
-        _copy_vibeguard_config(
-            vibeguard_config_path,
-            dry_run=args.dry_run,
-            no_backup=args.no_backup,
-        )
     # Remove the stub agents/<role>.md (and .bak) files a previous run
     # generated; they shadow the pi-subagents built-ins by name, so a
     # leftover stub would override the real built-in. Only files bearing
