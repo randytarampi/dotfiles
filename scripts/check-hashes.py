@@ -46,6 +46,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/summarize-local-utility-benchmarks.py",  # Offline operator-supplied JSON summarizer; reads local benchmark evidence, never a deployed config input
     "scripts/check-plugin-consistency.py",  # Makefile-only verification tool
     "scripts/precommit-text-hygiene.py",  # Staged-file commit hook helper; never a chezmoi deploy or config input
+    "scripts/precommit-json-check.py",  # JSON validation hook; reads multiple staged paths without changing them
     "scripts/verify-worktree-ready.py",  # Makefile-only worktree preflight helper
     "scripts/lib/worktree_readiness.py",  # Makefile-only helper; not deployed config input
     "scripts/lib/poetry_readiness.py",  # Makefile-only helper; not deployed config input
