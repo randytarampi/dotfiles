@@ -40,6 +40,8 @@ The repo-local `dotfiles-verify` skill uses valid folded YAML frontmatter and ke
 
 ### Package decisions
 
+**VibeGuard retirement (19 November 2026):** The managed `npm:@xzzpig/pi-vibeguard` package and its generated config are no longer provisioned. Removing a package from generated `settings.json` is not the same as uninstalling an existing Pi package; do not assume it has unloaded on a previously provisioned host. The owner-host cleanup used `pi remove npm:@xzzpig/pi-vibeguard`. On other hosts, first inspect `pi list`, back up user-owned Pi settings, remove that exact package only when it is present and explicitly approved, then restart Pi and confirm tool interaction. Do not delete an unrecognized user-authored `vibeguard.config.json` automatically. This retirement also removes automatic request-time redaction; keep secrets out of transcripts and tools, and do not treat configuration generation alone as a no-egress test.
+
 `pi-edit-session-in-place` was removed from the managed package list on 2026-11-03: upstream unpublished it from npm on 2026-10-31, and `pi update --all` fails while the dead entry is requested. Already-installed copies remain until manually removed; dropping the managed entry does not guarantee updates succeed on those machines. The rewind hook is not enabled. The following packages are explicitly declined: `pi-side-chat`, `pi-intercom`, `pi-messenger`, `pi-interactive-shell`, `pi-rewind-hook`, `pi-custom-compaction`, and `pi-model-switch`.
 
 ```sh
