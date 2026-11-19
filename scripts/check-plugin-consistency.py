@@ -303,15 +303,20 @@ def parse_config_plugins(path):
     tree = ast.parse(source, filename=str(path))
     environment = _plugin_list_environment(configured_plugin_specs())
     plugins = _plugins_entry_from_tree(tree, environment)
-    # OpenCode v2 uses a negative entry to disable a previously installed
-    # legacy plugin. This one explicitly approved directive is not a
-    # manifest package; require it exactly once, at the end of the list.
-    if plugins.count("-opencode-mem") != 1:
-        raise ValueError("config must disable retired opencode-mem exactly once")
-    # The AST fixture has no live Meridian entries, but real hosts preserve
-    # their registration after the disable directive. Remove only that
-    # sentinel, not a machine-owned Meridian entry.
-    plugins.remove("-opencode-mem")
+    # Omission from the manifest does not deactivate cached plugins in
+    # OpenCode v2. Require explicit tombstones, but keep the canonical
+    # manifest free of retired package specs. Meridian comes after them.
+    retired_directives = (
+        "-opencode-mem",
+        "-opencode-vibeguard.*",
+        "-vibeguard.*",
+    )
+    for directive in retired_directives:
+        if plugins.count(directive) != 1:
+            raise ValueError(
+                f"config must disable retired plugin {directive} exactly once"
+            )
+        plugins.remove(directive)
     disabled = not any(
         spec.startswith("context-mode@") for spec in active_plugin_specs()
     )
