@@ -90,7 +90,7 @@ def write_config_atomic(path: str, payload: Any) -> None:
             dir=directory, delete=False,
         ) as handle:
             temporary = handle.name
-            os.fchmod(handle.fileno(), 0o600)
+            # NamedTemporaryFile uses a private (0600) newly-created file.
             handle.write(json.dumps(payload, indent=2) + "\n")
             handle.flush()
             os.fsync(handle.fileno())
