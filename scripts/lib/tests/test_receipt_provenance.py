@@ -71,3 +71,28 @@ def test_stale_sha_is_still_rejected_with_provenance():
     receipt["provenance"]["run_url"] = RUN_URL
     with pytest.raises(COLLECT.ReceiptError, match="stale receipt"):
         COLLECT.validate(receipt, "b" * 40)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        [],
+        "just-a-string",
+        {"driver": "   "},
+        {"driver": True},
+        {"run_id": 12345},
+        {"driver": "x" * 513},
+    ],
+)
+def test_driver_reference_rejects_malformed_or_unverifiable_shapes(value):
+    receipt = _all_pass(_receipt())
+    receipt["provenance"] = value
+    with pytest.raises(COLLECT.ReceiptError, match="provenance"):
+        COLLECT.validate_driver_evidence(receipt)
+
+
+def test_valid_short_named_owner_driver_is_a_reference_not_attestation():
+    """An owner-reported run still needs independent evidence before closure."""
+    receipt = _all_pass(_receipt())
+    receipt["provenance"]["driver"] = "owner-host-rehearsal"
+    COLLECT.validate_driver_evidence(receipt)
