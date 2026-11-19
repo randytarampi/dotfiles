@@ -17,6 +17,7 @@ import sys
 import json
 import argparse
 import os
+import tempfile
 from typing import Any
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -26,7 +27,7 @@ LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR,
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 import logger
-from file_utils import backup_file, write_text_file
+from file_utils import backup_file
 from env import load_env
 
 DCP_PLUGIN_KEY = "@tarquinen/opencode-dcp"
@@ -77,6 +78,26 @@ def clean_entry_list(payload: Any, keys: tuple[str, ...]) -> tuple[Any, bool]:
                 changed = True
         return (updated, True) if changed else (payload, False)
     return payload, False
+
+
+def write_config_atomic(path: str, payload: Any) -> None:
+    """Replace one private shared config atomically; leave it intact on failure."""
+    directory = os.path.dirname(path)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", prefix=f".{os.path.basename(path)}.",
+            dir=directory, delete=False,
+        ) as handle:
+            temporary = handle.name
+            os.fchmod(handle.fileno(), 0o600)
+            handle.write(json.dumps(payload, indent=2) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def main():
@@ -165,16 +186,25 @@ def main():
             changed_files.append(filename)
             continue
 
+        # A shared client config may be a user-managed symlink. Never replace
+        # the link itself or follow a .bak symlink into an unrelated file.
+        if os.path.islink(output_path) or (
+            not args.no_backup and os.path.islink(output_path + ".bak")
+        ):
+            logger.critical(
+                "Refusing to rewrite symlinked shared config or backup: %s", output_path
+            )
+            sys.exit(1)
         if not args.no_backup:
             backup_path = backup_file(output_path, enabled=True)
-            if backup_path:
-                logger.info(f"Backed up existing {filename} to {backup_path}")
+            if not backup_path:
+                logger.critical(
+                    "Could not back up %s; refusing to rewrite shared config", filename
+                )
+                sys.exit(1)
+            logger.info(f"Backed up existing {filename} to {backup_path}")
         try:
-            write_text_file(
-                output_path,
-                json.dumps(updated_payload, indent=2) + "\n",
-                backup=False,
-            )
+            write_config_atomic(output_path, updated_payload)
             logger.info(f"{filename} written to {output_path}")
             changed_files.append(filename)
         except Exception as e:
