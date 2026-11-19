@@ -1,6 +1,8 @@
 import ast
 import importlib.util
 import json
+
+import pytest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -469,3 +471,86 @@ def test_cli_reconcile_preserves_retired_fork_disable(tmp_path, monkeypatch):
         "other-plugin",
         "-@renjfk/opencode-voice@latest",
     ]
+
+
+def _seed_obsolete_dcp_cli(tmp_path):
+    (tmp_path / "opencode.json").write_text(
+        '{"plugins":["@tarquinen/opencode-dcp@latest"]}'
+    )
+    cli = tmp_path / "cli.json"
+    cli.write_text(
+        '{"plugins":["@tarquinen/opencode-dcp@latest","@renjfk/opencode-voice@latest"]}'
+    )
+    return cli
+
+
+def test_dcp_reconcile_refuses_to_write_when_backup_fails(tmp_path, monkeypatch):
+    module = _load("dcp_backup_failure", ROOT / "configure-opencode-dcp.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module.sys, "argv", ["dcp"])
+    cli = _seed_obsolete_dcp_cli(tmp_path)
+    before = cli.read_bytes()
+    monkeypatch.setattr(module, "backup_file", lambda *_a, **_kw: None)
+
+    with pytest.raises(SystemExit) as failure:
+        module.main()
+    assert failure.value.code == 1
+    assert cli.read_bytes() == before
+
+
+def test_dcp_reconcile_refuses_symlinked_client_config(tmp_path, monkeypatch):
+    module = _load("dcp_symlink", ROOT / "configure-opencode-dcp.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module.sys, "argv", ["dcp", "--no-backup"])
+    _seed_obsolete_dcp_cli(tmp_path)
+    cli = tmp_path / "cli.json"
+    remote = tmp_path / "user-owned.json"
+    cli.rename(remote)
+    cli.symlink_to(remote)
+    before = remote.read_bytes()
+
+    with pytest.raises(SystemExit) as failure:
+        module.main()
+    assert failure.value.code == 1
+    assert cli.is_symlink()
+    assert remote.read_bytes() == before
+
+
+def test_dcp_atomic_write_preserves_original_on_replace_failure(tmp_path, monkeypatch):
+    module = _load("dcp_atomic_failure", ROOT / "configure-opencode-dcp.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module.sys, "argv", ["dcp", "--no-backup"])
+    cli = _seed_obsolete_dcp_cli(tmp_path)
+    before = cli.read_bytes()
+
+    def refuse_replace(*_args):
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(module.os, "replace", refuse_replace)
+    with pytest.raises(SystemExit) as failure:
+        module.main()
+    assert failure.value.code == 1
+    assert cli.read_bytes() == before
+    assert not list(tmp_path.glob(".cli.json.*"))
+
+
+def test_dcp_reconcile_is_idempotent_with_private_atomic_file(tmp_path, monkeypatch):
+    module = _load("dcp_atomic_converges", ROOT / "configure-opencode-dcp.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module.sys, "argv", ["dcp"])
+    cli = _seed_obsolete_dcp_cli(tmp_path)
+
+    assert module.main() is None
+    expected = cli.read_bytes()
+    assert b"opencode-dcp" not in expected
+    assert b"opencode-voice" in expected
+    assert (tmp_path / "cli.json.bak").exists()
+    assert cli.stat().st_mode & 0o777 == 0o600
+    mtime = cli.stat().st_mtime_ns
+    assert module.main() is None
+    assert cli.read_bytes() == expected
+    assert cli.stat().st_mtime_ns == mtime
