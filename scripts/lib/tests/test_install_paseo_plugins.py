@@ -341,13 +341,14 @@ def test_managed_wrapper_inserts_before_actual_daemon_exec(tmp_path):
     assert lines[1] == 'echo "exec is mentioned here"'
     assert lines[2] == module.START
     assert lines[3] == (
-        "export PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE="
-        + shlex.quote(chromium)
+        "export PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE=" + shlex.quote(chromium)
     )
     assert lines[-1] == 'exec "$HOME/bin/paseo" daemon run'
     assert wrapper.stat().st_mode & 0o777 == 0o700
-    assert (tmp_path / "launchd-daemon.sh.bak").read_text().startswith(
-        "# do not execute arbitrary exec text"
+    assert (
+        (tmp_path / "launchd-daemon.sh.bak")
+        .read_text()
+        .startswith("# do not execute arbitrary exec text")
     )
     before = wrapper.stat().st_mtime_ns
     assert module.managed_wrapper(wrapper, chromium) == "written"
@@ -397,3 +398,24 @@ def test_plugin_timeout_is_reported_without_aborting_other_attempts():
 
     with pytest.raises(ValueError, match="output redacted"):
         module.run_plugin("/bin/paseo", ["add", "some/plugin"], run=timeout)
+
+
+def test_existing_legacy_chromium_block_does_not_rewrite_host_backup(tmp_path):
+    """An already-deployed marker must converge without touching the owner backup."""
+    wrapper = tmp_path / "launchd-daemon.sh"
+    chromium = "/Applications/Chromium.app/Contents/MacOS/Chromium"
+    wrapper.write_text(
+        module.START
+        + '\nexport PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE="'
+        + chromium
+        + '"\n'
+        + module.END
+        + '\nexec "$HOME/bin/paseo" daemon run\n',
+        encoding="utf-8",
+    )
+    backup = tmp_path / "launchd-daemon.sh.bak"
+    backup.write_text('exec "$HOME/bin/paseo" daemon run\n', encoding="utf-8")
+    before = (wrapper.read_bytes(), wrapper.stat().st_mtime_ns)
+    assert module.managed_wrapper(wrapper, chromium) == "written"
+    assert (wrapper.read_bytes(), wrapper.stat().st_mtime_ns) == before
+    assert backup.read_text() == 'exec "$HOME/bin/paseo" daemon run\n'

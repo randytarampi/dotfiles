@@ -1631,11 +1631,8 @@ def main():
                 args, capture_output=True, text=True, check=False
             )
 
-        if (
-            sys.platform == "darwin"
-            and not check_caddy_brew_agent(
-                HOME / "Library/LaunchAgents/sh.brew.caddy.plist", run_launchctl_silently
-            )
+        if sys.platform == "darwin" and not check_caddy_brew_agent(
+            HOME / "Library/LaunchAgents/sh.brew.caddy.plist", run_launchctl_silently
         ):
             exit_code = 1
         zones_config_path = Path(

@@ -156,3 +156,32 @@ def test_versioned_marketplace_activation_is_normalized(caplog):
     assert slim["presets"]["pro"]["marketplace"]["agents"] == ["alvin/debugger"]
     assert slim["presets"]["plus"]["marketplace"]["agents_add"] == ["alvin/validator"]
     assert "dropped version" in caplog.text
+
+
+def test_variant_clamp_rejects_unknown_or_malformed_effort_catalogue():
+    """Unusable metadata must not retain a variant the provider cannot support."""
+    slim = {
+        "presets": {
+            "pro": {
+                "a": {"model": "ollama-cloud/a", "variant": "high"},
+                "b": {"model": "ollama-cloud/b", "variant": "max"},
+                "c": {"model": "ollama-cloud/c", "variant": "low"},
+            }
+        }
+    }
+    providers = {
+        "ollama-cloud": {
+            "models": {
+                "a": {
+                    "reasoning_options": [
+                        {"type": "effort", "values": ["unknown-effort"]}
+                    ]
+                },
+                "b": {"reasoning_options": "malformed"},
+                "c": {"reasoning_options": [{"type": "effort", "values": 123}]},
+            }
+        }
+    }
+    configure.clamp_slim_variants(slim, providers)
+    for role in ("a", "b", "c"):
+        assert "variant" not in slim["presets"]["pro"][role]

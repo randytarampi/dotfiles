@@ -1000,8 +1000,23 @@ def clamp_slim_variants(slim_data, providers, selected_preset=None):
             if not entry:
                 continue
             options = entry.get("reasoning_options")
-            effort = next((o for o in options or [] if o.get("type") == "effort"), None)
+            effort = (
+                next(
+                    (
+                        option
+                        for option in options
+                        if isinstance(option, dict) and option.get("type") == "effort"
+                    ),
+                    None,
+                )
+                if isinstance(options, list)
+                else None
+            )
             values = effort.get("values") if effort else None
+            if not isinstance(values, list) or not all(
+                isinstance(value, str) for value in values
+            ):
+                values = None
             authored = ref["variant"]
             effective = authored
             if not values:
@@ -1020,6 +1035,8 @@ def clamp_slim_variants(slim_data, providers, selected_preset=None):
                         (v for v in ranked if _EFFORT_ORDER.index(v) >= wanted),
                         ranked[-1],
                     )
+                else:
+                    effective = None
             if effective != authored:
                 if effective is None:
                     ref.pop("variant", None)
