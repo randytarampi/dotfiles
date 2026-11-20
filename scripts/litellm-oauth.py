@@ -142,20 +142,29 @@ def verify_chatgpt_openai_models(
         existing = set(json.loads(target.read_text(encoding="utf-8")))
     except (OSError, ValueError, TypeError):
         existing = set()
+    # Unknown errors and exhausted transient artifacts are both inconclusive:
+    # neither can revoke an earlier successful verification. This is especially
+    # important after removing the old "unknown -> return without writing"
+    # behaviour: a mixed run must not discard previous transient-failure ids.
+    # Explicit entitlement denials and registry removals still revoke ids.
+    verified_this_run = sorted(verified)
+    preserved_unknown = sorted(existing & set(unknown))
+    preserved_artifact = sorted(existing & set(deferred["artifact"]))
+    preserved = sorted(set(preserved_unknown) | set(preserved_artifact))
     if unknown:
-        # An unclassifiable probe is not evidence of absence. Keep the ids we
-        # already recorded for exactly those models, and still write everything
-        # that verified: discarding the whole run throws away sound evidence and
-        # lets one flaky artifact probe block every consumer indefinitely.
-        preserved = sorted(existing & set(unknown))
         print(
             "Unknown probe failures; kept previous ids for: "
-            + (", ".join(preserved) or "none")
+            + (", ".join(preserved_unknown) or "none")
             + " (probes: "
             + ", ".join(sorted(unknown))
             + ")"
         )
-        verified = sorted(set(verified) | set(preserved))
+    if preserved_artifact:
+        print(
+            "Transient probe artifacts; kept previously verified ids for: "
+            + ", ".join(preserved_artifact)
+        )
+    verified = sorted(set(verified_this_run) | set(preserved))
     dropped = sorted(existing - set(verified))
     if dropped:
         print(
@@ -182,7 +191,10 @@ def verify_chatgpt_openai_models(
     )
     summary = [
         "ChatGPT subscription probe summary:",
-        "  Verified (routed): " + (", ".join(verified) or "none"),
+        "  Verified this run: " + (", ".join(verified_this_run) or "none"),
+        "  Preserved from prior verification (not reconfirmed): "
+        + (", ".join(preserved) or "none"),
+        "  Routed ids after reconciliation: " + (", ".join(verified) or "none"),
         "  Deferred entitlement: "
         + (", ".join(sorted(deferred["entitlement"])) or "none"),
         "  Deferred artifact: " + (", ".join(sorted(deferred["artifact"])) or "none"),
