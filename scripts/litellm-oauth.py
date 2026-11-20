@@ -97,6 +97,33 @@ def verify_chatgpt_openai_models(
         or Path.home() / ".local/share/litellm/chatgpt_deferred_models.json"
     )
     runner = run or subprocess.run
+    # The gateway consumer rejects symlinks, insecure modes, malformed JSON
+    # and non-ID values. Never turn a report it would reject into "verified"
+    # evidence merely because this run's probe was inconclusive. Preserve
+    # user-owned untrusted reports instead of overwriting them.
+    for path in (target, deferred_target):
+        if path.is_symlink() or (path.exists() and not path.is_file()):
+            print("ERROR: refusing to replace a non-file or symlinked OAuth report.", file=sys.stderr)
+            return [], False
+    existing = set()
+    if target.exists():
+        try:
+            if stat.S_IMODE(target.stat().st_mode) != 0o600:
+                raise ValueError("report permissions are not 0600")
+            values = json.loads(target.read_text(encoding="utf-8"))
+            if not isinstance(values, list) or any(
+                not isinstance(model_id, str) or not model_id or "/" in model_id
+                for model_id in values
+            ):
+                raise ValueError("report is not a list of unprefixed model IDs")
+            existing = set(values)
+        except (OSError, ValueError, TypeError):
+            print(
+                "ERROR: existing verified-model report is not a trusted "
+                "mode-0600 JSON ID list; refusing to overwrite it.",
+                file=sys.stderr,
+            )
+            return [], False
     for path in (target, deferred_target):
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         path.parent.chmod(0o700)
@@ -138,10 +165,6 @@ def verify_chatgpt_openai_models(
                 unknown.append(model_id)
                 print(f"openai/{model_id}: FAILED — unknown probe failure")
             break
-    try:
-        existing = set(json.loads(target.read_text(encoding="utf-8")))
-    except (OSError, ValueError, TypeError):
-        existing = set()
     # Unknown errors and exhausted transient artifacts are both inconclusive:
     # neither can revoke an earlier successful verification. This is especially
     # important after removing the old "unknown -> return without writing"

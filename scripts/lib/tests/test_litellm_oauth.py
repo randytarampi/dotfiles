@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 SCRIPT = Path(__file__).resolve().parents[2] / "litellm-oauth.py"
 SPEC = importlib.util.spec_from_file_location("litellm_oauth", SCRIPT)
 OAUTH = importlib.util.module_from_spec(SPEC)
@@ -129,6 +131,7 @@ def test_unknown_probe_does_not_discard_other_verifications(tmp_path):
     # blocked the OpenCode generation that needed the new ids.
     target = tmp_path / "verified.json"
     target.write_text('["gpt-6.1-sol"]')
+    target.chmod(0o600)
 
     def stub(command, **kwargs):
         code = command[-1]
@@ -153,6 +156,7 @@ def test_unknown_probe_preserves_that_models_previous_id(tmp_path):
     # ids the run actually disproved are dropped.
     target = tmp_path / "verified.json"
     target.write_text('["gpt-unknown", "gpt-stale"]')
+    target.chmod(0o600)
 
     def stub(command, **kwargs):
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected")
@@ -190,6 +194,7 @@ def test_mixed_inconclusive_probes_keep_prior_ids_without_masking_entitlement(
         ),
         encoding="utf-8",
     )
+    target.chmod(0o600)
     calls = []
 
     def stub(command, **kwargs):
@@ -241,6 +246,7 @@ def test_mixed_inconclusive_probes_keep_prior_ids_without_masking_entitlement(
 def test_artifact_only_preserves_earlier_verification(tmp_path):
     target = tmp_path / "verified.json"
     target.write_text('["gpt-temporary-outage"]', encoding="utf-8")
+    target.chmod(0o600)
 
     def stub(command, **kwargs):
         return SimpleNamespace(returncode=1, stdout="", stderr="RateLimitError")
@@ -263,6 +269,7 @@ def test_artifact_only_preserves_earlier_verification(tmp_path):
 def test_explicit_entitlement_denial_revokes_existing_verified_id(tmp_path):
     target = tmp_path / "verified.json"
     target.write_text('["gpt-revoked"]', encoding="utf-8")
+    target.chmod(0o600)
 
     def stub(command, **kwargs):
         return SimpleNamespace(
@@ -280,6 +287,76 @@ def test_explicit_entitlement_denial_revokes_existing_verified_id(tmp_path):
     )
     assert ok and verified == []
     assert json.loads(target.read_text()) == []
+
+
+@pytest.mark.parametrize(
+    ("contents", "mode"),
+    [
+        ('{"gpt-shadow": true}', 0o600),
+        ('["gpt-shadow", ""]', 0o600),
+        ('["gpt-shadow"]', 0o644),
+    ],
+)
+def test_untrusted_previous_report_cannot_be_promoted_to_verified(
+    tmp_path, contents, mode, capsys
+):
+    """A model never approved by the consumer cannot be carried forward."""
+    from litellm_config import chatgpt_verified_openai_models
+
+    target = tmp_path / ".local/share/litellm/chatgpt_verified_models.json"
+    target.parent.mkdir(parents=True)
+    target.write_text(contents, encoding="utf-8")
+    target.chmod(mode)
+    previous = target.read_bytes()
+    assert chatgpt_verified_openai_models({"HOME": str(tmp_path)}) == set()
+
+    def no_probe(*args, **kwargs):
+        raise AssertionError("untrusted state must stop before external probes")
+
+    verified, ok = OAUTH.verify_chatgpt_openai_models(
+        refs={"openai/gpt-shadow"},
+        verified_path=target,
+        deferred_path=tmp_path / "deferred.json",
+        run=no_probe,
+        sleep=lambda _: None,
+    )
+    assert not ok and verified == []
+    assert target.read_bytes() == previous
+    assert target.stat().st_mode & 0o777 == mode
+    assert not (tmp_path / "deferred.json").exists()
+    assert chatgpt_verified_openai_models({"HOME": str(tmp_path)}) == set()
+    assert "refusing to overwrite" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("symlink_target", ["verified", "deferred"])
+def test_symlinked_report_is_refused_without_touching_private_files(
+    tmp_path, symlink_target
+):
+    private_file = tmp_path / "user-owned-private-report.json"
+    private_file.write_text('["gpt-shadow"]', encoding="utf-8")
+    private_file.chmod(0o600)
+    verified_path = tmp_path / "verified.json"
+    deferred_path = tmp_path / "deferred.json"
+    redirected_path = (
+        verified_path if symlink_target == "verified" else deferred_path
+    )
+    redirected_path.symlink_to(private_file)
+    original = private_file.read_bytes()
+
+    def no_probe(*args, **kwargs):
+        raise AssertionError("symlinks must fail before external probes")
+
+    verified, ok = OAUTH.verify_chatgpt_openai_models(
+        refs={"openai/gpt-shadow"},
+        verified_path=verified_path,
+        deferred_path=deferred_path,
+        run=no_probe,
+        sleep=lambda _: None,
+    )
+    assert not ok and verified == []
+    assert redirected_path.is_symlink()
+    assert private_file.read_bytes() == original
+    assert private_file.stat().st_mode & 0o777 == 0o600
 
 
 def test_main_probe_entitlement_continues_to_model_verification(monkeypatch, tmp_path):
