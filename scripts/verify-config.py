@@ -1627,13 +1627,17 @@ def main():
     if caddy_gate:
 
         def run_launchctl_silently(args):
-            return subprocess.run(args, capture_output=True, text=True, check=False)
+            return subprocess.run(  # nosec B603 B607 - fixed launchctl print, no shell
+                args, capture_output=True, text=True, check=False
+            )
 
-        if not check_caddy_brew_agent(
-            HOME / "Library/LaunchAgents/sh.brew.caddy.plist", run_launchctl_silently
+        if (
+            sys.platform == "darwin"
+            and not check_caddy_brew_agent(
+                HOME / "Library/LaunchAgents/sh.brew.caddy.plist", run_launchctl_silently
+            )
         ):
-            if sys.platform == "darwin":
-                exit_code = 1
+            exit_code = 1
         zones_config_path = Path(
             os.path.expanduser(
                 os.path.expandvars(

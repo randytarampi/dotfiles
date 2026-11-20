@@ -6,9 +6,12 @@ import json
 import os
 import platform as platform_module
 import re
+import shlex
+import stat
 import shutil
 import subprocess  # nosec B404 - fixed argv, no shell.
 import sys
+import tempfile
 from pathlib import Path
 
 PLUGINS = (
@@ -90,25 +93,48 @@ def resolve_chromium(
 
 
 def managed_wrapper(path, chromium, *, backup=True):
+    """Modify only a recognizable owner wrapper; preserve backups and file mode."""
     path = Path(path)
+    if path.is_symlink():
+        return "unsafe-wrapper"
     if not path.exists():
         return "owner-persistence-needed"
-    content = path.read_text()
-    if not re.search(r"^\s*exec\s+.*paseo.*daemon run", content, re.M):
+    if not path.is_file():
+        return "unsafe-wrapper"
+    content = path.read_text(encoding="utf-8")
+    daemon_exec = re.search(r"(?m)^[ \t]*exec\s+[^\n]*paseo[^\n]*daemon\s+run\b", content)
+    if daemon_exec is None:
         return "unrecognized-wrapper"
     block = (
-        f'{START}\nexport PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE="{chromium}"\n{END}'
+        f"{START}\nexport PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE="
+        f"{shlex.quote(chromium)}\n{END}"
     )
     pattern = re.compile(re.escape(START) + r".*?" + re.escape(END), re.S)
-    updated = (
-        pattern.sub(block, content)
-        if pattern.search(content)
-        else content.replace("exec", block + "\nexec", 1)
-    )
-    if updated != content:
-        if backup:
-            shutil.copy2(path, str(path) + ".bak")
-        path.write_text(updated)
+    if content.count(START) != content.count(END) or content.count(START) > 1:
+        return "unsafe-wrapper"
+    if pattern.search(content):
+        updated = pattern.sub(lambda _: block, content, count=1)
+    else:
+        updated = content[: daemon_exec.start()] + block + "\n" + content[daemon_exec.start() :]
+    if updated == content:
+        return "written"
+    if backup:
+        backup_path = Path(str(path) + ".bak")
+        if backup_path.is_symlink() or (
+            backup_path.exists() and backup_path.read_bytes() != path.read_bytes()
+        ):
+            return "backup-conflict"
+        if not backup_path.exists():
+            shutil.copy2(path, backup_path)
+    fd, temporary = tempfile.mkstemp(prefix=".paseo-wrapper.", dir=path.parent)
+    try:
+        os.fchmod(fd, stat.S_IMODE(path.stat().st_mode))
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(updated)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
     return "written"
 
 
@@ -221,14 +247,17 @@ def run_plugin(paseo, args, *, env=None, run=None):
     if run is None:
         # Resolve at call time so injected/monkeypatched runners are honoured.
         run = subprocess.run
-    result = run(
-        [paseo, "plugin", *args],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=180,
-        env=env,
-    )
+    try:
+        result = run(
+            [paseo, "plugin", *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=180,
+            env=env,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError("plugin command could not complete; output redacted") from error
     if result.returncode:
         raise ValueError(
             f"plugin command failed (exit {result.returncode}; output redacted)"
@@ -253,7 +282,7 @@ def main(argv=None):
         return 0 if args.dry_run else 1
     try:
         cli_version = version_tuple(
-            subprocess.run(
+            subprocess.run(  # nosec B603 - resolved Paseo executable, fixed version argv
                 [paseo, "--version"],
                 check=True,
                 capture_output=True,
@@ -261,8 +290,12 @@ def main(argv=None):
                 timeout=15,
             ).stdout
         )
-        # The daemon enforces plugin compatibility floors, so plan against it.
-        version = daemon_version(paseo) or cli_version
+        # Do not authorize mutations using only a newer CLI when the running
+        # daemon's compatibility version cannot be established.
+        observed_daemon_version = daemon_version(paseo)
+        if observed_daemon_version is None and args.apply and not args.dry_run:
+            raise ValueError("daemon version unavailable; refusing plugin mutation")
+        version = observed_daemon_version or cli_version
         if version != cli_version:
             print(
                 "Note: daemon "
@@ -273,7 +306,7 @@ def main(argv=None):
             )
         node = qualified_node_version(shutil.which, subprocess.run)
         current = json.loads(
-            subprocess.run(
+            subprocess.run(  # nosec B603 - absolute, resolved Paseo CLI; fixed read-only argv
                 [paseo, "plugin", "ls", "--json"],
                 check=True,
                 capture_output=True,
@@ -281,6 +314,13 @@ def main(argv=None):
                 timeout=15,
             ).stdout
         )
+        if not isinstance(current, list) or any(
+            not isinstance(entry, dict)
+            or not isinstance(entry.get("id"), str)
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]*", entry["id"])
+            for entry in current
+        ):
+            raise ValueError("plugin list has unsafe or malformed runtime ids")
         eligible, omitted = plan(
             shutil.which,
             version,
@@ -292,17 +332,9 @@ def main(argv=None):
         # A listed-but-disabled plugin is only re-enabled when its prerequisites
         # are met; eligibility must gate enables exactly as it gates installs.
         enables = [(name, runtime) for name, runtime in enables if name in eligible]
-        installs = [
-            n
-            for n in installs
-            if n != "uiyzzi/codexbar-usage"
-            or (args.codexbar_daemon_verified and shutil.which("codexbar"))
-        ]
-        if node is None or node < (24, 0, 0):
-            installs = [n for n in installs if n != "omercnet/shared-browser"]
-        if version < (0, 13, 0):
-            installs = [n for n in installs if n != "omercnet/shared-browser"]
         chromestatus, chromium = resolve_chromium()
+        if chromium and any(char in chromium for char in ("\n", "\r", "\x00")):
+            raise ValueError("unsafe Chromium executable path")
         for name, reason in omitted:
             print(f"Skip {name}: {reason}")
         for name in installs:
@@ -314,14 +346,14 @@ def main(argv=None):
                 f"Unlisted installed plugin: {registry} ({runtime})"
                 + ("; would remove" if args.prune else "; retained")
             )
-        if chromestatus != "resolved":
+        if "omercnet/shared-browser" in eligible and chromestatus != "resolved":
             print(f"shared-browser Chromium: {chromestatus}")
         if args.dry_run:
             return 0
         if os.environ.get(GATE) != "1":
             raise ValueError(f"explicit --apply requires {GATE}=1")
         env = os.environ.copy()
-        if chromium:
+        if chromium and "omercnet/shared-browser" in eligible:
             env["PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE"] = chromium
         failures = []
         for name in installs:
@@ -343,12 +375,14 @@ def main(argv=None):
                 except ValueError as exc:
                     failures.append(registry)
                     print(f"Failed to remove {registry}: {exc}", file=sys.stderr)
-        if chromium:
+        if chromium and "omercnet/shared-browser" in eligible:
             system = platform_module.system()
             home = Path.home()
             if system == "Darwin":
                 mechanism = managed_wrapper(home / ".paseo/launchd-daemon.sh", chromium)
-                subprocess.run(
+                if mechanism != "written":
+                    failures.append("shared-browser persistence")
+                result = subprocess.run(  # nosec B603 B607 - fixed launchctl subcommand, no shell
                     [
                         "launchctl",
                         "setenv",
@@ -359,23 +393,32 @@ def main(argv=None):
                     capture_output=True,
                     text=True,
                 )
+                if result.returncode:
+                    failures.append("shared-browser launchctl setenv")
                 print(
-                    f"Chromium persistence: {mechanism}; launchctl setenv requested; daemon restart required"
+                    f"Chromium persistence: {mechanism}; "
+                    "daemon restart required"
                 )
             elif system == "Linux":
                 target = home / ".config/environment.d/90-paseo-shared-browser.conf"
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(
-                    f"PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE={chromium}\n"
-                )
-                print(f"Chromium persistence: {target}; daemon restart required")
+                if target.is_symlink():
+                    failures.append("shared-browser Linux environment symlink")
+                else:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(
+                        f"PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE={chromium}\n"
+                    )
+                    target.chmod(0o600)
+                    print(f"Chromium persistence: {target}; daemon restart required")
             elif system == "Windows":
-                subprocess.run(
+                result = subprocess.run(  # nosec B603 B607 - fixed user-scope setx, no shell
                     ["setx", "PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE", chromium],
                     check=False,
                     capture_output=True,
                     text=True,
                 )
+                if result.returncode:
+                    failures.append("shared-browser setx")
                 print("Chromium persistence: setx user scope; daemon restart required")
         if failures:
             print(
