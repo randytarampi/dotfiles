@@ -919,6 +919,7 @@ def prepare_config_candidates(
     """Validate both generated payloads before the caller installs either."""
     if not preserve_dynamic:
         slim_data = without_disabled_presets(slim_data)
+    normalize_marketplace_activation(slim_data)
     clamp_slim_variants(slim_data, config.get("providers", {}), selected_preset)
     if preserve_dynamic and get_litellm_proxy_mode():
         # The selected dynamic routes were already validated against gateway evidence.
@@ -942,6 +943,42 @@ def prepare_config_candidates(
 
 
 _EFFORT_ORDER = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+
+_MARKETPLACE_ACTIVATION_KEYS = ("agents", "agents_add", "agents_remove")
+
+
+def normalize_marketplace_activation(slim_data):
+    """Keep marketplace activation canonical: package IDs carry no version.
+
+    OMO-Slim validates per-preset activation as `author/name`; a versioned
+    selector such as `author/name@1.0.0` fails the whole preset schema, which
+    disables the preset and every agent it defines. Installed versions remain
+    the marketplace store's business.
+    """
+    for preset_name, preset in (slim_data.get("presets") or {}).items():
+        if not isinstance(preset, dict):
+            continue
+        market = preset.get("marketplace")
+        if not isinstance(market, dict):
+            continue
+        for key in _MARKETPLACE_ACTIVATION_KEYS:
+            values = market.get(key)
+            if not isinstance(values, list):
+                continue
+            canonical = []
+            for value in values:
+                if not isinstance(value, str):
+                    canonical.append(value)
+                    continue
+                stripped = value.split("@", 1)[0]
+                if stripped != value:
+                    logger.warning(
+                        "Marketplace activation for preset %s dropped version from %s",
+                        preset_name,
+                        value,
+                    )
+                canonical.append(stripped)
+            market[key] = canonical
 
 
 def clamp_slim_variants(slim_data, providers, selected_preset=None):

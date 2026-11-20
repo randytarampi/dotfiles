@@ -68,9 +68,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -140,9 +140,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -211,9 +211,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -282,9 +282,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -354,9 +354,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -426,9 +426,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -498,9 +498,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -570,9 +570,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -642,9 +642,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -714,9 +714,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -769,9 +769,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -822,9 +822,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -882,9 +882,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -915,9 +915,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -948,9 +948,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -1008,9 +1008,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     },
@@ -1080,9 +1080,9 @@
       },
       "marketplace": {
         "agents": [
-          "alvin/debugger@1.0.0",
-          "alvin/documenter@1.0.0",
-          "alvin/validator@1.0.1"
+          "alvin/debugger",
+          "alvin/documenter",
+          "alvin/validator"
         ]
       }
     }
@@ -1095,8 +1095,6 @@
   "disabled_agents": [],
   "image_routing": "auto",
   "council": {
-    "timeout": 360000,
-    "councillor_retries": 1,
     "default_preset": "pro-plus",
     "presets": {
       "pro": {
