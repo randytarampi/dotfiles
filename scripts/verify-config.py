@@ -24,6 +24,34 @@ import time
 from pathlib import Path
 from typing import Optional
 
+
+def check_caddy_brew_agent(plist_path, runner, *, is_darwin=None, uid=None):
+    """Report whether the competing Homebrew Caddy user agent is present or loaded."""
+    if is_darwin is None:
+        is_darwin = sys.platform == "darwin"
+    if not is_darwin:
+        print("  ⊘ Homebrew Caddy LaunchAgent check (non-darwin, skipped)")
+        return False
+
+    loaded = False
+    if uid is None:
+        uid = os.getuid()
+    try:
+        loaded = (
+            runner(["launchctl", "print", f"gui/{uid}/sh.brew.caddy"]).returncode == 0
+        )
+    except OSError:
+        pass
+
+    if plist_path.exists() or loaded:
+        print(
+            "  ✗ Homebrew Caddy LaunchAgent conflicts with the root Caddy admin API on 127.0.0.1:2019; Homebrew points at $(brew --prefix)/etc/Caddyfile, which this repo never writes. Remediate with user-level `brew services stop caddy` (no sudo)."
+        )
+        return False
+    print("  ✓ Homebrew Caddy LaunchAgent absent (no admin API 2019 conflict)")
+    return True
+
+
 sys.path.insert(0, str(Path(__file__).with_name("lib")))
 from litellm_routing import routing_config_text_is_safe
 from constants import get_litellm_oauth_gate, get_litellm_proxy_mode
@@ -1597,6 +1625,15 @@ def main():
     # ddns-route53 multi-zone checks (only when CADDY setup is enabled)
     caddy_gate = os.environ.get("DOTFILES_RUN_CADDY_SETUP", "0") == "1"
     if caddy_gate:
+
+        def run_launchctl_silently(args):
+            return subprocess.run(args, capture_output=True, text=True, check=False)
+
+        if not check_caddy_brew_agent(
+            HOME / "Library/LaunchAgents/sh.brew.caddy.plist", run_launchctl_silently
+        ):
+            if sys.platform == "darwin":
+                exit_code = 1
         zones_config_path = Path(
             os.path.expanduser(
                 os.path.expandvars(
