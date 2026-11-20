@@ -135,7 +135,16 @@ def test_wildcard_tool_filter_is_equivalent_to_no_filter():
     }
     previous = {"mcpServers": {"basic-memory": {**record, "tools": ["*"]}}}
     generated = {"mcpServers": {"basic-memory": dict(record)}}
-    assert ensure_basic_memory_ownership(previous, generated, "mcpServers") is None
+    # Copilot explicitly defaults its tool list to all tools.
+    assert (
+        ensure_basic_memory_ownership(
+            previous, generated, "mcpServers", copilot_wildcard_tools=True
+        )
+        is None
+    )
+    # Never silently extend the equivalence to other client schemas.
+    with pytest.raises(ValueError, match="refusing to overwrite"):
+        ensure_basic_memory_ownership(previous, generated, "mcpServers")
 
 
 def test_restrictive_tool_filter_still_rejects_divergence():
@@ -157,3 +166,90 @@ def test_absent_memory_entry_does_not_trigger_collision_validator():
     generated = {"mcpServers": {"codegraph": {"command": "codegraph"}}}
     assert ensure_basic_memory_ownership(existing, generated, "mcpServers") is None
     assert existing == {"mcpServers": {"private-memory": {"command": "keep"}}}
+
+
+@pytest.mark.parametrize(
+    ("format_type", "is_copilot"),
+    [
+        ("json-mcpServers-http", True),
+        ("json-mcpServers-merge", False),
+        ("json-mcpServers", False),
+        ("json-mcpServers-antigravity", False),
+    ],
+)
+def test_real_writer_normalizes_wildcard_only_for_copilot(
+    tmp_path, format_type, is_copilot
+):
+    """The actual format dispatcher must enforce the consumer boundary."""
+    canonical = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+    managed = {
+        "command": canonical["command"],
+        "args": canonical["args"],
+        "env": canonical["env"],
+    }
+    previous = {"mcpServers": {"basic-memory": {**managed, "tools": ["*"]}}}
+    generated = {"mcpServers": {"basic-memory": managed}}
+    path = tmp_path / "mcp-config.json"
+    path.write_text(json.dumps(previous), encoding="utf-8")
+    before = (path.read_bytes(), path.stat().st_mtime_ns)
+    writer = load_actual_writer()
+    if is_copilot:
+        writer.merge_configs_to_file(format_type, path, json.dumps(generated))
+        assert json.loads(path.read_text(encoding="utf-8")) == generated
+        # A second run has no ownership mismatch after the client rewrite.
+        path.write_text(json.dumps(previous), encoding="utf-8")
+        writer.merge_configs_to_file(format_type, path, json.dumps(generated))
+        assert json.loads(path.read_text(encoding="utf-8")) == generated
+    else:
+        with pytest.raises(ValueError, match="refusing to overwrite"):
+            writer.merge_configs_to_file(format_type, path, json.dumps(generated))
+        assert (path.read_bytes(), path.stat().st_mtime_ns) == before
+
+
+@pytest.mark.parametrize(
+    "filter_value",
+    [[], ["read"], ["*", "read"], "*", None],
+)
+def test_copilot_writer_rejects_other_tool_filters(tmp_path, filter_value):
+    canonical = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+    managed = {
+        "command": canonical["command"],
+        "args": canonical["args"],
+        "env": canonical["env"],
+    }
+    previous = {
+        "mcpServers": {"basic-memory": {**managed, "tools": filter_value}}
+    }
+    generated = {"mcpServers": {"basic-memory": managed}}
+    path = tmp_path / "copilot.json"
+    path.write_text(json.dumps(previous), encoding="utf-8")
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="refusing to overwrite"):
+        load_actual_writer().merge_configs_to_file(
+            "json-mcpServers-http", path, json.dumps(generated)
+        )
+    assert path.read_bytes() == before
+
+
+def test_copilot_wildcard_does_not_mask_changed_private_environment(tmp_path):
+    canonical = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+    managed = {
+        "command": canonical["command"],
+        "args": canonical["args"],
+        "env": canonical["env"],
+    }
+    changed = {
+        **managed,
+        "env": {**managed["env"], "BASIC_MEMORY_FORCE_LOCAL": "false"},
+        "tools": ["*"],
+    }
+    previous = {"mcpServers": {"basic-memory": changed}}
+    generated = {"mcpServers": {"basic-memory": managed}}
+    path = tmp_path / "copilot.json"
+    path.write_text(json.dumps(previous), encoding="utf-8")
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="refusing to overwrite"):
+        load_actual_writer().merge_configs_to_file(
+            "json-mcpServers-http", path, json.dumps(generated)
+        )
+    assert path.read_bytes() == before
