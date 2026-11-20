@@ -670,6 +670,37 @@ def test_probe_routes_are_opt_in_and_attach_qualification(monkeypatch):
     assert audio["selection"]["tts"]["qualification"] == "protocol_probed"
 
 
+def test_reconcile_without_probe_routes_makes_no_route_probes(monkeypatch):
+    calls = []
+    import route_probes
+
+    for name in ("probe_stt", "probe_tts", "probe_embeddings"):
+        monkeypatch.setattr(
+            route_probes, name, lambda *args, _name=name, **kwargs: calls.append(_name)
+        )
+    monkeypatch.setattr(openwebui, "_disabled", lambda: set())
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://local/v1", "OMLX_API_KEY")
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda *_: [
+            {"name": "stt-model", "model_type": "audio_stt"},
+            {"name": "tts-model", "model_type": "audio_tts"},
+        ],
+    )
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: {})
+    monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
+    monkeypatch.setattr(openwebui, "_read_embedding_state", lambda: {})
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: False)
+    monkeypatch.setattr(openwebui, "_persist_audio_selection", lambda *_: None)
+
+    openwebui.compute_desired_state()
+    assert calls == []
+
+
 def test_direct_audio_probes_resolve_backend_credential(monkeypatch):
     monkeypatch.setattr(openwebui, "_disabled", lambda: set())
     monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
@@ -817,11 +848,11 @@ def _route_evidence_record(engine_build="9.9.9", recorded_at=None):
     }
 
 
-def test_route_evidence_probed_when_missing_on_healthy_apply(monkeypatch):
+def test_explicit_probe_routes_probes_missing_route_evidence(monkeypatch):
     calls, persisted = _route_evidence_audio_fixture(monkeypatch)
     provenance = {}
     bundle = openwebui._desired_audio_settings(
-        allow_auto_probe=True, selection_records=provenance
+        probe_routes=True, selection_records=provenance
     )
     assert calls == [("http://local/v1", "stt-model")]
     assert bundle["selection"]["stt"]["qualification"] == "protocol_probed"
@@ -831,42 +862,14 @@ def test_route_evidence_probed_when_missing_on_healthy_apply(monkeypatch):
     assert persisted == {}  # provenance is proposed; persistence happens at apply
 
 
-def test_route_evidence_reused_without_probing_when_binding_matches(monkeypatch):
+def test_explicit_probe_routes_probes_existing_qualification(monkeypatch):
+    record = _route_evidence_record()
     calls, _persisted = _route_evidence_audio_fixture(
-        monkeypatch, selection={"stt": _route_evidence_record()}
+        monkeypatch, selection={"stt": record}
     )
-    monkeypatch.setenv("OMLX_API_KEY", "fixture-key")
-    selection = {"stt": _route_evidence_record()}
-    selection["stt"]["route_evidence"]["credential_digest"] = (
-        openwebui._credential_digest("fixture-key")
-    )
-    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: selection)
-    builds = []
-    monkeypatch.setattr(
-        openwebui, "_route_engine_build", lambda *args: builds.append(args) or "9.9.9"
-    )
-    monkeypatch.setattr(
-        openwebui,
-        "resolve_transport",
-        lambda *_args, **_kwargs: type(
-            "ResolvedRoute",
-            (),
-            {
-                "transport": openwebui.Transport.DIRECT,
-                "endpoint": "http://local/v1",
-                "wire_model": "stt-model",
-                "key_reference": "OMLX_API_KEY",
-                "reason": None,
-            },
-        )(),
-    )
-    bundle = openwebui._desired_audio_settings(allow_auto_probe=True)
-    assert calls == []  # valid persisted binding: no probe on the reused route
-    assert builds == [("omlx", "http://local/v1")]
+    bundle = openwebui._desired_audio_settings(probe_routes=True)
+    assert calls == [("http://local/v1", "stt-model")]
     assert bundle["selection"]["stt"]["qualification"] == "protocol_probed"
-    assert (
-        bundle["selection"]["stt"]["reason"] == "previous selection remains qualified"
-    )
 
 
 def test_gateway_audio_auto_probe_resolves_scoped_key_and_renders_proxy(
@@ -900,7 +903,7 @@ def test_gateway_audio_auto_probe_resolves_scoped_key_and_renders_proxy(
         return type("Result", (), {"status": "ok", "notes": ("HTTP 200",)})()
 
     monkeypatch.setattr(route_probes, "probe_stt", success)
-    bundle = openwebui._desired_audio_settings(allow_auto_probe=True)
+    bundle = openwebui._desired_audio_settings(probe_routes=True)
     assert observed == [
         ("http://127.0.0.1:4000/v1", "asr", str(key), "scoped-wire-secret")
     ]
@@ -919,7 +922,7 @@ def test_route_evidence_reprobes_once_when_binding_changes(monkeypatch):
     )
     provenance = {}
     bundle = openwebui._desired_audio_settings(
-        allow_auto_probe=True, selection_records=provenance
+        probe_routes=True, selection_records=provenance
     )
     assert calls == [("http://local/v1", "stt-model")]  # exactly one re-probe
     assert bundle["selection"]["stt"]["route_evidence"]["engine_build"] == "9.9.9"
@@ -932,7 +935,7 @@ def test_route_evidence_auth_failure_stays_unqualified(monkeypatch):
     calls, _persisted = _route_evidence_audio_fixture(monkeypatch, probe_result=failure)
     provenance = {}
     bundle = openwebui._desired_audio_settings(
-        allow_auto_probe=True, selection_records=provenance
+        probe_routes=True, selection_records=provenance
     )
     assert calls == [("http://local/v1", "stt-model")]
     assert bundle is None
@@ -991,7 +994,7 @@ def test_route_build_fetch_is_gated_by_probe_mode(monkeypatch):
         probe,
     )
     assert requests == []
-    for flags in ({"probe_on_missing": True}, {"full_probe": True}):
+    for flags in ({"full_probe": True},):
         openwebui._qualify_candidates(
             [("ollama", "embed", openwebui.Qualification.DISCOVERED)],
             openwebui.Operation.EMBEDDING,
@@ -1054,7 +1057,7 @@ def test_route_evidence_rotated_credential_forces_reprobe(monkeypatch):
     )
     provenance = {}
     bundle = openwebui._desired_audio_settings(
-        allow_auto_probe=True, selection_records=provenance
+        probe_routes=True, selection_records=provenance
     )
     assert calls == [("http://local/v1", "stt-model")]  # rotated digest: re-probe
     assert (
@@ -1068,7 +1071,7 @@ def test_route_evidence_unknown_build_never_reused(monkeypatch):
     calls, _persisted = _route_evidence_audio_fixture(
         monkeypatch, selection={"stt": unknown}
     )
-    openwebui._desired_audio_settings(allow_auto_probe=True, selection_records={})
+    openwebui._desired_audio_settings(probe_routes=True, selection_records={})
     assert calls == [
         ("http://local/v1", "stt-model")
     ]  # unknown build: not authoritative
@@ -1081,7 +1084,7 @@ def test_route_evidence_stale_record_is_reprobed(monkeypatch):
     calls, _persisted = _route_evidence_audio_fixture(
         monkeypatch, selection={"stt": stale}
     )
-    openwebui._desired_audio_settings(allow_auto_probe=True, selection_records={})
+    openwebui._desired_audio_settings(probe_routes=True, selection_records={})
     assert calls == [("http://local/v1", "stt-model")]  # stale evidence: re-probe
 
 
@@ -2207,7 +2210,7 @@ def test_gateway_embedding_desired_render(monkeypatch, tmp_path, caplog):
         )
 
     monkeypatch.setattr(route_probes, "probe_embeddings", fake_probe)
-    desired = openwebui.compute_desired_state(allow_auto_probe=True)
+    desired = openwebui.compute_desired_state(probe_routes=True)
     assert desired["embedding"]["RAG_EMBEDDING_ENGINE"] == "openai"
     assert desired["embedding"]["openai_config"]["url"] == captured["endpoint"]
     assert "ollama_config" not in desired["embedding"]
@@ -2267,7 +2270,7 @@ def test_gateway_embedding_alias_unresolved_is_unavailable(monkeypatch):
         "_gateway_embedding_alias",
         lambda fetch=None, endpoint=None, key_value=None: None,
     )
-    desired = openwebui.compute_desired_state(allow_auto_probe=True)
+    desired = openwebui.compute_desired_state(probe_routes=True)
     assert "embedding" not in desired
     assert desired["embedding_status"] == "unavailable"
     record = desired["embedding_selection"]
@@ -5426,7 +5429,7 @@ def test_entrypoint_check_suppresses_probe_routes(monkeypatch, caplog):
     )
     assert module.main() == 0  # healthy check exits 0; probes suppressed
     assert captured["probe_routes"] is False
-    assert captured["allow_auto_probe"] is False
+    assert captured["probe_routes"] is False
     assert any("ignored in check/dry-run" in line for line in caplog.messages)
 
 
@@ -6287,7 +6290,7 @@ def test_compute_desired_audio_stable_when_discovery_is_reversed(monkeypatch, tm
             lambda *_a, **_k: DiscoveryResult("ok_models", [], None),
         )
         monkeypatch.setattr(openwebui, "audio_models", lambda *_: ordered)
-        return openwebui.compute_desired_state(allow_auto_probe=True)
+        return openwebui.compute_desired_state(probe_routes=True)
 
     forward = compute(models)
     reverse = compute(list(reversed(models)))
@@ -6555,7 +6558,7 @@ def test_gateway_audio_collision_renders_served_namespaced_alias(monkeypatch, tm
         return type("Result", (), {"status": "ok", "notes": ("HTTP 200",)})()
 
     monkeypatch.setattr(route_probes, "probe_stt", success)
-    bundle = openwebui._desired_audio_settings(allow_auto_probe=True)
+    bundle = openwebui._desired_audio_settings(probe_routes=True)
     assert observed == [
         ("http://127.0.0.1:4000/v1", "omlx/asr", str(key), "scoped-wire-secret")
     ]
@@ -6602,7 +6605,7 @@ def test_gateway_audio_alias_resolution_degrades_bare_on_unknown_inventory(
         return type("Result", (), {"status": "ok", "notes": ("HTTP 200",)})()
 
     monkeypatch.setattr(route_probes, "probe_stt", success)
-    openwebui._desired_audio_settings(allow_auto_probe=True)
+    openwebui._desired_audio_settings(probe_routes=True)
     assert observed == [("http://127.0.0.1:4000/v1", "asr")]
 
 
