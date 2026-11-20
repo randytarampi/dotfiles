@@ -233,6 +233,19 @@ def get_model_metadata(provider_key, model_id, models_dev_data):
     modalities = model.get("modalities")
     if isinstance(modalities, dict) and modalities.get("input"):
         result["modalities"] = modalities
+    if isinstance(model.get("reasoning"), bool):
+        result["reasoning"] = model["reasoning"]
+    reasoning_options = model.get("reasoning_options")
+    if isinstance(reasoning_options, list) and all(
+        isinstance(option, dict)
+        and option.get("type") in {"toggle", "effort", "budget_tokens"}
+        and all(
+            key not in option or isinstance(option[key], (list, str, int, float, bool))
+            for key in ("values", "min", "max")
+        )
+        for option in reasoning_options
+    ):
+        result["reasoning_options"] = reasoning_options
     return result
 
 
@@ -397,5 +410,9 @@ def build_model_entry(
     )
     if resolved_modalities:
         entry["modalities"] = resolved_modalities
+
+    for key in ("reasoning", "reasoning_options"):
+        if key in meta:
+            entry[key] = meta[key]
 
     return entry

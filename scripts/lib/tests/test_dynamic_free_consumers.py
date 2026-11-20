@@ -454,6 +454,7 @@ def test_opencode_main_resolves_dynamic_preset_and_materializes_provider(
     configure_opencode.main.__wrapped__()
 
     output = json.loads(config_path.read_text())
+    assert output["default_agent"] == "orchestrator"
     # Native v2 shape contract, asserted on real emitter output: no legacy
     # top-level key may survive, and the external-directory ask rule must
     # lead the ordered permissions array so the narrower allows can win the
@@ -477,6 +478,7 @@ def test_opencode_main_resolves_dynamic_preset_and_materializes_provider(
             for rule in permissions
         )
     else:
+        assert output["default_agent"] == "orchestrator"
         assert "mcp" not in output
     if proxy:
         assert output["providers"]["litellm"]["models"][alias]

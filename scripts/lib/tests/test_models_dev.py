@@ -175,6 +175,35 @@ class BuildModelEntryModalityTest(unittest.TestCase):
             entry["modalities"], {"input": ["text", "image"], "output": ["text"]}
         )
 
+    def test_reasoning_metadata_is_propagated_only_when_well_formed(self):
+        catalog = {
+            "ollama-cloud": {
+                "models": {
+                    "reasoner": {
+                        "reasoning": True,
+                        "reasoning_options": [
+                            {"type": "toggle"},
+                            {"type": "effort", "values": ["low", "high", "max"]},
+                        ],
+                    },
+                    "plain": {"reasoning": "yes", "reasoning_options": "invalid"},
+                }
+            }
+        }
+        self.assertEqual(
+            models_dev.build_model_entry("reasoner", catalog, "ollama-cloud")[
+                "reasoning"
+            ],
+            True,
+        )
+        self.assertIn(
+            "reasoning_options",
+            models_dev.build_model_entry("reasoner", catalog, "ollama-cloud"),
+        )
+        plain = models_dev.build_model_entry("plain", catalog, "ollama-cloud")
+        self.assertNotIn("reasoning", plain)
+        self.assertNotIn("reasoning_options", plain)
+
 
 if __name__ == "__main__":
     unittest.main()

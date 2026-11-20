@@ -122,7 +122,9 @@ def _collect_provider_from_value(value, out):
 def _collect_providers(obj, out):
     """Recursively walk a preset/fallback object collecting provider IDs."""
     if isinstance(obj, dict):
-        for v in obj.values():
+        for key, v in obj.items():
+            if key == "marketplace":
+                continue
             _collect_providers(v, out)
     elif isinstance(obj, list):
         for v in obj:

@@ -1779,6 +1779,55 @@ def test_opencode_atomic_private_writer_preserves_old_output_on_replace_failure(
     assert list(tmp_path.iterdir()) == [target]
 
 
+def test_opencode_atomic_private_writer_skips_identical_bytes_and_replaces_changes(
+    tmp_path,
+):
+    script = _load_script(
+        "configure_opencode_atomic_identical", "configure-opencode.py"
+    )
+    target = tmp_path / "opencode.json"
+    target.write_text("same", encoding="utf-8")
+    target.chmod(0o600)
+    original = target.stat()
+    script.write_private_atomic(target, "same")
+    unchanged = target.stat()
+    assert (unchanged.st_ino, unchanged.st_mtime_ns) == (
+        original.st_ino,
+        original.st_mtime_ns,
+    )
+    script.write_private_atomic(target, "changed")
+    assert target.read_text(encoding="utf-8") == "changed"
+
+
+def test_opencode_atomic_private_writer_repairs_mode_for_identical_bytes(tmp_path):
+    script = _load_script("configure_opencode_atomic_mode", "configure-opencode.py")
+    target = tmp_path / "opencode.json"
+    target.write_text("same", encoding="utf-8")
+    target.chmod(0o644)
+    inode = target.stat().st_ino
+    script.write_private_atomic(target, "same")
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+    assert target.stat().st_ino != inode
+
+
+def test_install_config_pair_skips_identical_generation_writes(tmp_path):
+    script = _load_script("configure_opencode_pair_noop", "configure-opencode.py")
+    slim = tmp_path / "oh-my-opencode-slim.json"
+    config = tmp_path / "opencode.json"
+    slim.write_text('{"stable":true}\n', encoding="utf-8")
+    config.write_text('{"default_agent":"orchestrator"}\n', encoding="utf-8")
+    slim.chmod(0o600)
+    config.chmod(0o600)
+    before = {
+        path: (path.stat().st_ino, path.stat().st_mtime_ns) for path in (slim, config)
+    }
+    script.install_config_pair(slim, config, slim.read_bytes(), config.read_bytes())
+    after = {
+        path: (path.stat().st_ino, path.stat().st_mtime_ns) for path in (slim, config)
+    }
+    assert after == before
+
+
 def test_opencode_tier_staging_is_private_and_staging_dir_is_private(
     monkeypatch, tmp_path
 ):

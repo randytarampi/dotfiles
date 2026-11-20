@@ -14,6 +14,19 @@ DRIFT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(DRIFT)
 
 
+def test_marketplace_activation_is_not_treated_as_a_model_reference():
+    data = {
+        "presets": {
+            "pro": {
+                "orchestrator": {"model": "openai/gpt-6.2-sol"},
+                "marketplace": {"agents": ["alvin/debugger@1.0.0"]},
+            }
+        },
+        "marketplace": {"enabled": True},
+    }
+    assert list(DRIFT.iter_models(data)) == ["openai/gpt-6.2-sol"]
+
+
 def test_live_drift_allowlist_uses_ids_not_display_names(tmp_path):
     path = tmp_path / "openai.json"
     path.write_text('{"models": {"real-id": {"name": "Pretty name"}}}')

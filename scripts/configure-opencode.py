@@ -11,6 +11,7 @@ import sys
 import json
 import argparse
 import os
+import re
 import shutil
 import subprocess  # nosec B404 - managed script/gateway orchestration; no shell, env-staged
 import tempfile
@@ -559,7 +560,8 @@ def apply_litellm_slim_gate(
     dynamic_selected_refs = {
         value["model"]
         for preset in ("free", "omo-slim-opencode-zen-free")
-        for value in slim.get("presets", {}).get(preset, {}).values()
+        for key, value in slim.get("presets", {}).get(preset, {}).items()
+        if key != "marketplace"
         if isinstance(value, dict)
         and isinstance(value.get("model"), str)
         and value["model"].startswith("litellm/")
@@ -693,6 +695,9 @@ def apply_litellm_slim_gate(
         if isinstance(node, dict):
             result = {}
             for key, child in node.items():
+                if key == "marketplace":
+                    result[key] = child
+                    continue
                 if key in model_fields:
                     result[key] = (
                         child
@@ -914,6 +919,7 @@ def prepare_config_candidates(
     """Validate both generated payloads before the caller installs either."""
     if not preserve_dynamic:
         slim_data = without_disabled_presets(slim_data)
+    clamp_slim_variants(slim_data, config.get("providers", {}), selected_preset)
     if preserve_dynamic and get_litellm_proxy_mode():
         # The selected dynamic routes were already validated against gateway evidence.
         slim_candidate = slim_data
@@ -933,6 +939,145 @@ def prepare_config_candidates(
         json.dumps(config, indent=2) + "\n",
         json.dumps(slim_candidate, indent=2) + "\n",
     )
+
+
+_EFFORT_ORDER = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+
+
+def clamp_slim_variants(slim_data, providers, selected_preset=None):
+    """Clamp authored Slim role variants to model-declared effort values."""
+    models = {}
+    for provider, block in (providers or {}).items():
+        for model_id, entry in (block.get("models") or {}).items():
+            models[f"{provider}/{model_id}"] = entry
+    for preset, roles in (slim_data.get("presets") or {}).items():
+        if not isinstance(roles, dict):
+            continue
+        for role, ref in roles.items():
+            if role == "marketplace":
+                continue
+            if not isinstance(ref, dict) or "variant" not in ref:
+                continue
+            model_id = ref.get("model")
+            entry = models.get(model_id)
+            if not entry:
+                continue
+            options = entry.get("reasoning_options")
+            effort = next((o for o in options or [] if o.get("type") == "effort"), None)
+            values = effort.get("values") if effort else None
+            authored = ref["variant"]
+            effective = authored
+            if not values:
+                effective = None
+            elif authored not in values:
+                ranked = sorted(
+                    (v for v in values if v in _EFFORT_ORDER), key=_EFFORT_ORDER.index
+                )
+                if ranked:
+                    wanted = (
+                        _EFFORT_ORDER.index(authored)
+                        if authored in _EFFORT_ORDER
+                        else 0
+                    )
+                    effective = next(
+                        (v for v in ranked if _EFFORT_ORDER.index(v) >= wanted),
+                        ranked[-1],
+                    )
+            if effective != authored:
+                if effective is None:
+                    ref.pop("variant", None)
+                else:
+                    ref["variant"] = effective
+                logger.warning(
+                    "Adjusted Slim variant preset=%s role=%s model=%s %s->%s",
+                    preset,
+                    role,
+                    model_id,
+                    authored,
+                    effective or "<dropped>",
+                )
+
+
+def reconcile_marketplace(packages, runner=subprocess.run, logger_=logger):
+    """Install missing marketplace packages without blocking config generation."""
+    if not packages:
+        return
+    cache_root = Path.home() / ".cache/opencode/npm/oh-my-opencode-slim@latest"
+    cached = (
+        sorted(cache_root.glob("*/node_modules/oh-my-opencode-slim/dist/cli/index.js"))
+        if cache_root.is_dir()
+        else []
+    )
+
+    def command(*parts):
+        suffix = ["marketplace", *parts, "--host-flavor", "v2"]
+        return (
+            ["node", str(cached[-1]), *suffix]
+            if cached
+            else ["bunx", "oh-my-opencode-slim@latest", *suffix]
+        )
+
+    try:
+        result = runner(
+            command("list"), capture_output=True, text=True, check=False, timeout=60
+        )
+        if result.returncode:
+            raise RuntimeError(
+                (result.stderr or result.stdout or "list failed").strip()
+            )
+        try:
+            entries = json.loads(result.stdout or "[]")
+            installed = {
+                f"{entry['id']}@{entry['version']}"
+                for entry in entries
+                if isinstance(entry, dict) and entry.get("id") and entry.get("version")
+            }
+        except (json.JSONDecodeError, TypeError):
+            installed = set(
+                re.findall(r"[\w.-]+/[\w.-]+(?:@[\w.+-]+)?", result.stdout or "")
+            )
+    except Exception as exc:
+        logger_.warning(
+            "Marketplace inventory failed; install manually with `bunx oh-my-opencode-slim@latest marketplace install <package> --host-flavor v2`: %s",
+            exc,
+        )
+        return
+    for requested in packages:
+        name = requested.split("@", 1)[0]
+        found = next(
+            (item for item in installed if item.split("@", 1)[0] == name), None
+        )
+        if found:
+            actual_version = found.partition("@")[2]
+            requested_version = requested.partition("@")[2]
+            if requested_version and actual_version != requested_version:
+                logger_.warning(
+                    "Marketplace package %s is installed at %s, not requested pin %s",
+                    name,
+                    actual_version,
+                    requested_version,
+                )
+            continue
+        try:
+            result = runner(
+                command("install", requested),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=120,
+            )
+            if result.returncode:
+                raise RuntimeError(
+                    (result.stderr or result.stdout or "install failed").strip()
+                )
+            logger_.info("Marketplace install command completed for %s", requested)
+        except Exception as exc:
+            logger_.warning(
+                "Could not install %s; run `bunx oh-my-opencode-slim@latest marketplace install %s --host-flavor v2` manually: %s",
+                requested,
+                requested,
+                exc,
+            )
 
 
 def prepare_project_candidate(config):
@@ -995,7 +1140,35 @@ def prepare_tier_candidate(
                 selected_preset=selected_preset or staged_slim.get("preset"),
             )
         )
-        return json.dumps(routed, indent=2) + "\n"
+    return json.dumps(routed, indent=2) + "\n"
+
+
+def merge_acp_agents_candidate(slim_payload, acp_agents_source_path):
+    """Merge generated ACP agents into a staged Slim payload."""
+    slim_data = json.loads(slim_payload)
+    with open(acp_agents_source_path, "r", encoding="utf-8") as handle:
+        acp_data = json.load(handle)
+    if not isinstance(acp_data, dict) or not isinstance(
+        acp_data.get("acpAgents"), dict
+    ):
+        raise ValueError(
+            f"ACP agent config at {acp_agents_source_path} did not contain acpAgents"
+        )
+    slim_data["acpAgents"] = acp_data["acpAgents"]
+    return json.dumps(slim_data, indent=2) + "\n"
+
+
+def preserve_acp_agents(candidate_payload, source_path):
+    """Copy the ACP payload into an already routed Slim candidate."""
+    candidate = json.loads(candidate_payload)
+    with open(source_path, encoding="utf-8") as handle:
+        acp_data = json.load(handle)
+    if not isinstance(acp_data, dict) or not isinstance(
+        acp_data.get("acpAgents"), dict
+    ):
+        raise ValueError(f"ACP agent config at {source_path} did not contain acpAgents")
+    candidate["acpAgents"] = acp_data["acpAgents"]
+    return json.dumps(candidate, indent=2) + "\n"
 
 
 def write_private_atomic(path, content):
@@ -1007,10 +1180,19 @@ def write_private_atomic(path, content):
     """
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
+    data = content.encode("utf-8") if isinstance(content, str) else bytes(content)
+    if target.is_file():
+        try:
+            if (
+                target.read_bytes() == data
+                and stat.S_IMODE(target.stat().st_mode) == 0o600
+            ):
+                return
+        except OSError:
+            pass
     fd, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
     try:
         os.fchmod(fd, 0o600)
-        data = content.encode("utf-8") if isinstance(content, str) else bytes(content)
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)
             handle.flush()
@@ -1129,7 +1311,7 @@ def main():
         choices=available_tiers,
     )
     parser.add_argument("--mode", default="global", choices=["global", "project"])
-    add_skip_arg(parser, ["mcps", "acp-agents", "tier", "voice", "dcp"])
+    add_skip_arg(parser, ["mcps", "acp-agents", "tier", "voice", "dcp", "marketplace"])
     args = parser.parse_args()
     # One-way migration gate: native v2 configuration is only written for
     # a compatible host. A v1 (or unprobeable) host keeps its last honest
@@ -1147,7 +1329,9 @@ def main():
             source_root,
             Path(chezmoi_source).resolve(),
         )
-    skipped = parse_skip(args.skip, ["mcps", "acp-agents", "tier", "voice", "dcp"])
+    skipped = parse_skip(
+        args.skip, ["mcps", "acp-agents", "tier", "voice", "dcp", "marketplace"]
+    )
     failures = 0
 
     configs_dir_path = os.path.abspath(
@@ -1539,6 +1723,7 @@ def main():
 
         config = {
             "$schema": "https://opencode.ai/config.json",
+            "default_agent": "orchestrator",
             "mcp": mcp_config,
             "providers": {},
             "plugins": [],
@@ -1662,6 +1847,7 @@ def main():
         ]
         config = {
             "$schema": "https://opencode.ai/config.json",
+            "default_agent": "orchestrator",
             "mcp": mcp_config,
             "compaction": {"auto": False},
             "providers": {},
@@ -2017,6 +2203,24 @@ def main():
         logger.critical(f"presets.json not found at {presets_json_path}")
         sys.exit(1)
 
+    if "marketplace" not in skipped and not args.dry_run:
+        try:
+            with open(presets_json_path, encoding="utf-8") as source_file:
+                source_marketplace = json.load(source_file)
+            package_ids = sorted(
+                {
+                    package
+                    for preset in source_marketplace.get("presets", {}).values()
+                    if isinstance(preset, dict)
+                    for package in preset.get("marketplace", {}).get("agents", [])
+                }
+            )
+            reconcile_marketplace(package_ids)
+        except Exception as exc:
+            logger.warning(
+                "Marketplace reconcile could not read source configuration: %s", exc
+            )
+
     try:
         with open(presets_json_path, "r", encoding="utf-8") as f:
             slim_data = json.load(f)
@@ -2035,6 +2239,58 @@ def main():
                 raise RuntimeError(
                     "Cannot safely inspect installed Slim config; refusing overwrite"
                 ) from None
+        acp_agents_source_path = os.path.join(
+            configs_dir_path, "opencode", "acp-agents.json"
+        )
+        acp_merge_ready = False
+        if "acp-agents" in skipped:
+            logger.info("Skipping ACP agent wrappers")
+        elif args.dry_run:
+            logger.info(
+                "[dry-run] Would run configure-acp-agents.py (skipped: child has no --dry-run)"
+            )
+        else:
+            try:
+                acp_result = subprocess.run(
+                    [
+                        sys.executable,
+                        os.path.join(SCRIPT_DIR, "configure-acp-agents.py"),
+                        "--preset",
+                        args.preset,
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if acp_result.returncode != 0:
+                    stderr = (acp_result.stderr or acp_result.stdout or "").strip()
+                    logger.error(
+                        f"ACP agent generation failed (exit {acp_result.returncode}); skipping merge"
+                        + (f": {stderr}" if stderr else "")
+                    )
+                    failures += 1
+                elif not os.path.exists(acp_agents_source_path):
+                    logger.error(
+                        f"ACP agent generation completed but {acp_agents_source_path} was not found; skipping merge"
+                    )
+                    failures += 1
+                else:
+                    try:
+                        slim_data = json.loads(
+                            merge_acp_agents_candidate(
+                                json.dumps(slim_data), acp_agents_source_path
+                            )
+                        )
+                        acp_merge_ready = True
+                    except Exception as error:
+                        logger.warning(
+                            f"Failed to merge acpAgents into oh-my-opencode-slim.json: {error}"
+                        )
+                        failures += 1
+            except Exception as error:
+                logger.error(f"Failed to configure ACP agents: {error}")
+                failures += 1
         opencode_candidate, slim_candidate = prepare_config_candidates(
             config,
             slim_data,
@@ -2042,8 +2298,12 @@ def main():
             preserve_dynamic=dynamic_registry is not None,
             selected_preset=args.preset,
         )
+        if acp_merge_ready:
+            base_data = json.loads(slim_candidate)
+            base_data["acpAgents"] = slim_data["acpAgents"]
+            slim_candidate = json.dumps(base_data, indent=2) + "\n"
         tier_candidate = None
-        if "tier" not in skipped and not args.dry_run:
+        if "tier" not in skipped and not args.dry_run and not acp_merge_ready:
             tier_args_list = (
                 build_tier_args(
                     tier=args.preset, no_local_fallbacks=not with_local_ollama
@@ -2090,74 +2350,6 @@ def main():
 
     if args.mode == "project":
         return
-
-    # 2b. Generate and merge acpAgents (ACP-capable agent wrappers)
-    acp_agents_source_path = os.path.join(
-        configs_dir_path, "opencode", "acp-agents.json"
-    )
-    if "acp-agents" in skipped:
-        logger.info("Skipping ACP agent wrappers")
-    elif args.dry_run:
-        logger.info(
-            "[dry-run] Would run configure-acp-agents.py (skipped: child has no --dry-run)"
-        )
-    else:
-        try:
-            acp_args = [
-                sys.executable,
-                os.path.join(SCRIPT_DIR, "configure-acp-agents.py"),
-                "--preset",
-                args.preset,
-            ]
-            acp_result = subprocess.run(
-                acp_args,
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if acp_result.returncode != 0:
-                stderr = (acp_result.stderr or acp_result.stdout or "").strip()
-                logger.error(
-                    f"ACP agent generation failed (exit {acp_result.returncode}); skipping merge"
-                    + (f": {stderr}" if stderr else "")
-                )
-                failures += 1
-            elif not os.path.exists(acp_agents_source_path):
-                logger.error(
-                    f"ACP agent generation completed but {acp_agents_source_path} was not found; skipping merge"
-                )
-                failures += 1
-            else:
-                slim_output_path = os.path.join(
-                    config_dir_path, "oh-my-opencode-slim.json"
-                )
-                try:
-                    with open(slim_output_path, "r", encoding="utf-8") as f:
-                        slim_data = json.load(f)
-                    with open(acp_agents_source_path, "r", encoding="utf-8") as f:
-                        acp_data = json.load(f)
-                    if isinstance(acp_data, dict) and isinstance(
-                        acp_data.get("acpAgents"), dict
-                    ):
-                        slim_data["acpAgents"] = acp_data["acpAgents"]
-                        with open(slim_output_path, "w", encoding="utf-8") as f:
-                            json.dump(slim_data, f, indent=2)
-                            f.write("\n")
-                        logger.info("acpAgents merged into oh-my-opencode-slim.json")
-                    else:
-                        failures += 1
-                        logger.error(
-                            f"ACP agent config at {acp_agents_source_path} did not contain acpAgents; skipping merge"
-                        )
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to merge acpAgents into oh-my-opencode-slim.json: {e}"
-                    )
-                    failures += 1
-        except Exception as e:
-            logger.error(f"Failed to configure ACP agents: {e}")
-            failures += 1
 
     # 3. Set active tier
     if "tier" in skipped:

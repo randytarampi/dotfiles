@@ -54,5 +54,12 @@ def write_text_file(path, content, backup=True):
         os.makedirs(parent_dir, exist_ok=True)
     if backup:
         backup_file(path, enabled=True)
+    if os.path.isfile(path):
+        try:
+            with open(path, "rb") as existing:
+                if existing.read() == content.encode("utf-8"):
+                    return
+        except OSError:
+            pass
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
