@@ -82,17 +82,20 @@ def test_marketplace_activation_in_source_every_preset_only():
     source = json.loads(
         (ROOT / "configs/opencode/oh-my-opencode-slim.json").read_text()
     )
-    expected = [
-        "alvin/debugger@1.0.0",
-        "alvin/documenter@1.0.0",
-        "alvin/validator@1.0.1",
-    ]
+    # Activation must be canonical `author/name`: OMO-Slim rejects a versioned
+    # selector and then invalidates the whole preset it belongs to.
+    expected = ["alvin/debugger", "alvin/documenter", "alvin/validator"]
     assert source["presets"]
     assert all(
         preset["marketplace"]["agents"] == expected
         for preset in source["presets"].values()
     )
     assert all("marketplace" not in tier for tier in source["_tiers"].values())
+    assert all(
+        "@" not in agent
+        for preset in source["presets"].values()
+        for agent in preset["marketplace"]["agents"]
+    )
 
 
 def test_marketplace_reconcile_cache_cli_and_pin_mismatch(
@@ -139,3 +142,17 @@ def test_marketplace_reconcile_uses_bunx_without_cached_cli(tmp_path, monkeypatc
     configure.reconcile_marketplace([], runner=runner)
     configure.reconcile_marketplace(["alvin/new@1.0.0"], runner=runner)
     assert calls[0][:2] == ["bunx", "oh-my-opencode-slim@latest"]
+
+
+def test_versioned_marketplace_activation_is_normalized(caplog):
+    """A versioned selector would invalidate the preset; generation drops it."""
+    slim = {
+        "presets": {
+            "pro": {"marketplace": {"agents": ["alvin/debugger@1.0.0"]}},
+            "plus": {"marketplace": {"agents_add": ["alvin/validator@1.0.1"]}},
+        }
+    }
+    configure.normalize_marketplace_activation(slim)
+    assert slim["presets"]["pro"]["marketplace"]["agents"] == ["alvin/debugger"]
+    assert slim["presets"]["plus"]["marketplace"]["agents_add"] == ["alvin/validator"]
+    assert "dropped version" in caplog.text
