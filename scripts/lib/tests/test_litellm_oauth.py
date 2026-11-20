@@ -169,6 +169,119 @@ def test_unknown_probe_preserves_that_models_previous_id(tmp_path):
     assert json.loads(target.read_text()) == ["gpt-unknown"]
 
 
+def test_mixed_inconclusive_probes_keep_prior_ids_without_masking_entitlement(
+    tmp_path, capsys
+):
+    """A mixed run must not silently revoke a previously verified artifact id."""
+    import stat
+
+    from litellm_config import chatgpt_verified_openai_models
+
+    target = tmp_path / ".local/share/litellm/chatgpt_verified_models.json"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        json.dumps(
+            [
+                "gpt-prior-artifact",
+                "gpt-prior-unknown",
+                "gpt-denied",
+                "gpt-retired",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    calls = []
+
+    def stub(command, **kwargs):
+        code = command[-1]
+        calls.append(code)
+        if "chatgpt/gpt-new" in code:
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        if "chatgpt/gpt-prior-artifact" in code:
+            return SimpleNamespace(returncode=1, stdout="", stderr="Timeout")
+        if "chatgpt/gpt-denied" in code:
+            return SimpleNamespace(
+                returncode=1,
+                stdout="",
+                stderr="model is not supported when using Codex with a ChatGPT account",
+            )
+        return SimpleNamespace(returncode=1, stdout="", stderr="unclassified error")
+
+    verified, ok = OAUTH.verify_chatgpt_openai_models(
+        refs={
+            "openai/gpt-new",
+            "openai/gpt-prior-artifact",
+            "openai/gpt-prior-unknown",
+            "openai/gpt-denied",
+        },
+        verified_path=target,
+        deferred_path=tmp_path / "deferred.json",
+        run=stub,
+        sleep=lambda _: None,
+    )
+    expected = ["gpt-new", "gpt-prior-artifact", "gpt-prior-unknown"]
+    assert ok and verified == expected
+    assert json.loads(target.read_text(encoding="utf-8")) == expected
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+    assert chatgpt_verified_openai_models({"HOME": str(tmp_path)}) == set(expected)
+    assert sum("chatgpt/gpt-prior-artifact" in code for code in calls) == 3
+    assert json.loads((tmp_path / "deferred.json").read_text()) == {
+        "entitlement": ["gpt-denied"],
+        "artifact": ["gpt-prior-artifact"],
+    }
+    summary = capsys.readouterr().out
+    assert "Verified this run: gpt-new" in summary
+    assert (
+        "Preserved from prior verification (not reconfirmed): "
+        "gpt-prior-artifact, gpt-prior-unknown"
+    ) in summary
+    assert "dropped ids: gpt-denied, gpt-retired" in summary
+
+
+def test_artifact_only_preserves_earlier_verification(tmp_path):
+    target = tmp_path / "verified.json"
+    target.write_text('["gpt-temporary-outage"]', encoding="utf-8")
+
+    def stub(command, **kwargs):
+        return SimpleNamespace(returncode=1, stdout="", stderr="RateLimitError")
+
+    verified, ok = OAUTH.verify_chatgpt_openai_models(
+        refs={"openai/gpt-temporary-outage"},
+        verified_path=target,
+        deferred_path=tmp_path / "deferred.json",
+        run=stub,
+        sleep=lambda _: None,
+    )
+    assert ok and verified == ["gpt-temporary-outage"]
+    assert json.loads(target.read_text()) == ["gpt-temporary-outage"]
+    assert json.loads((tmp_path / "deferred.json").read_text()) == {
+        "entitlement": [],
+        "artifact": ["gpt-temporary-outage"],
+    }
+
+
+def test_explicit_entitlement_denial_revokes_existing_verified_id(tmp_path):
+    target = tmp_path / "verified.json"
+    target.write_text('["gpt-revoked"]', encoding="utf-8")
+
+    def stub(command, **kwargs):
+        return SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr="model is not supported when using Codex with a ChatGPT account",
+        )
+
+    verified, ok = OAUTH.verify_chatgpt_openai_models(
+        refs={"openai/gpt-revoked"},
+        verified_path=target,
+        deferred_path=tmp_path / "deferred.json",
+        run=stub,
+        sleep=lambda _: None,
+    )
+    assert ok and verified == []
+    assert json.loads(target.read_text()) == []
+
+
 def test_main_probe_entitlement_continues_to_model_verification(monkeypatch, tmp_path):
     python = tmp_path / "venv/bin/python"
     python.parent.mkdir(parents=True)
