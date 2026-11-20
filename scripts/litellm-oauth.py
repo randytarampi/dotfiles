@@ -103,7 +103,10 @@ def verify_chatgpt_openai_models(
     # user-owned untrusted reports instead of overwriting them.
     for path in (target, deferred_target):
         if path.is_symlink() or (path.exists() and not path.is_file()):
-            print("ERROR: refusing to replace a non-file or symlinked OAuth report.", file=sys.stderr)
+            print(
+                "ERROR: refusing to replace a non-file or symlinked OAuth report.",
+                file=sys.stderr,
+            )
             return [], False
     existing = set()
     if target.exists():

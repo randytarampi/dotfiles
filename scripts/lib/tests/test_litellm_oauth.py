@@ -337,9 +337,7 @@ def test_symlinked_report_is_refused_without_touching_private_files(
     private_file.chmod(0o600)
     verified_path = tmp_path / "verified.json"
     deferred_path = tmp_path / "deferred.json"
-    redirected_path = (
-        verified_path if symlink_target == "verified" else deferred_path
-    )
+    redirected_path = verified_path if symlink_target == "verified" else deferred_path
     redirected_path.symlink_to(private_file)
     original = private_file.read_bytes()
 
