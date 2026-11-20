@@ -156,6 +156,8 @@ def _iter_model_values(value, path=""):
     """Yield every model string, including fallback-array model entries."""
     if isinstance(value, dict):
         for key, child in value.items():
+            if key == "marketplace":
+                continue
             child_path = f"{path}.{key}" if path else key
             if key == "model" and isinstance(child, str):
                 yield child_path, child
@@ -534,6 +536,10 @@ def _profile_violations(presets, council_presets, tiers):
 
     for label, root in (("presets", presets), ("council.presets", council_presets)):
         for tier, tree in root.items():
+            if label == "presets" and isinstance(tree, dict):
+                tree = {
+                    key: value for key, value in tree.items() if key != "marketplace"
+                }
             for path, model in _iter_model_values(tree, f"{label}.{tier}"):
                 if re.search(r"-(?:flex|fast)$", model):
                     violations.append(

@@ -511,6 +511,7 @@ def orchestrate_tier_switch(
     source_presets_data = registry.get("presets", {})
     if tier in source_presets_data:
         source_preset = json.loads(json.dumps(source_presets_data[tier]))
+        source_preset.pop("marketplace", None)
         for role, model in resolved_role_models.items():
             if role in source_preset and isinstance(source_preset[role], dict):
                 if model is None:
@@ -564,7 +565,10 @@ def orchestrate_tier_switch(
                 category = tier_registry.collect_placeholder_categories(value)
                 return fallback_role_models.get(category, value) if category else value
             if isinstance(value, dict):
-                return {key: resolve_value(item) for key, item in value.items()}
+                return {
+                    key: (item if key == "marketplace" else resolve_value(item))
+                    for key, item in value.items()
+                }
             if isinstance(value, list):
                 return [resolve_value(item) for item in value]
             return value

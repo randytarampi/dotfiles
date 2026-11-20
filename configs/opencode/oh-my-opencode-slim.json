@@ -65,6 +65,13 @@
       "council": {
         "model": "ollama-cloud/glm-5.3",
         "variant": "max"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "pro-plus": {
@@ -130,6 +137,13 @@
       "council": {
         "model": "ollama-cloud/glm-5.3",
         "variant": "max"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "pro-plus-anthropic": {
@@ -194,6 +208,13 @@
       "council": {
         "model": "ollama-cloud/glm-5.3",
         "variant": "max"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "anthropic": {
@@ -258,6 +279,13 @@
       "council": {
         "model": "anthropic/claude-opus-5-5",
         "variant": "xhigh"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "plus": {
@@ -323,6 +351,13 @@
       "council": {
         "model": "openai/gpt-6.2-sol",
         "variant": "high"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "plus-anthropic": {
@@ -388,6 +423,13 @@
       "council": {
         "model": "anthropic/claude-opus-5-5",
         "variant": "xhigh"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "local": {
@@ -453,6 +495,13 @@
       "council": {
         "model": "_local:reasoning",
         "variant": "max"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "local-quiet": {
@@ -518,6 +567,13 @@
       "council": {
         "model": "_local:reasoning",
         "variant": "max"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "local-loud": {
@@ -583,6 +639,13 @@
       "council": {
         "model": "_local:reasoning",
         "variant": "max"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "local-solo": {
@@ -648,6 +711,13 @@
       "council": {
         "model": "_local:solo",
         "variant": "max"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "omo-slim-openai": {
@@ -696,6 +766,13 @@
       "council": {
         "model": "openai/gpt-6.2-sol",
         "variant": "high"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "omo-slim-thirty-dollars": {
@@ -742,6 +819,13 @@
       "council": {
         "model": "openai/gpt-6.2-sol",
         "variant": "high"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "omo-slim-opencode-zen-free": {
@@ -795,6 +879,13 @@
       "council": {
         "model": "opencode/big-pickle",
         "variant": "max"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "cohere": {
@@ -821,6 +912,13 @@
       },
       "council": {
         "model": "cohere/command-r-plus-08-2024"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "poolside": {
@@ -847,6 +945,13 @@
       },
       "council": {
         "model": "poolside/laguna-s-2.1"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "free": {
@@ -900,6 +1005,13 @@
       "council": {
         "model": "opencode/big-pickle",
         "variant": "max"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     },
     "omo-slim-forty-dollars": {
@@ -965,6 +1077,13 @@
       "council": {
         "model": "openai/gpt-6.2-sol",
         "variant": "max"
+      },
+      "marketplace": {
+        "agents": [
+          "alvin/debugger@1.0.0",
+          "alvin/documenter@1.0.0",
+          "alvin/validator@1.0.1"
+        ]
       }
     }
   },

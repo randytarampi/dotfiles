@@ -89,6 +89,10 @@ def _cached_catalogue(url, api_key=""):
 def iter_models(value):
     if isinstance(value, dict):
         for key, child in value.items():
+            # Marketplace activation lists carry package IDs (owner/name@version),
+            # not model references; treating them as models invents fake providers.
+            if key == "marketplace":
+                continue
             if key == "model" and isinstance(child, str):
                 yield child
             else:
