@@ -331,51 +331,25 @@ fi
 # ---------------------------------------------------------------------------
 VOICE_SETUP="${DOTFILES_RUN_VOICE_SETUP:-0}"
 if [[ "$VOICE_SETUP" != "1" ]]; then
-  info "DOTFILES_RUN_VOICE_SETUP='${VOICE_SETUP}' — skipping voice deps & models"
-  info "  Set DOTFILES_RUN_VOICE_SETUP=1 to install whisper.cpp, sox, piper-tts, and models"
+  info "DOTFILES_RUN_VOICE_SETUP='${VOICE_SETUP}' — skipping voice binary checks & model downloads"
+  info "  Set DOTFILES_RUN_VOICE_SETUP=1 to verify Brewfile.dev voice binaries and download models"
 else
-  info "Installing voice dependencies..."
+  info "Checking voice dependencies..."
 
   # ── whisper.cpp + sox (STT) ──────────────────────────────────────
-  if command -v brew &>/dev/null; then
-    for pkg in whisper.cpp sox; do
-      if brew list "$pkg" &>/dev/null 2>&1; then
-        ok "$pkg already installed"
-      else
-        if brew install "$pkg" 2>/dev/null; then
-          ok "$pkg installed"
-        else
-          warn "$pkg install failed — install manually: brew install $pkg"
-        fi
-      fi
-    done
-  else
-    warn "brew not found; skipping whisper.cpp/sox install"
-  fi
+  for pkg in whisper-cli sox; do
+    if command -v "$pkg" &>/dev/null; then
+      ok "$pkg is installed"
+    else
+      warn "$pkg is missing — install it from Brewfile.dev"
+    fi
+  done
 
   # ── Piper TTS ─────────────────────────────────────────────────────
-  if command -v uv &>/dev/null; then
-    if uv tool list 2>/dev/null | grep -q "piper-tts"; then
-      ok "piper-tts already installed via uv"
-    else
-      if uv tool install piper-tts 2>/dev/null; then
-        ok "piper-tts installed via uv"
-      else
-        warn "piper-tts install failed — install manually: uv tool install piper-tts"
-      fi
-    fi
-  elif command -v pip &>/dev/null; then
-    if pip show piper-tts &>/dev/null 2>&1; then
-      ok "piper-tts already installed via pip"
-    else
-      if pip install piper-tts 2>/dev/null; then
-        ok "piper-tts installed via pip"
-      else
-        warn "piper-tts install failed — install manually: pip install piper-tts"
-      fi
-    fi
+  if command -v piper &>/dev/null; then
+    ok "piper-tts is installed"
   else
-    warn "Neither uv nor pip found; skipping piper-tts install"
+    warn "piper-tts is missing — install it from Brewfile.dev"
   fi
 
   # ── Download Whisper model ─────────────────────────────────────────

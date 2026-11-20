@@ -126,14 +126,10 @@ def install_opencode_adapters(dry_run=False):
         logger.info("GitHub Copilot CLI already installed")
     elif dry_run:
         logger.info(
-            "[DRY RUN] Would install GitHub Copilot CLI with brew install copilot-cli"
+            "[DRY RUN] GitHub Copilot CLI is missing; Brewfile.dev owns installation"
         )
-    elif _run(["brew", "install", "copilot-cli"], quiet=True):
-        logger.info("GitHub Copilot CLI installed")
     else:
-        logger.warning(
-            "Failed to install GitHub Copilot CLI (public preview — may require manual install)"
-        )
+        logger.warning("GitHub Copilot CLI is missing; install it from Brewfile.dev")
     install_npm_adapter(
         "@agentclientprotocol/claude-agent-acp", CLAUDE_ACP_VERSION, dry_run
     )
