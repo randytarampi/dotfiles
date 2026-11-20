@@ -36,6 +36,13 @@ def _comparison_shape(entry):
         enabled = not bool(disabled)
     elif disabled is not None and bool(enabled) == bool(disabled):
         normalized["disabled"] = disabled
+    # A wildcard tool filter means "all tools" — the same intent as no filter.
+    # Native clients automatically add it after the managed render (Copilot via
+    # Context Mode writes ``tools: ["*"]``), so it must not read as a
+    # user-owned divergence. Restrictive filters are still compared.
+    tools = normalized.get("tools")
+    if isinstance(tools, (list, tuple)) and list(tools) == ["*"]:
+        normalized.pop("tools", None)
     return {
         **normalized,
         "command": command,

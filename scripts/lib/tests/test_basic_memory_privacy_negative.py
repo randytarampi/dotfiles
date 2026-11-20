@@ -126,6 +126,31 @@ def test_identical_memory_registration_is_idempotent():
     assert ensure_basic_memory_ownership(previous, generated, "mcpServers") is None
 
 
+def test_wildcard_tool_filter_is_equivalent_to_no_filter():
+    canonical = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+    record = {
+        "command": canonical["command"],
+        "args": canonical["args"],
+        "env": canonical["env"],
+    }
+    previous = {"mcpServers": {"basic-memory": {**record, "tools": ["*"]}}}
+    generated = {"mcpServers": {"basic-memory": dict(record)}}
+    assert ensure_basic_memory_ownership(previous, generated, "mcpServers") is None
+
+
+def test_restrictive_tool_filter_still_rejects_divergence():
+    canonical = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+    record = {
+        "command": canonical["command"],
+        "args": canonical["args"],
+        "env": canonical["env"],
+    }
+    previous = {"mcpServers": {"basic-memory": {**record, "tools": ["read"]}}}
+    generated = {"mcpServers": {"basic-memory": dict(record)}}
+    with pytest.raises(ValueError, match="refusing to overwrite"):
+        ensure_basic_memory_ownership(previous, generated, "mcpServers")
+
+
 def test_absent_memory_entry_does_not_trigger_collision_validator():
     """A pure guard may inspect an absent name; no gate-off behaviour is inferred."""
     existing = {"mcpServers": {"private-memory": {"command": "keep"}}}
