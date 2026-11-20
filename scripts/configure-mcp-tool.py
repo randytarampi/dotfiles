@@ -478,7 +478,14 @@ def merge_configs_to_file(fmt, mcp_path, output):
                 namespace = "mcp"
             else:
                 namespace = "mcpServers"
-        ensure_basic_memory_ownership(existing_document, generated_document, namespace)
+        ensure_basic_memory_ownership(
+            existing_document,
+            generated_document,
+            namespace,
+            # Copilot is the sole consumer of this format and documents
+            # tools:["*"] as equivalent to the default unrestricted list.
+            copilot_wildcard_tools=(fmt == "json-mcpServers-http"),
+        )
     if not os.path.exists(mcp_path):
         with open(mcp_path, "w", encoding="utf-8") as f:
             f.write(output)
