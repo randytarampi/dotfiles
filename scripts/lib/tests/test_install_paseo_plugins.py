@@ -82,6 +82,8 @@ def test_apply_skips_unsupported_plugin_and_installs_exact_registry_ids(monkeypa
             )
         if argv[1:] == ["plugin", "ls", "--json"]:
             return Mock(stdout="[]", returncode=0)
+        if argv[1:] == ["status", "--json"]:
+            return Mock(stdout='{"daemonVersion": "0.15.0"}', returncode=0)
         return Mock(stdout="", returncode=0)
 
     monkeypatch.setattr(module.subprocess, "run", fake_run)
@@ -103,12 +105,7 @@ def test_apply_skips_unsupported_plugin_and_installs_exact_registry_ids(monkeypa
     assert "asherlc/devices" not in added
     assert "asherlc/cheapskate" not in added
     assert "omercnet/shared-browser" not in added
-    assert [
-        "launchctl",
-        "setenv",
-        "PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE",
-        "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    ] in calls
+    assert not any(call[:2] == ["launchctl", "setenv"] for call in calls)
 
 
 def test_invalid_version_and_unsupported_option_fail_closed(monkeypatch):
@@ -184,11 +181,12 @@ def test_registry_mapping_and_reconciliation():
 
 
 def test_chromium_resolver_platform_candidates():
-    exists = lambda path: path in {
-        "/Applications/Chromium.app/Contents/MacOS/Chromium",
-        r"C:\Users\x\Chromium\Application\chrome.exe",
-        "/usr/bin/chromium",
-    }
+    def exists(path):
+        return path in {
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            r"C:\Users\x\Chromium\Application\chrome.exe",
+            "/usr/bin/chromium",
+        }
     assert module.resolve_chromium("Darwin", exists=exists)[0] == "resolved"
     status, path = module.resolve_chromium(
         "Windows", exists=exists, environ={"LOCALAPPDATA": r"C:\Users\x"}
@@ -264,6 +262,8 @@ def test_one_failed_install_does_not_abort_the_rest(monkeypatch):
             )
         if argv[1:] == ["plugin", "ls", "--json"]:
             return Mock(stdout="[]", returncode=0)
+        if argv[1:] == ["status", "--json"]:
+            return Mock(stdout='{"daemonVersion": "0.16.2"}', returncode=0)
         return Mock(stdout="", returncode=0)
 
     def fake_plugin(paseo, args, *, env=None, run=None):
@@ -303,3 +303,97 @@ def test_daemon_version_not_cli_version_gates_plugin_floors(monkeypatch):
     assert reasons["asherlc/devices"] == "Paseo >=0.16.2 required"
     assert reasons["asherlc/cheapskate"] == "Paseo >=0.16.1 required"
     assert "omercnet/context-mode" in selected
+
+
+def test_apply_refuses_unknown_daemon_version_without_plugin_writes(monkeypatch):
+    monkeypatch.setattr(module.shutil, "which", lambda name: "/bin/" + name)
+    monkeypatch.setenv(module.GATE, "1")
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        if argv[1:] == ["--version"]:
+            return Mock(stdout="0.16.2", returncode=0)
+        if argv[1:] == ["status", "--json"]:
+            return Mock(stdout="", returncode=1)
+        raise AssertionError("must refuse before listing or mutating plugins")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    assert module.main(["--apply"]) == 1
+    assert not any("add" in call or "enable" in call for call in calls)
+
+
+def test_managed_wrapper_inserts_before_actual_daemon_exec(tmp_path):
+    import shlex
+
+    wrapper = tmp_path / "launchd-daemon.sh"
+    chromium = "/Applications/Special ' $(echo leaked)/Chromium"
+    wrapper.write_text(
+        "# do not execute arbitrary exec text\n"
+        'echo "exec is mentioned here"\n'
+        'exec "$HOME/bin/paseo" daemon run\n',
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o700)
+    assert module.managed_wrapper(wrapper, chromium) == "written"
+    lines = wrapper.read_text().splitlines()
+    assert lines[0] == "# do not execute arbitrary exec text"
+    assert lines[1] == 'echo "exec is mentioned here"'
+    assert lines[2] == module.START
+    assert lines[3] == (
+        "export PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE="
+        + shlex.quote(chromium)
+    )
+    assert lines[-1] == 'exec "$HOME/bin/paseo" daemon run'
+    assert wrapper.stat().st_mode & 0o777 == 0o700
+    assert (tmp_path / "launchd-daemon.sh.bak").read_text().startswith(
+        "# do not execute arbitrary exec text"
+    )
+    before = wrapper.stat().st_mtime_ns
+    assert module.managed_wrapper(wrapper, chromium) == "written"
+    assert wrapper.stat().st_mtime_ns == before
+
+
+def test_managed_wrapper_never_overwrites_symlink_or_conflicting_backup(tmp_path):
+    original = tmp_path / "private.sh"
+    original.write_text('exec "$HOME/bin/paseo" daemon run\n', encoding="utf-8")
+    link = tmp_path / "launchd-daemon.sh"
+    link.symlink_to(original)
+    assert module.managed_wrapper(link, "/bin/chromium") == "unsafe-wrapper"
+    assert original.read_text() == 'exec "$HOME/bin/paseo" daemon run\n'
+    link.unlink()
+    link.write_text('exec "$HOME/bin/paseo" daemon run\n', encoding="utf-8")
+    backup = tmp_path / "launchd-daemon.sh.bak"
+    backup.write_text("owner-backup", encoding="utf-8")
+    assert module.managed_wrapper(link, "/bin/chromium") == "backup-conflict"
+    assert backup.read_text() == "owner-backup"
+    assert link.read_text() == 'exec "$HOME/bin/paseo" daemon run\n'
+
+
+def test_plugin_runtime_id_must_not_be_cli_option(monkeypatch):
+    monkeypatch.setattr(module.shutil, "which", lambda name: "/bin/" + name)
+    monkeypatch.setenv(module.GATE, "1")
+
+    def fake_run(argv, **kwargs):
+        if argv[1:] == ["--version"]:
+            return Mock(stdout="0.16.2", returncode=0)
+        if argv[1:] == ["status", "--json"]:
+            return Mock(stdout='{"daemonVersion":"0.16.2"}', returncode=0)
+        if argv[1:] == ["plugin", "ls", "--json"]:
+            return Mock(stdout='[{"id":"--help"}]', returncode=0)
+        raise AssertionError("unsafe runtime id should stop before mutation")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    assert module.main(["--apply", "--prune"]) == 1
+
+
+def test_plugin_timeout_is_reported_without_aborting_other_attempts():
+    import subprocess
+
+    def timeout(argv, **kwargs):
+        raise subprocess.TimeoutExpired(argv, 1, output="private-token")
+
+    import pytest
+
+    with pytest.raises(ValueError, match="output redacted"):
+        module.run_plugin("/bin/paseo", ["add", "some/plugin"], run=timeout)

@@ -1,6 +1,5 @@
 import importlib.util
 import subprocess
-import sys
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[2] / "verify-config.py"

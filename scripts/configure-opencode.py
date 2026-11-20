@@ -2288,7 +2288,7 @@ def main():
             )
         else:
             try:
-                acp_result = subprocess.run(
+                acp_result = subprocess.run(  # nosec B603 - fixed repo script via Python, no shell
                     [
                         sys.executable,
                         os.path.join(SCRIPT_DIR, "configure-acp-agents.py"),
