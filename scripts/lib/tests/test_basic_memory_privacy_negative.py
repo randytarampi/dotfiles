@@ -217,9 +217,7 @@ def test_copilot_writer_rejects_other_tool_filters(tmp_path, filter_value):
         "args": canonical["args"],
         "env": canonical["env"],
     }
-    previous = {
-        "mcpServers": {"basic-memory": {**managed, "tools": filter_value}}
-    }
+    previous = {"mcpServers": {"basic-memory": {**managed, "tools": filter_value}}}
     generated = {"mcpServers": {"basic-memory": managed}}
     path = tmp_path / "copilot.json"
     path.write_text(json.dumps(previous), encoding="utf-8")
