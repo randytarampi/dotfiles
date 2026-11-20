@@ -345,8 +345,8 @@ caddy-reload: ## Hot-reload Caddy config
 	bin="$$prefix/bin/caddy"; config="$$prefix/etc/caddy/Caddyfile"; \
 	if [ ! -x "$$bin" ]; then svc_failed "caddy is not installed at $$bin"; exit 1; fi; \
 	if [ ! -f "$$config" ]; then svc_failed "no managed Caddyfile at $$config"; exit 1; fi; \
-	if sudo "$$bin" reload --force --config "$$config" 2>&1; then svc_applied "Caddy reloaded"; \
-	else svc_failed "Caddy reload failed (privilege or configuration error)"; exit 1; fi
+	if "$$bin" reload --force --config "$$config" 2>&1; then svc_applied "Caddy reloaded"; \
+	else svc_failed "Caddy reload failed (loopback admin API unreachable or configuration invalid; use sudo $${bin} reload --force --config $${config} manually only if the endpoint is protected)"; exit 1; fi
 
 caddy-restart: ## Restart Caddy service (system-level)
 	@. scripts/lib/service_result.sh; \

@@ -134,7 +134,7 @@ info "Installing certificate files..."
 mkdir -p "$CADDY_CERT_DIR"
 # reloadcmd must tolerate Caddy not being installed/running yet (script 23 runs before script 24).
 # On first run the Caddyfile won't exist; on renewals it will and Caddy should be running.
-RELOAD_CMD="rm -f '${HOME}/Library/Application Support/Caddy/autosave.json' 2>/dev/null || true; if [ -f '${CADDYFILE_PATH}' ] && command -v caddy >/dev/null 2>&1; then sudo caddy reload --force --config '${CADDYFILE_PATH}' || echo 'caddy reload failed (will succeed once Caddy is running)'; else echo 'Caddy not yet installed — reload skipped'; fi"
+RELOAD_CMD="rm -f '${HOME}/Library/Application Support/Caddy/autosave.json' 2>/dev/null || true; if [ -f '${CADDYFILE_PATH}' ] && command -v caddy >/dev/null 2>&1; then caddy reload --force --config '${CADDYFILE_PATH}' || echo 'caddy reload failed (will succeed once Caddy is running)'; else echo 'Caddy not yet installed — reload skipped'; fi"
 "$ACME_BIN" --install-cert -d "${PRIMARY_DOMAIN}" \
   --fullchain-file "${CADDY_CERT_DIR}/fullchain.pem" \
   --key-file "${CADDY_CERT_DIR}/key.pem" \
