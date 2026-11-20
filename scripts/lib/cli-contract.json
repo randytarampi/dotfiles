@@ -251,7 +251,8 @@
         "--help",
         "--dry-run",
         "--apply",
-        "--codexbar-daemon-verified"
+        "--codexbar-daemon-verified",
+        "--prune"
       ],
       "positional_operand": null,
       "child_scripts": []
