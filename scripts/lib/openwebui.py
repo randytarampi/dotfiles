@@ -315,7 +315,7 @@ def ownership_catalogue(proxy_mode=None):
     return catalogue
 
 
-def compute_desired_state(probe_routes=False, allow_auto_probe=False, read_only=False):
+def compute_desired_state(probe_routes=False, read_only=False):
     """Build desired entries; inactive/keyless providers remain ownership-known.
 
     ``read_only`` marks the diagnostic (--check/--dry-run) context: gateway
@@ -435,7 +435,6 @@ def compute_desired_state(probe_routes=False, allow_auto_probe=False, read_only=
     audio_selection = {}
     audio = _desired_audio_settings(
         probe_routes=probe_routes,
-        allow_auto_probe=allow_auto_probe,
         selection_records=audio_selection,
     )
     explicitly_disabled = (
@@ -478,7 +477,6 @@ def compute_desired_state(probe_routes=False, allow_auto_probe=False, read_only=
     embedding_selection = {}
     embedding = _desired_embedding_settings(
         probe_routes=probe_routes,
-        allow_auto_probe=allow_auto_probe,
         selection_records=embedding_selection,
     )
     if embedding is not None:
@@ -612,16 +610,13 @@ def _qualify_candidates(
     probe,
     *,
     full_probe=False,
-    probe_on_missing=False,
     key_value=None,
     **probe_options,
 ):
     """Reuse exact route-bound evidence; probe selected stale/missing routes.
 
     ``full_probe`` is the explicit --probe-routes opt-in (probe every
-    candidate). ``probe_on_missing`` is the healthy-apply auto-probe: probe a
-    candidate only when it lacks valid persisted route evidence. With both
-    false (read-only modes), a missing/stale binding keeps the candidate's
+    candidate). With it false, a missing/stale binding keeps the candidate's
     discovered qualification and records that it was not probed in this mode.
     """
     from route_probes import qualification_from_probe
@@ -643,7 +638,7 @@ def _qualify_candidates(
     qualified, reasons = [], {}
     for provider, model, discovered in candidates:
         engine_endpoint = endpoint
-        should_probe = full_probe or probe_on_missing
+        should_probe = full_probe
         build = _route_engine_build(provider, engine_endpoint) if should_probe else None
         resolved_key_value = key_value
         if should_probe and resolved_key_value is None and key_reference:
@@ -654,6 +649,7 @@ def _qualify_candidates(
         # Non-secret credential-generation proof: reuse must survive
         # rotations only when the digest (and everything else in the
         # binding) is byte-identical; the value itself is never stored.
+        prior = previous_by_identity.get((provider, model), {})
         binding = _route_binding(
             provider,
             model,
@@ -665,12 +661,11 @@ def _qualify_candidates(
                 _credential_digest(resolved_key_value) if should_probe else None
             ),
         )
-        prior = previous_by_identity.get((provider, model), {})
         evidence = prior.get("route_evidence")
         if (
             not full_probe
             and _selection_record_fresh(prior)
-            and (build is not None or not should_probe)
+            and build is not None
             and evidence == binding
             and prior.get("qualification")
             in {
@@ -688,7 +683,7 @@ def _qualify_candidates(
                 "recorded_at": prior.get("recorded_at"),
                 "output_dims": prior.get("output_dims"),
             }
-        elif full_probe or probe_on_missing:
+        elif full_probe:
             result = probe(
                 engine_endpoint,
                 model,
@@ -763,9 +758,7 @@ def _served_wire_alias(provider, model, endpoint, key_value):
     return None
 
 
-def _desired_audio_settings(
-    probe_routes=False, allow_auto_probe=False, selection_records=None
-):
+def _desired_audio_settings(probe_routes=False, selection_records=None):
     """Return the owned speech settings, or None when oMLX is unavailable."""
     if "omlx" in _disabled() or "omlx" not in active_engines():
         return None
@@ -781,9 +774,7 @@ def _desired_audio_settings(
     ]
     gateway = constants.get_litellm_proxy_mode()
     gateway_endpoint = _litellm_endpoint() if gateway else None
-    gateway_key = (
-        _litellm_key_value() if gateway and (probe_routes or allow_auto_probe) else None
-    )
+    gateway_key = _litellm_key_value() if gateway and probe_routes else None
     key_reference = LITELLM_OPENWEBUI_KEY_PATH if gateway else endpoint[1]
     if gateway and gateway_key:
         # P1.1 canonical-alias resolution: cross-engine id collisions leave
@@ -818,12 +809,11 @@ def _desired_audio_settings(
         key_reference,
         probe_stt,
         full_probe=probe_routes,
-        probe_on_missing=probe_routes or allow_auto_probe,
         key_value=gateway_key if gateway else None,
     )
     locator_options = (
         {"gateway_route": (gateway_endpoint, key_reference, gateway_key)}
-        if gateway and (probe_routes or allow_auto_probe)
+        if gateway and probe_routes
         else {}
     )
     stt = _audio_locator(
@@ -889,7 +879,6 @@ def _desired_audio_settings(
         key_reference,
         probe_tts,
         full_probe=probe_routes,
-        probe_on_missing=probe_routes or allow_auto_probe,
         key_value=gateway_key if gateway else None,
         voice=os.environ.get("DOTFILES_VOICE_TTS_VOICE", "serena"),
     )
@@ -1093,12 +1082,10 @@ def _persist_embedding_selection(selection):
     _write_embedding_state(state)
 
 
-def _desired_embedding_settings(
-    probe_routes=False, allow_auto_probe=False, selection_records=None
-):
+def _desired_embedding_settings(probe_routes=False, selection_records=None):
     selection_records = selection_records if selection_records is not None else {}
     if constants.get_litellm_proxy_mode():
-        if not (probe_routes or allow_auto_probe):
+        if not probe_routes:
             selection_record = {
                 "operation": "embedding",
                 "provider": None,
@@ -1151,7 +1138,6 @@ def _desired_embedding_settings(
             LITELLM_OPENWEBUI_KEY_PATH,
             probe_embeddings,
             full_probe=probe_routes,
-            probe_on_missing=probe_routes or allow_auto_probe,
             key_value=gateway_key,
         )
         qualification = candidates[0][2]
@@ -1241,7 +1227,6 @@ def _desired_embedding_settings(
         key_reference,
         probe_embeddings,
         full_probe=probe_routes,
-        probe_on_missing=probe_routes or allow_auto_probe,
         key_value=None,
     )
     if selection_records is not None:

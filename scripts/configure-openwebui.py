@@ -800,10 +800,8 @@ def main():
     if not (args.reconcile or args.check):
         args.reconcile = True
     # Effective mode FIRST: diagnostic modes (check/dry-run) never run
-    # inference probes — neither the explicit --probe-routes flag nor the
-    # healthy-apply auto-qualifier. Automatic qualification is enabled only
-    # for apply runs, and desired-state construction (which may probe) happens
-    # only after the apply prerequisites (API key, service health) succeed.
+    # inference probes unless explicitly requested with --probe-routes;
+    # desired-state construction happens only after apply prerequisites.
     read_only = bool(args.check or args.dry_run)
     api_key = os.environ.get(
         "OPENWEBUI_API_KEY", ""
@@ -850,7 +848,6 @@ def main():
         logger.warning("--probe-routes is ignored in check/dry-run modes")
     desired = compute_desired_state(
         probe_routes=bool(getattr(args, "probe_routes", False)) and not read_only,
-        allow_auto_probe=bool(args.reconcile) and not read_only,
         read_only=read_only,
     )
     try:
