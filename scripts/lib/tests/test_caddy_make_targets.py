@@ -157,10 +157,13 @@ PKI_ERROR = (
 )
 
 
-def _run_with_caddy(tmp_path, caddy_body, *, uname="Darwin"):
-    """Run the target with a caddy stub that emits an arbitrary body."""
+def _run_with_caddy(tmp_path, caddy_body, *, uname="Darwin", adapt_rc=0):
+    """Run validate with a fake provisioner and independent adapter result."""
     env = _env(tmp_path, uname=uname, caddy_ok=True)
-    _write_stub(tmp_path / "bin" / "caddy", caddy_body)
+    _write_stub(
+        tmp_path / "bin" / "caddy",
+        f'if [ "$1" = adapt ]; then exit {adapt_rc}; fi\n' + caddy_body,
+    )
     return subprocess.run(
         ["make", "-s", "--no-print-directory", "caddy-validate"],
         cwd=REPO_ROOT,
@@ -218,3 +221,55 @@ def test_missing_caddyfile_message_names_the_real_path(tmp_path):
     assert result.returncode != 0
     assert "onfig" not in result.stderr, "make-expanded $c: path was mangled"
     assert "Caddyfile" in result.stderr
+
+
+def test_pki_match_does_not_mask_invalid_caddyfile(tmp_path):
+    """Even a PKI-looking error cannot override a failed parse/adaptation."""
+    _caddyfile_for(tmp_path)
+    result = _run_with_caddy(
+        tmp_path,
+        f'printf "%s\\n" {PKI_ERROR!r} >&2\nexit 1\n',
+        adapt_rc=1,
+    )
+    assert result.returncode != 0
+    assert "FAILED" in result.stderr
+    assert "UNKNOWN" not in result.stderr
+    assert "loading intermediate cert" in result.stderr
+
+
+def test_validate_preserves_original_caddy_failure_diagnostic(tmp_path):
+    _caddyfile_for(tmp_path)
+    result = _run_with_caddy(
+        tmp_path,
+        'printf "%s\\n" "caddyfile:12: unrecognized directive" >&2\nexit 1\n',
+    )
+    assert result.returncode != 0
+    assert "FAILED" in result.stderr
+    assert "caddyfile:12: unrecognized directive" in result.stderr
+
+
+def test_validate_refuses_failed_brew_prefix_even_with_config_file(tmp_path):
+    _caddyfile_for(tmp_path)
+    env = _env(tmp_path, uname="Darwin", caddy_ok=True)
+    _write_stub(tmp_path / "bin" / "brew", f'echo "{tmp_path}"\nexit 1\n')
+    result = subprocess.run(
+        ["make", "-s", "--no-print-directory", "caddy-validate"],
+        cwd=REPO_ROOT, env=env, capture_output=True, text=True, check=False,
+    )
+    assert result.returncode != 0
+    assert "brew --prefix failed" in result.stderr
+    assert "APPLIED" not in result.stdout
+
+
+def test_reload_refuses_failed_brew_prefix_before_privileged_command(tmp_path):
+    _caddyfile_for(tmp_path)
+    env = _env(tmp_path, uname="Darwin", caddy_ok=True)
+    _write_stub(tmp_path / "bin" / "brew", f'echo "{tmp_path}"\nexit 1\n')
+    _write_stub(tmp_path / "bin" / "sudo", 'printf "%s\\n" "sudo called" >&2\nexit 0\n')
+    result = subprocess.run(
+        ["make", "-s", "--no-print-directory", "caddy-reload"],
+        cwd=REPO_ROOT, env=env, capture_output=True, text=True, check=False,
+    )
+    assert result.returncode != 0
+    assert "brew --prefix failed" in result.stderr
+    assert "sudo called" not in result.stderr
