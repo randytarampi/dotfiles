@@ -281,3 +281,13 @@ def test_reload_refuses_failed_brew_prefix_before_privileged_command(tmp_path):
     assert result.returncode != 0
     assert "brew --prefix failed" in result.stderr
     assert "sudo called" not in result.stderr
+
+
+def test_reload_paths_do_not_require_sudo():
+    """Reload runs against the loopback admin API; only the daemon needs root."""
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    acme = (REPO_ROOT / "scripts/install-acme-cert.sh").read_text(encoding="utf-8")
+    assert 'sudo "$$bin" reload' not in makefile
+    assert "sudo caddy reload" not in acme
+    assert 'if "$$bin" reload --force --config "$$config"' in makefile
+    assert "then caddy reload --force --config '${CADDYFILE_PATH}'" in acme

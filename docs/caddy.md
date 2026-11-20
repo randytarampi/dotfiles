@@ -208,7 +208,7 @@ The migration step decommissions the legacy dedicated-user setup:
 
 The new setup runs as a root LaunchDaemon, but Caddy's `HOME` is set to the real user home so its PKI store remains under the user Library tree.
 
-`make caddy-deploy` restarts the daemon with `sudo launchctl bootout/bootstrap` and `make caddy-reload` uses `sudo` for the reload command. `make caddy-restart` does a full service restart (distinct from `caddy-reload`).
+`make caddy-deploy` restarts the daemon with `sudo launchctl bootout/bootstrap`. `make caddy-reload` reloads through Caddy's loopback admin API as the current user, with no `sudo`, and the certificate renewal hook reloads the same way so an unattended renewal actually takes effect; `sudo` remains necessary only to restart the root LaunchDaemon (`make caddy-restart`), which is distinct from `caddy-reload`.
 
 ### Linux
 
