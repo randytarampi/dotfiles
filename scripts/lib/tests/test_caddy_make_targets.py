@@ -254,7 +254,11 @@ def test_validate_refuses_failed_brew_prefix_even_with_config_file(tmp_path):
     _write_stub(tmp_path / "bin" / "brew", f'echo "{tmp_path}"\nexit 1\n')
     result = subprocess.run(
         ["make", "-s", "--no-print-directory", "caddy-validate"],
-        cwd=REPO_ROOT, env=env, capture_output=True, text=True, check=False,
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert result.returncode != 0
     assert "brew --prefix failed" in result.stderr
@@ -268,7 +272,11 @@ def test_reload_refuses_failed_brew_prefix_before_privileged_command(tmp_path):
     _write_stub(tmp_path / "bin" / "sudo", 'printf "%s\\n" "sudo called" >&2\nexit 0\n')
     result = subprocess.run(
         ["make", "-s", "--no-print-directory", "caddy-reload"],
-        cwd=REPO_ROOT, env=env, capture_output=True, text=True, check=False,
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert result.returncode != 0
     assert "brew --prefix failed" in result.stderr
