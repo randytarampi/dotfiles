@@ -7,7 +7,7 @@ the managed defaults, or keep their existing MCP configuration untouched.
 """
 
 
-def _comparison_shape(entry):
+def _comparison_shape(entry, *, copilot_wildcard_tools=False):
     """Reduce the known MCP entry layouts to their substantive fields.
 
     Handled layouts: template/JSON ``{command, args, env}``, v2-native
@@ -36,12 +36,16 @@ def _comparison_shape(entry):
         enabled = not bool(disabled)
     elif disabled is not None and bool(enabled) == bool(disabled):
         normalized["disabled"] = disabled
-    # A wildcard tool filter means "all tools" — the same intent as no filter.
-    # Native clients automatically add it after the managed render (Copilot via
-    # Context Mode writes ``tools: ["*"]``), so it must not read as a
-    # user-owned divergence. Restrictive filters are still compared.
+    # Only Copilot documents "*" as the same default as omitting "tools".
+    # Context Mode adds this explicit default after our managed render.
+    # Other clients use this shared guard too: never normalize their tool
+    # filters without equivalent consumer-specific evidence.
     tools = normalized.get("tools")
-    if isinstance(tools, (list, tuple)) and list(tools) == ["*"]:
+    if (
+        copilot_wildcard_tools
+        and isinstance(tools, (list, tuple))
+        and list(tools) == ["*"]
+    ):
         normalized.pop("tools", None)
     return {
         **normalized,
@@ -52,7 +56,9 @@ def _comparison_shape(entry):
     }
 
 
-def ensure_basic_memory_ownership(existing, generated, namespace):
+def ensure_basic_memory_ownership(
+    existing, generated, namespace, *, copilot_wildcard_tools=False
+):
     """Reject collisions with a differently configured existing memory server."""
     if not isinstance(existing, dict) or not isinstance(generated, dict):
         raise ValueError("MCP configuration must be an object")
@@ -67,8 +73,12 @@ def ensure_basic_memory_ownership(existing, generated, namespace):
         return
     previous = before.get("basic-memory")
     if previous is not None:
-        before_shape = _comparison_shape(previous)
-        after_shape = _comparison_shape(after.get("basic-memory"))
+        before_shape = _comparison_shape(
+            previous, copilot_wildcard_tools=copilot_wildcard_tools
+        )
+        after_shape = _comparison_shape(
+            after.get("basic-memory"), copilot_wildcard_tools=copilot_wildcard_tools
+        )
         if before_shape != after_shape:
             raise ValueError(
                 "existing basic-memory MCP configuration differs from the managed "
