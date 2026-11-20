@@ -121,9 +121,38 @@ def test_persistent_artifact_is_deferred(tmp_path):
     }
 
 
-def test_unknown_preserves_verified_file(tmp_path):
+def test_unknown_probe_does_not_discard_other_verifications(tmp_path):
+    # Regression: an unclassifiable probe on one model used to return before
+    # writing, discarding every successful verification in the same run. On
+    # 2026-11-20 that discarded freshly verified gpt-6.2-sol/gpt-6.2-astra
+    # because the unrelated gpt-oss artifact probes failed to classify, which
+    # blocked the OpenCode generation that needed the new ids.
     target = tmp_path / "verified.json"
-    target.write_text('["stale"]')
+    target.write_text('["gpt-6.1-sol"]')
+
+    def stub(command, **kwargs):
+        code = command[-1]
+        if "chatgpt/gpt-6.2-sol" in code:
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(returncode=1, stdout="", stderr="unexpected")
+
+    verified, ok = OAUTH.verify_chatgpt_openai_models(
+        refs={"openai/gpt-6.2-sol", "openai/gpt-oss-120b"},
+        verified_path=target,
+        deferred_path=tmp_path / "deferred.json",
+        run=stub,
+        sleep=lambda _: None,
+    )
+    assert ok
+    assert verified == ["gpt-6.2-sol"]
+    assert json.loads(target.read_text()) == ["gpt-6.2-sol"]
+
+
+def test_unknown_probe_preserves_that_models_previous_id(tmp_path):
+    # The unclassifiable model keeps whatever was already recorded for it; only
+    # ids the run actually disproved are dropped.
+    target = tmp_path / "verified.json"
+    target.write_text('["gpt-unknown", "gpt-stale"]')
 
     def stub(command, **kwargs):
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected")
@@ -133,8 +162,11 @@ def test_unknown_preserves_verified_file(tmp_path):
         verified_path=target,
         deferred_path=tmp_path / "deferred.json",
         run=stub,
+        sleep=lambda _: None,
     )
-    assert not ok and verified == [] and target.read_text() == '["stale"]'
+    assert ok
+    assert verified == ["gpt-unknown"]
+    assert json.loads(target.read_text()) == ["gpt-unknown"]
 
 
 def test_main_probe_entitlement_continues_to_model_verification(monkeypatch, tmp_path):
