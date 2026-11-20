@@ -102,7 +102,9 @@ def managed_wrapper(path, chromium, *, backup=True):
     if not path.is_file():
         return "unsafe-wrapper"
     content = path.read_text(encoding="utf-8")
-    daemon_exec = re.search(r"(?m)^[ \t]*exec\s+[^\n]*paseo[^\n]*daemon\s+run\b", content)
+    daemon_exec = re.search(
+        r"(?m)^[ \t]*exec\s+[^\n]*paseo[^\n]*daemon\s+run\b", content
+    )
     if daemon_exec is None:
         return "unrecognized-wrapper"
     block = (
@@ -112,10 +114,29 @@ def managed_wrapper(path, chromium, *, backup=True):
     pattern = re.compile(re.escape(START) + r".*?" + re.escape(END), re.S)
     if content.count(START) != content.count(END) or content.count(START) > 1:
         return "unsafe-wrapper"
-    if pattern.search(content):
+    match = pattern.search(content)
+    if match is not None and match.start() > daemon_exec.start():
+        return "unsafe-wrapper"
+    legacy_block = (
+        f'{START}\nexport PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE="{chromium}"\n{END}'
+    )
+    # Keep a safe block that was already installed by the owner; don't
+    # rewrite it just to alter quote style or collide with its backup.
+    if (
+        match is not None
+        and match.group() == legacy_block
+        and re.fullmatch(r"[/A-Za-z0-9_. +:-]+", chromium)
+    ):
+        return "written"
+    if match is not None:
         updated = pattern.sub(lambda _: block, content, count=1)
     else:
-        updated = content[: daemon_exec.start()] + block + "\n" + content[daemon_exec.start() :]
+        updated = (
+            content[: daemon_exec.start()]
+            + block
+            + "\n"
+            + content[daemon_exec.start() :]
+        )
     if updated == content:
         return "written"
     if backup:
@@ -257,7 +278,9 @@ def run_plugin(paseo, args, *, env=None, run=None):
             env=env,
         )
     except (OSError, subprocess.SubprocessError) as error:
-        raise ValueError("plugin command could not complete; output redacted") from error
+        raise ValueError(
+            "plugin command could not complete; output redacted"
+        ) from error
     if result.returncode:
         raise ValueError(
             f"plugin command failed (exit {result.returncode}; output redacted)"
@@ -395,10 +418,7 @@ def main(argv=None):
                 )
                 if result.returncode:
                     failures.append("shared-browser launchctl setenv")
-                print(
-                    f"Chromium persistence: {mechanism}; "
-                    "daemon restart required"
-                )
+                print(f"Chromium persistence: {mechanism}; " "daemon restart required")
             elif system == "Linux":
                 target = home / ".config/environment.d/90-paseo-shared-browser.conf"
                 if target.is_symlink():
@@ -411,11 +431,13 @@ def main(argv=None):
                     target.chmod(0o600)
                     print(f"Chromium persistence: {target}; daemon restart required")
             elif system == "Windows":
-                result = subprocess.run(  # nosec B603 B607 - fixed user-scope setx, no shell
-                    ["setx", "PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE", chromium],
-                    check=False,
-                    capture_output=True,
-                    text=True,
+                result = (
+                    subprocess.run(  # nosec B603 B607 - fixed user-scope setx, no shell
+                        ["setx", "PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE", chromium],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
                 )
                 if result.returncode:
                     failures.append("shared-browser setx")
