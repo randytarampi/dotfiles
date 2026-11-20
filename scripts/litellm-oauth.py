@@ -138,17 +138,24 @@ def verify_chatgpt_openai_models(
                 unknown.append(model_id)
                 print(f"openai/{model_id}: FAILED — unknown probe failure")
             break
-    if unknown:
-        print(
-            "Unknown probe failures; preserving the existing verified-model file: "
-            + ", ".join(unknown)
-        )
-        return verified, False
-
     try:
         existing = set(json.loads(target.read_text(encoding="utf-8")))
     except (OSError, ValueError, TypeError):
         existing = set()
+    if unknown:
+        # An unclassifiable probe is not evidence of absence. Keep the ids we
+        # already recorded for exactly those models, and still write everything
+        # that verified: discarding the whole run throws away sound evidence and
+        # lets one flaky artifact probe block every consumer indefinitely.
+        preserved = sorted(existing & set(unknown))
+        print(
+            "Unknown probe failures; kept previous ids for: "
+            + (", ".join(preserved) or "none")
+            + " (probes: "
+            + ", ".join(sorted(unknown))
+            + ")"
+        )
+        verified = sorted(set(verified) | set(preserved))
     dropped = sorted(existing - set(verified))
     if dropped:
         print(
