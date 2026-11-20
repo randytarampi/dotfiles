@@ -21,6 +21,10 @@ if LIB_DIR not in sys.path:
 
 import logger
 
+# These globally installed tools are owned by gated reconcilers, not Brewfiles.
+# See docs/context-mode.md for context-mode's upstream ownership contract.
+GATE_OWNED_NPM_PACKAGES = {"context-mode"}
+
 
 @dataclass(frozen=True)
 class CategorySpec:
@@ -577,6 +581,8 @@ def classify_entry(entry: BrewEntry) -> str | None:
         return None
 
     if entry.kind == "npm":
+        if name in GATE_OWNED_NPM_PACKAGES:
+            return None
         return "dev"
 
     return None
@@ -716,6 +722,10 @@ def sync_brewfiles(args: argparse.Namespace) -> int:
     unassigned: list[BrewEntry] = []
     for entry in installed_entries:
         if entry.key in assigned_keys:
+            continue
+
+        if entry.kind == "npm" and entry.name.lower() in GATE_OWNED_NPM_PACKAGES:
+            logger.info("Skipped gate-owned npm package %s", format_entry(entry))
             continue
 
         suggestion = classify_entry(entry)

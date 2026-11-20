@@ -2,6 +2,8 @@
 
 **Source contract (18 November 2026):** Context Mode is installed on its upstream **latest** release channels, behind the default-off `DOTFILES_RUN_CONTEXT_MODE_SETUP=0` gate. Source integration is distinct from real installed-host approval. [Upstream](https://github.com/mksglu/context-mode) currently supports 11 native agent integrations; other applications cannot gain its native tool-output hooks merely by registering a generic MCP server.
 
+Ownership: the gated upstream reconciler owns the `context-mode` npm installation; do not declare it in a Brewfile npm manifest.
+
 ## Architecture
 
 Context Mode intercepts and indexes large tool results before they consume an agent's prompt budget, makes them searchable, and restores session state after native compaction. Each agent retains its host-native tool, hook and skill registration. Context Mode's “sandbox” limits *context output*, **not** executable code's access to user files, environment or network. Local indexed outputs under `~/.context-mode` may contain confidential data.
