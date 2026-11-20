@@ -187,6 +187,7 @@ def test_chromium_resolver_platform_candidates():
             r"C:\Users\x\Chromium\Application\chrome.exe",
             "/usr/bin/chromium",
         }
+
     assert module.resolve_chromium("Darwin", exists=exists)[0] == "resolved"
     status, path = module.resolve_chromium(
         "Windows", exists=exists, environ={"LOCALAPPDATA": r"C:\Users\x"}
