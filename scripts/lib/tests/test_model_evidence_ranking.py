@@ -3,6 +3,8 @@
 import json
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from model_evidence import load_catalogues, load_private_mappings, rank_qualified
 
 
@@ -184,7 +186,6 @@ def test_actual_tier_consumer_calls_opt_in_ranker(monkeypatch):
     assert changed == baseline
     with patch.object(tier_resolve, "get_model_details", side_effect=details):
         with patch("model_evidence.rank_qualified") as ranker:
-            import pytest
             with pytest.raises(ValueError, match="apply disabled"):
                 tier_resolve.resolve_roles_from_list(fleet, evidence_mode="apply")
             ranker.assert_not_called()
