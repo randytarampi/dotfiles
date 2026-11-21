@@ -18,6 +18,8 @@ from model_evidence import _normalize_source, sources_dir
 SOURCE_URL = "https://whatmodel.sh/?format=json&n=2000&thin=1&retired=0"
 MAX_BYTES = 8 * 1024 * 1024
 MAX_ROWS = 2000
+# Upstream JSON defaults to 40 when n is omitted; require more coverage.
+MIN_EXPECTED_ROWS = 41
 LICENCE = "CC BY-SA 4.0"
 SOURCE_ID = "whatmodel"
 SCALE = "whatmodel-g-v1"
@@ -98,8 +100,10 @@ def normalize_response(payload, *, now=None):
     if updated > now:
         raise WhatmodelError("upstream update timestamp is in the future")
     incoming = payload["models"]
-    if not 1 <= len(incoming) <= MAX_ROWS:
-        raise WhatmodelError("empty or oversized leaderboard")
+    if not MIN_EXPECTED_ROWS <= len(incoming) < MAX_ROWS:
+        raise WhatmodelError(
+            "whatmodel response coverage incomplete or reached request cap"
+        )
     if payload.get("coverage") == "no reviewed rankings available":
         raise WhatmodelError("no reviewed scores")
     seen = set()
@@ -120,6 +124,7 @@ def normalize_response(payload, *, now=None):
         "licence": LICENCE,
         "licence_url": "https://creativecommons.org/licenses/by-sa/4.0/",
         "source_url": "https://whatmodel.sh/",
+        "retrieved_rows": len(incoming),
         "models": sorted(rows, key=lambda row: row["id"]),
     }
 
