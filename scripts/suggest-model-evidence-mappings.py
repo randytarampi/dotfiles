@@ -65,6 +65,8 @@ def main():
     args = parser.parse_args()
     if args.apply and not args.accept:
         parser.error("--apply requires one or more --accept approvals")
+    if args.apply and args.models_file:
+        parser.error("--apply requires live installed-model discovery, not a fixture")
     if args.dry_run:
         print("mapping onboarding: dry run; no API requests or file writes")
         return 0

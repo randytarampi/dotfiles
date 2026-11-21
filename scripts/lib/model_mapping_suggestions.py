@@ -29,11 +29,17 @@ class MappingSuggestionError(ValueError):
 def _tokens(label):
     # Model slugs can include provider namespaces and runtime quantization tags.
     name = label.split("/")[-1].lower()
-    parts = re.findall(r"[a-z]+(?:\d+(?:\.\d+)?)?|\d+(?:\.\d+)?[abtm]?", name)
+    name = re.sub(
+        r"(?:^|[-_:])(?:mlx|gguf|ollama|mxfp\d+|nvfp4|bf16|fp16|fp32|"
+        r"q[2-8](?:_[a-z0-9]+)?|\d+bit)(?=$|[-_:])",
+        "-", name,
+    )
     return tuple(
-        part for part in parts
+        part for part in re.findall(
+            r"[a-z]+\d+(?:\.\d+)?[abtm]?|[a-z]+|\d+(?:\.\d+)?[abtm]?",
+            name,
+        )
         if part not in RUNTIME_SUFFIXES
-        and not re.fullmatch(r"(?:[2468]|[345678])bit|q[2-8](?:_k(?:_[a-z])?)?", part)
     )
 
 
@@ -75,6 +81,8 @@ def qualified_local_models(records, details=None):
         ):
             continue
         metadata = details(name, provider) if details else item
+        if not isinstance(metadata, dict):
+            continue
         caps = set(item.get("capabilities") or []) | set(metadata.get("capabilities") or [])
         if not {"completion", "tools"}.issubset(caps):
             continue
@@ -217,6 +225,23 @@ def merge_approved(approved, *, path=None, apply=False):
             raise MappingSuggestionError("refusing symlink map directory")
         if not path.exists():
             os.chmod(path.parent, 0o700)
+        if path.exists():
+            backup = path.with_name(path.name + ".bak")
+            if backup.exists() or backup.is_symlink():
+                raise MappingSuggestionError(
+                    "refusing to overwrite existing private map backup"
+                )
+            descriptor = os.open(backup, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            try:
+                with os.fdopen(descriptor, "wb") as stream:
+                    stream.write(
+                        (json.dumps(original, sort_keys=True, indent=2) + "\n").encode()
+                    )
+                    stream.flush()
+                    os.fsync(stream.fileno())
+            except BaseException:
+                backup.unlink(missing_ok=True)
+                raise
         _write_private(
             path, (json.dumps(result, sort_keys=True, indent=2) + "\n").encode()
         )
