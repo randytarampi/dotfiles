@@ -113,6 +113,7 @@ def test_no_key_and_no_implicit_network():
         fetch_free("")
     assert load_snapshot("/definitely/not/an/aa/cache") is None
 
+
 def test_credential_header_is_not_forwarded_to_another_origin():
     from artificial_analysis import SameOriginRedirectHandler
 
@@ -122,6 +123,10 @@ def test_credential_header_is_not_forwarded_to_another_origin():
     )
     with pytest.raises(urllib.error.URLError, match="cross-origin"):
         SameOriginRedirectHandler().redirect_request(
-            request, None, 302, "Found", {},
+            request,
+            None,
+            302,
+            "Found",
+            {},
             "https://attacker.example/record-key",
         )

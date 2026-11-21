@@ -67,7 +67,10 @@ def baseline_records(content):
     return [
         (commented, line)
         for commented, line in assignment_records(content)
-        if not any(line.lstrip(b"# ").startswith(key + b"=") for key in REMOTE_GATES + OPTIONAL_QUALITY_KEYS)
+        if not any(
+            line.lstrip(b"# ").startswith(key + b"=")
+            for key in REMOTE_GATES + OPTIONAL_QUALITY_KEYS
+        )
     ]
 
 
