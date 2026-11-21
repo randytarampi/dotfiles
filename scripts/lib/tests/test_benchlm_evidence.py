@@ -336,12 +336,30 @@ def test_real_tier_consumer_uses_benchlm_only_with_opt_in_and_complete_cache(
     with patch.object(tier_resolve, "get_model_details", side_effect=details):
         baseline = tier_resolve.resolve_roles_from_list(fleet)
         proposed = tier_resolve.resolve_roles_from_list(fleet, evidence_mode="shadow")
-        preferred = tier_resolve.resolve_roles_from_list(fleet, evidence_mode="apply")
-        (tmp_path / "benchlm-reasoning.json").unlink()
-        recovered = tier_resolve.resolve_roles_from_list(fleet, evidence_mode="apply")
     assert baseline["code-gen"] == "ollama/coder-beta:8b"
     assert proposed == baseline
-    assert preferred["code-gen"] == "ollama/coder-alpha:7b"
+    # The direct ranker remains usable for research; consumer apply is not shipped.
+    eligible = [
+        {
+            "name": name,
+            "provider": "ollama",
+            "capabilities": ["completion", "tools"],
+        }
+        for name in ("coder-beta:8b", "coder-alpha:7b")
+    ]
+    qualified = {"code-gen": eligible}
+    assert (
+        rank_qualified(
+            qualified,
+            catalogues=offline_sources(tmp_path),
+            mappings=mapping["mappings"],
+        )
+        == 1
+    )
+    assert qualified["code-gen"][0]["name"] == "coder-alpha:7b"
+    (tmp_path / "benchlm-reasoning.json").unlink()
+    with patch.object(tier_resolve, "get_model_details", side_effect=details):
+        recovered = tier_resolve.resolve_roles_from_list(fleet)
     assert recovered["code-gen"] == baseline["code-gen"]
 
 

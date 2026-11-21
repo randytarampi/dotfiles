@@ -8,7 +8,7 @@ Use this playbook when adding or changing models, switching tiers, or updating p
 
 Artificial Analysis Free is a **private, offline-first intelligence signal**, not a complete coding/agentic model selector. `scripts/refresh-artificial-analysis.py --refresh` uses a private `ARTIFICIAL_ANALYSIS_API_KEY`, writes a checksum-verified CSV under `~/.cache/dotfiles/artificial-analysis/`, and supports `--offline` with no network. As of 21 November, its Coding and Agentic Index fields are **always null**; do not synthesize them or rank coding/agentic models as if they were provided.
 
-The opt-in `DOTFILES_USE_MODEL_EVIDENCE_RANKING=1` is recognised **only by the OpenCode tier-aware generator**; unscoped local-engine and voice consumers are isolated. Prefer `python3 scripts/configure-opencode-tier.py --preset local --dry-run --model-evidence shadow` for initial comparison. The explicit `--model-evidence off|shadow|apply` takes precedence over `~/.env`, which `load_env()` otherwise loads over exported values. `shadow` compares eligible candidates without changing the resulting roles and reports source coverage, source/metric selected, and missing or stale identity/scale evidence. Use `apply` only after an observed task-based improvement on the actual host. The opt-in resolver reads multiple sources through `scripts/lib/model_evidence.py`, with exact source identities in `~/.config/dotfiles/model-evidence-map.json` (or `DOTFILES_MODEL_EVIDENCE_MAP`). Each `mappings` entry uses the fully qualified local route and a source-specific triple `model_id`, `creator_id`, `scale`. Example, with synthetic identities only: `{"schema_version":1,"mappings":{"omlx/example":{"artificial-analysis":{"model_id":"aa-example","creator_id":"lab","scale":"aa-intelligence-5"}}}}`.
+The legacy `DOTFILES_USE_MODEL_EVIDENCE_RANKING=1` toggle is now **ignored**. No automatic evidence application is shipped; the OpenCode tier-aware generator alone can run an offline, non-mutating shadow comparison. Prefer `python3 scripts/configure-opencode-tier.py --preset local --dry-run --model-evidence shadow` for initial comparison. The explicit `--model-evidence off|shadow` takes precedence over `~/.env`, which `load_env()` otherwise loads over exported values. `shadow` compares eligible candidates without changing the resulting roles and reports source coverage, source/metric selected, and missing or stale identity/scale evidence. There is no public `apply` mode. Consider adding it in a later PR only after observed task-based improvement on the actual host. The opt-in resolver reads multiple sources through `scripts/lib/model_evidence.py`, with exact source identities in `~/.config/dotfiles/model-evidence-map.json` (or `DOTFILES_MODEL_EVIDENCE_MAP`). Each `mappings` entry uses the fully qualified local route and a source-specific triple `model_id`, `creator_id`, `scale`. Example, with synthetic identities only: `{"schema_version":1,"mappings":{"omlx/example":{"artificial-analysis":{"model_id":"aa-example","creator_id":"lab","scale":"aa-intelligence-5"}}}}`.
 
 Other datasets are private JSON files in `~/.cache/dotfiles/model-evidence/sources/<source>.json` with `schema_version=1`, `source`, `metric` (reasoning, coding, agentic, overall or intelligence), `scale`, `observed_at` and a `models` array of exact `id`, `creator_id`, numeric `score`, optional observation count `n` and provenance `evidence`. This prevents comparing incompatible source scales and allows independent data adapters. Unknown models remain in their old slots; quiet keeps memory-first order; benchmark scores never prove local quantization equivalence, tools, provider entitlement or observed host inference.
 
@@ -38,9 +38,40 @@ Mapping example with **synthetic identities** (not an actual benchmark claim): `
 
 **Verification and rollback:** `PYTHONPATH=scripts/lib poetry run python -m pytest scripts/lib/tests/test_benchlm_evidence.py scripts/lib/tests/test_benchlm_workflow.py -q` exercises synthetic invariants; `make verify` is the repository integrated gate. Disable the opt-in ranking or omit the private BenchLM identity mapping to restore size/capabilities fallback. Host acceptance, including real BenchLM response shape, on-device oMLX/Ollama performance and developer entitlement, remains owner-only.
 
+### Mapping onboarding: a controlled local product, not a name-to-score guess
+
+`python3 scripts/suggest-model-evidence-mappings.py` enumerates enabled,
+installed Ollama/oMLX models through the existing engine discovery and local
+metadata adapters. It reads validated private AA and BenchLM caches, lists each
+locally tool-and-completion-qualified model, and suggests up to three upstream
+source IDs using conservative, non-authoritative name matching. Output includes
+the **exact** source ID, model ID, creator ID, score scale, mapping provenance,
+and a quantisation warning. No scores, token values, or licence-restricted row
+exports are printed. If no plausible join exists, the model is explicitly
+reported as unmapped. Discovery errors are failures, never an empty fleet.
+
+To preview a specific *human-verified* identity, use
+`--accept 'omlx/Model-MLX-4bit=benchlm-coding:upstream:model-key'`.
+The preview emits a complete private schema-v1 map in JSON, but **does not write**.
+Only `--apply` writes the private `~/.config/dotfiles/model-evidence-map.json`
+with 0600 permissions, preserving compatible existing entries and creating
+`model-evidence-map.json.bak` before replacing an existing map (refuses to
+overwrite an existing backup). Applying is an **owner-only decision**, never
+part of an unattended job. The review must confirm the original checkpoint,
+revision, parameter count, quantisation and creator independently of the label.
+No automated name suggestion is itself approval. `--models-file` is a local
+fixture/replay mode and cannot be combined with `--apply`.
+
+The shadow audit now reports distinct locally eligible routes and mapped,
+unmapped and scale-mismatched counts **per source**, excluding duplicate
+category slots when testing the two-candidate minimum. Repeated model slots
+are preserved for baseline selection but do not create fictitious independent
+evidence. Default `off` remains unchanged. `apply` is not shipped; a separate future
+change would require measured task improvements.
+
 ### Shadow-first rollout and quota-bounded probes (implementation review)
 
-**Decision:** Keep the quality adapters available for evidence collection, not mandatory model selection. The OpenCode tier generator accepts `--model-evidence off|shadow|apply` (default off, or the explicitly configured legacy opt-in). `shadow` computes proposed category ordering without changing any generated role; it reports source count, mappings, exact comparable matches, missing identities, scale mismatches, selected source/metric and baseline/proposed names. The explicit CLI mode takes precedence over `~/.env`; `scripts/lib/tier_resolve.py` defaults to `off` for voice and local-engine consumers. Do not promote `apply` until one mapped pair improves independently measured tasks against the current curated baseline.
+**Decision:** Keep the quality adapters available for evidence collection only. The OpenCode tier generator accepts `--model-evidence off|shadow` (default off; legacy opt-in ignored). `shadow` computes proposed category ordering without changing any generated role; it reports source count, mappings, exact comparable matches, missing identities, scale mismatches, selected source/metric and baseline/proposed names. The explicit CLI mode takes precedence over `~/.env`; `scripts/lib/tier_resolve.py` defaults to `off` for voice and local-engine consumers. An application path requires a separate PR after one mapped pair improves independently measured tasks against the current curated baseline.
 
 **Safe first API checks:** `python3 scripts/refresh-artificial-analysis.py --probe` validates one Free page without writing a snapshot; `--refresh --max-pages 1` will refuse any larger source after its first request. AA schema v3 restores the required join identity (`slug`, `name`, `creator_name`) alongside `id`, `creator_id` and `intelligence` without storing unused scores. The private reader retains both v1 and v2 compatibility. The API's Free quota is documented as 100 requests per fixed 24-hour period; probe before a multi-page refresh. The authenticated weekly AA Actions canary is now a **single-read** first-page schema probe with no stored snapshot or score output; it remains advisory.
 
