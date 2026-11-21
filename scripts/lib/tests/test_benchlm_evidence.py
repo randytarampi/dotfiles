@@ -275,6 +275,62 @@ def test_invalid_pagination_type_is_bounded_error():
     with pytest.raises(BenchlmError, match="pagination"):
         _parse_page(data, surface="coding", offset=0)
 
+def test_real_tier_consumer_uses_benchlm_only_with_opt_in_and_complete_cache(
+    monkeypatch, tmp_path
+):
+    from unittest.mock import patch
+
+    import model_evidence
+    import tier_resolve
+
+    fleet = [
+        {"name": "coder-alpha:7b", "provider": "ollama", "param_count": 7},
+        {"name": "coder-beta:8b", "provider": "ollama", "param_count": 8},
+    ]
+
+    def details(name, provider="ollama"):
+        return {
+            "param_count": 7 if "alpha" in name else 8,
+            "capabilities": ["completion", "thinking", "tools"],
+            "is_moe": False,
+        }
+
+    store_snapshots(fetch_snapshots("placeholder", opener=StubOpener()), tmp_path)
+    mapping = {
+        "schema_version": 1,
+        "mappings": {
+            "ollama/coder-alpha:7b": {
+                "benchlm-coding": {
+                    "model_id": "provider:high",
+                    "creator_id": "provider",
+                    "scale": "benchalign-6.0-coding",
+                }
+            },
+            "ollama/coder-beta:8b": {
+                "benchlm-coding": {
+                    "model_id": "provider:low",
+                    "creator_id": "provider",
+                    "scale": "benchalign-6.0-coding",
+                }
+            },
+        },
+    }
+    mapping_file = tmp_path / "private-map.json"
+    mapping_file.write_text(json.dumps(mapping), encoding="utf-8")
+    monkeypatch.setattr(model_evidence, "sources_dir", lambda: tmp_path)
+    monkeypatch.setattr(model_evidence, "load_snapshot", lambda **kw: None)
+    monkeypatch.setenv("DOTFILES_MODEL_EVIDENCE_MAP", str(mapping_file))
+    monkeypatch.delenv("DOTFILES_USE_MODEL_EVIDENCE_RANKING", raising=False)
+    with patch.object(tier_resolve, "get_model_details", side_effect=details):
+        baseline = tier_resolve.resolve_roles_from_list(fleet)
+        monkeypatch.setenv("DOTFILES_USE_MODEL_EVIDENCE_RANKING", "1")
+        preferred = tier_resolve.resolve_roles_from_list(fleet)
+        (tmp_path / "benchlm-reasoning.json").unlink()
+        recovered = tier_resolve.resolve_roles_from_list(fleet)
+    assert baseline["code-gen"] == "ollama/coder-beta:8b"
+    assert preferred["code-gen"] == "ollama/coder-alpha:7b"
+    assert recovered["code-gen"] == baseline["code-gen"]
+
 def test_no_network_when_cache_read(monkeypatch, tmp_path):
     store_snapshots(fetch_snapshots("placeholder", opener=StubOpener()), tmp_path)
     monkeypatch.setattr(
