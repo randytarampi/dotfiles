@@ -37,6 +37,15 @@ def assignment_records(content):
     return records
 
 
+# New quality-input keys intentionally stay outside the frozen historical
+# assignment list, and receive separate default-off/secret-empty checks.
+OPTIONAL_QUALITY_KEYS = (
+    b"ARTIFICIAL_ANALYSIS_API_KEY",
+    b"DOTFILES_USE_ARTIFICIAL_ANALYSIS_RANKING",
+    b"DOTFILES_ARTIFICIAL_ANALYSIS_MODEL_MAP",
+    b"DOTFILES_USE_MODEL_EVIDENCE_RANKING",
+)
+
 REMOTE_GATES = (
     b"DOTFILES_RUN_TAILSCALE_ACCESS_SETUP",
     b"DOTFILES_RUN_PASEO_SETUP",
@@ -58,7 +67,7 @@ def baseline_records(content):
     return [
         (commented, line)
         for commented, line in assignment_records(content)
-        if not any(line.lstrip(b"# ").startswith(key + b"=") for key in REMOTE_GATES)
+        if not any(line.lstrip(b"# ").startswith(key + b"=") for key in REMOTE_GATES + OPTIONAL_QUALITY_KEYS)
     ]
 
 
@@ -67,6 +76,24 @@ class EnvTemplateSemanticsTests(unittest.TestCase):
         records = baseline_records(TEMPLATE.read_bytes())
         digest = hashlib.sha256(b"\n".join(line for _, line in records)).hexdigest()
         self.assertEqual(digest, BASELINE_ASSIGNMENTS_SHA256)
+
+    def test_optional_quality_keys_remain_comment_only_and_default_off(self):
+        expected = {
+            b"ARTIFICIAL_ANALYSIS_API_KEY": b"# ARTIFICIAL_ANALYSIS_API_KEY=''",
+            b"DOTFILES_USE_ARTIFICIAL_ANALYSIS_RANKING": b"# DOTFILES_USE_ARTIFICIAL_ANALYSIS_RANKING='0'",
+            b"DOTFILES_ARTIFICIAL_ANALYSIS_MODEL_MAP": b"# DOTFILES_ARTIFICIAL_ANALYSIS_MODEL_MAP=''",
+            b"DOTFILES_USE_MODEL_EVIDENCE_RANKING": b"# DOTFILES_USE_MODEL_EVIDENCE_RANKING='0'",
+        }
+        assignments = [line for _, line in assignment_records(TEMPLATE.read_bytes())]
+        for key, prefix in expected.items():
+            matching = [
+                line
+                for line in assignments
+                if line.lstrip(b"# ").startswith(key + b"=")
+            ]
+            self.assertLessEqual(len(matching), 1, key.decode())
+            if matching:
+                self.assertTrue(matching[0].startswith(prefix), key.decode())
 
     def test_baseline_detects_status_default_and_order_changes(self):
         original = TEMPLATE.read_bytes()

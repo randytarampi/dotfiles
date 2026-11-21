@@ -23,6 +23,7 @@ from pathlib import Path
 ENDPOINT = "https://artificialanalysis.ai/api/v2/language/models/free"
 SCHEMA_VERSION = 1
 MAX_PAGES = 20
+MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 COLUMNS = (
     "id",
     "slug",
@@ -144,16 +145,35 @@ def normalize_pages(pages):
     return output.getvalue().encode("utf-8"), str(version), len(rows)
 
 
+class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Never forward a private x-api-key header to another origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        old = urllib.parse.urlsplit(req.full_url)
+        new = urllib.parse.urlsplit(newurl)
+        if (old.scheme.lower(), old.netloc.lower()) != (
+            new.scheme.lower(),
+            new.netloc.lower(),
+        ):
+            raise urllib.error.URLError("cross-origin redirect rejected")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def _request_page(page, api_key):
     url = ENDPOINT + "?" + urllib.parse.urlencode({"page": page})
     request = urllib.request.Request(
         url, headers={"x-api-key": api_key, "Accept": "application/json"}
     )
     try:
-        with urllib.request.urlopen(request, timeout=15) as response:
+        with urllib.request.build_opener(SameOriginRedirectHandler()).open(
+            request, timeout=15
+        ) as response:
             if response.status != 200:
                 raise EvidenceError("Artificial Analysis returned non-200")
-            return json.load(response)
+            payload = response.read(MAX_RESPONSE_BYTES + 1)
+            if len(payload) > MAX_RESPONSE_BYTES:
+                raise EvidenceError("Artificial Analysis response too large")
+            return json.loads(payload)
     except urllib.error.HTTPError as exc:
         # Never echo request headers, URL query strings, credentials, or body.
         raise EvidenceError(

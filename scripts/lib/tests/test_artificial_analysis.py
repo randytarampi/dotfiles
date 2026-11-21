@@ -2,6 +2,9 @@
 
 from datetime import datetime, timedelta, timezone
 
+import urllib.error
+import urllib.request
+
 import pytest
 
 from artificial_analysis import (
@@ -109,3 +112,16 @@ def test_no_key_and_no_implicit_network():
     with pytest.raises(EvidenceError, match="missing"):
         fetch_free("")
     assert load_snapshot("/definitely/not/an/aa/cache") is None
+
+def test_credential_header_is_not_forwarded_to_another_origin():
+    from artificial_analysis import SameOriginRedirectHandler
+
+    request = urllib.request.Request(
+        "https://artificialanalysis.ai/api/v2/language/models/free",
+        headers={"x-api-key": "not-a-real-secret"},
+    )
+    with pytest.raises(urllib.error.URLError, match="cross-origin"):
+        SameOriginRedirectHandler().redirect_request(
+            request, None, 302, "Found", {},
+            "https://attacker.example/record-key",
+        )
