@@ -247,6 +247,7 @@ def rank_qualified(
                 "comparable": 0,
                 "scale_mismatches": 0,
                 "missing_identifiers": 0,
+                "selected": {},
             }
         )
     if profile == "quiet":
@@ -298,9 +299,15 @@ def rank_qualified(
                 if len(comparable) >= 2:
                     possibilities.append((source["source"], comparable))
             if possibilities:
-                selection = sorted(
+                chosen_source, selection = sorted(
                     possibilities, key=lambda item: (-len(item[1]), item[0])
-                )[0][1]
+                )[0]
+                if audit is not None:
+                    audit["selected"][category] = {
+                        "source": chosen_source,
+                        "metric": metric,
+                        "candidates": len(selection),
+                    }
                 break
         if selection is None:
             continue

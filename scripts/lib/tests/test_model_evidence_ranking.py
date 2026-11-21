@@ -226,3 +226,16 @@ def test_shadow_audit_explains_stale_scale_and_keeps_original_order():
     assert audit["scale_mismatches"] >= 1
     assert audit["comparable"] == 1
     assert models[0]["name"] == "slow"
+
+
+def test_audit_names_exact_source_when_two_candidates_are_comparable():
+    source, mappings = fixture()
+    models = [candidate("slow"), candidate("fast")]
+    audit = {}
+    assert rank_qualified(
+        {"code-gen": models}, catalogues=[source],
+        mappings=mappings, audit=audit,
+    ) == 1
+    assert audit["selected"]["code-gen"] == {
+        "source": "whatmodel", "metric": "overall", "candidates": 2,
+    }
