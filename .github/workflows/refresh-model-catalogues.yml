@@ -118,6 +118,41 @@ jobs:
           path: artifacts/model-catalogues/free-model-candidates.json
           if-no-files-found: error
 
+      # Separate private API probe; never copy licensed rows into the public
+      # candidate artifact or grant its token to the Woofbot publisher.
+      - name: Probe Artificial Analysis Free API evidence (advisory)
+        id: aa_probe
+        continue-on-error: true
+        env:
+          ARTIFICIAL_ANALYSIS_API_KEY: ${{ secrets.ARTIFICIAL_ANALYSIS_API_KEY }}
+          AA_PRIVATE_CACHE: ${{ runner.temp }}/artificial-analysis-private
+        run: |
+          set -euo pipefail
+          if [[ -z "${ARTIFICIAL_ANALYSIS_API_KEY}" ]]; then
+            echo "status=skipped_no_key" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          # Runner-local cache only; no scores, model IDs, or snapshots are
+          # emitted to logs, commits, public artifacts or PR descriptions.
+          python3 scripts/refresh-artificial-analysis.py --refresh --cache-dir "${AA_PRIVATE_CACHE}"
+          python3 scripts/refresh-artificial-analysis.py --offline --cache-dir "${AA_PRIVATE_CACHE}"
+          echo "status=validated_private" >> "${GITHUB_OUTPUT}"
+
+      - name: Summarize optional Artificial Analysis probe
+        if: always()
+        env:
+          PROBE_OUTCOME: ${{ steps.aa_probe.outcome }}
+          PROBE_STATUS: ${{ steps.aa_probe.outputs.status }}
+        run: |
+          set -euo pipefail
+          if [[ "${PROBE_STATUS}" == "validated_private" && "${PROBE_OUTCOME}" == "success" ]]; then
+            echo "Artificial Analysis Free: private snapshot validated (advisory)." >> "${GITHUB_STEP_SUMMARY}"
+          elif [[ "${PROBE_STATUS}" == "skipped_no_key" ]]; then
+            echo "Artificial Analysis Free: skipped (secret not configured)." >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "Artificial Analysis Free: unavailable/degraded; catalogue publication is independent." >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
   publish:
     needs: refresh
     if: needs.refresh.result == 'success' && needs.refresh.outputs.status == 'available'
