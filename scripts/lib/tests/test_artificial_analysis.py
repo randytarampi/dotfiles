@@ -20,7 +20,15 @@ from artificial_analysis import (
 )
 
 
-def page(number=1, total=1, *, model_id="synthetic-a", coding=25, intelligence=10, version=4.1):
+def page(
+    number=1,
+    total=1,
+    *,
+    model_id="synthetic-a",
+    coding=25,
+    intelligence=10,
+    version=4.1,
+):
     return {
         "tier": "free",
         "intelligence_index_version": version,

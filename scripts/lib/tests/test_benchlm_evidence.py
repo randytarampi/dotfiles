@@ -148,7 +148,9 @@ def test_rate_limit_and_wrong_key_preserve_last_good(tmp_path):
         name.name: name.read_bytes() for name in tmp_path.glob("benchlm-*.json")
     }
     with pytest.raises(BenchlmError):
-        fetch_snapshots("placeholder", opener=StubOpener(invalid="agentic"), request_interval=0)
+        fetch_snapshots(
+            "placeholder", opener=StubOpener(invalid="agentic"), request_interval=0
+        )
     assert original == {
         name.name: name.read_bytes() for name in tmp_path.glob("benchlm-*.json")
     }
@@ -298,7 +300,10 @@ def test_real_tier_consumer_uses_benchlm_only_with_opt_in_and_complete_cache(
             "is_moe": False,
         }
 
-    store_snapshots(fetch_snapshots("placeholder", opener=StubOpener(), request_interval=0), tmp_path)
+    store_snapshots(
+        fetch_snapshots("placeholder", opener=StubOpener(), request_interval=0),
+        tmp_path,
+    )
     mapping = {
         "schema_version": 1,
         "mappings": {
@@ -337,7 +342,10 @@ def test_real_tier_consumer_uses_benchlm_only_with_opt_in_and_complete_cache(
 
 
 def test_no_network_when_cache_read(monkeypatch, tmp_path):
-    store_snapshots(fetch_snapshots("placeholder", opener=StubOpener(), request_interval=0), tmp_path)
+    store_snapshots(
+        fetch_snapshots("placeholder", opener=StubOpener(), request_interval=0),
+        tmp_path,
+    )
     monkeypatch.setattr(
         "urllib.request.build_opener",
         lambda *a: (_ for _ in ()).throw(AssertionError("network prohibited")),
@@ -357,8 +365,11 @@ def test_rate_limit_is_visible_without_response_or_credentials():
     class LimitedOpener:
         def open(self, request, timeout):
             raise HTTPError(
-                request.full_url, 429, "rate limited",
-                {"Retry-After": "45"}, None,
+                request.full_url,
+                429,
+                "rate limited",
+                {"Retry-After": "45"},
+                None,
             )
 
     with pytest.raises(BenchlmError, match="HTTP 429.*45 seconds") as error:
@@ -385,7 +396,9 @@ def test_refresh_request_budget_stops_before_extra_pages():
     upstream = PagedOpener()
     with pytest.raises(BenchlmError, match="budget exceeded"):
         fetch_snapshots(
-            "placeholder", opener=upstream, max_requests=4,
+            "placeholder",
+            opener=upstream,
+            max_requests=4,
             request_interval=0,
         )
     assert len(upstream.calls) == 4
@@ -401,8 +414,11 @@ def test_pacing_is_enforced_between_requests_without_real_sleep():
         now[0] += seconds
 
     fetch_snapshots(
-        "placeholder", opener=upstream, request_interval=2.1,
-        clock=lambda: now[0], sleeper=sleep,
+        "placeholder",
+        opener=upstream,
+        request_interval=2.1,
+        clock=lambda: now[0],
+        sleeper=sleep,
     )
     assert len(upstream.calls) == 4
     assert len(delays) == 3
@@ -412,7 +428,9 @@ def test_pacing_is_enforced_between_requests_without_real_sleep():
 def test_request_budget_prevents_unbounded_pagination():
     upstream = StubOpener()
     fetch_snapshots(
-        "placeholder", opener=upstream, max_requests=4,
+        "placeholder",
+        opener=upstream,
+        max_requests=4,
         request_interval=0,
     )
     assert len(upstream.calls) == 4

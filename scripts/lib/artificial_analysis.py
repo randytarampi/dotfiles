@@ -27,8 +27,14 @@ MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 COLUMNS = ("id", "creator_id", "intelligence")
 # Reader-only compatibility: never make pre-migration private caches unusable.
 LEGACY_COLUMNS = (
-    "id", "slug", "name", "creator_id", "creator_name",
-    "intelligence", "coding", "agentic",
+    "id",
+    "slug",
+    "name",
+    "creator_id",
+    "creator_name",
+    "intelligence",
+    "coding",
+    "agentic",
 )
 
 
@@ -315,7 +321,11 @@ def load_snapshot(directory=None, *, max_age_days=30, now=None):
             if not row["id"] or row["id"] in ids:
                 return None
             ids.add(row["id"])
-            for metric in (("intelligence", "coding", "agentic") if schema == 1 else ("intelligence",)):
+            for metric in (
+                ("intelligence", "coding", "agentic")
+                if schema == 1
+                else ("intelligence",)
+            ):
                 if row[metric]:
                     _numeric(float(row[metric]))
         return {"manifest": manifest, "models": rows, "source": "aa_cache"}

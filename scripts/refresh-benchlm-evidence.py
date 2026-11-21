@@ -31,15 +31,20 @@ def main():
     )
     actions.add_argument("--probe", action="store_true", help="One-page schema test")
     parser.add_argument(
-        "--surface", choices=("reasoning", "coding", "agentic", "overall"),
+        "--surface",
+        choices=("reasoning", "coding", "agentic", "overall"),
         help="Select surface for --probe (defaults to coding)",
     )
     parser.add_argument(
-        "--max-requests", type=int, default=12,
+        "--max-requests",
+        type=int,
+        default=12,
         help="Hard total HTTP request budget for full refresh (default 12)",
     )
     parser.add_argument(
-        "--max-pages", type=int, default=20,
+        "--max-pages",
+        type=int,
+        default=20,
         help="Hard per-surface page cap for full refresh (default 20)",
     )
     parser.add_argument("--cache-dir", type=Path, default=sources_dir())
@@ -54,7 +59,8 @@ def main():
             result = probe_surface(surface=args.surface or "coding")
             print(
                 "BenchLM Free: first-page schema valid for "
-                + result["surface"] + "; no cache written"
+                + result["surface"]
+                + "; no cache written"
             )
             return 0
         if args.refresh:

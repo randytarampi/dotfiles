@@ -27,8 +27,15 @@ def main():
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--refresh", action="store_true", help="Fetch Free API evidence")
     group.add_argument("--offline", action="store_true", help="Inspect saved evidence")
-    group.add_argument("--probe", action="store_true", help="Validate one Free API page")
-    parser.add_argument("--max-pages", type=int, default=MAX_PAGES, help="Maximum pages during --refresh")
+    group.add_argument(
+        "--probe", action="store_true", help="Validate one Free API page"
+    )
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=MAX_PAGES,
+        help="Maximum pages during --refresh",
+    )
     parser.add_argument("--cache-dir", type=Path, default=cache_dir())
     args = parser.parse_args()
     if args.max_pages != MAX_PAGES and not args.refresh:
@@ -40,7 +47,9 @@ def main():
         try:
             probe_free(os.environ.get("ARTIFICIAL_ANALYSIS_API_KEY", ""))
         except (EvidenceError, OSError):
-            print("Artificial Analysis: first-page schema probe failed", file=sys.stderr)
+            print(
+                "Artificial Analysis: first-page schema probe failed", file=sys.stderr
+            )
             return 1
         print("Artificial Analysis: first-page schema verified; no cache written")
         return 0

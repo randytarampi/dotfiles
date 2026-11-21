@@ -122,7 +122,10 @@ def test_exact_requested_cap_is_ambiguous_and_rejected():
     payload = envelope()
     seed = payload["models"][-1]
     payload["models"].extend(
-        [{**seed, "id": "extra-" + str(i)} for i in range(2000 - len(payload["models"]))]
+        [
+            {**seed, "id": "extra-" + str(i)}
+            for i in range(2000 - len(payload["models"]))
+        ]
     )
     with pytest.raises(WhatmodelError, match="request cap"):
         normalize_response(payload)

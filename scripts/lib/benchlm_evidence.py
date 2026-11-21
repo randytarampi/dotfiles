@@ -171,9 +171,13 @@ def _read_page(surface, offset, key, *, opener):
                 if isinstance(retry, str) and retry.isdecimal() and len(retry) <= 5
                 else " Check the account's Retry-After response."
             )
-            raise BenchlmError("BenchLM Free rate limited (HTTP 429)." + retry_text) from None
+            raise BenchlmError(
+                "BenchLM Free rate limited (HTTP 429)." + retry_text
+            ) from None
         if error.code in (401, 403):
-            raise BenchlmError("BenchLM credential or plan rejected (HTTP " + str(error.code) + ")") from None
+            raise BenchlmError(
+                "BenchLM credential or plan rejected (HTTP " + str(error.code) + ")"
+            ) from None
         raise BenchlmError("BenchLM HTTP error " + str(error.code)) from None
     except (OSError, ValueError):
         raise BenchlmError("BenchLM Free ranking request or decoding failed") from None
@@ -248,9 +252,14 @@ def probe_surface(api_key=None, *, surface="coding", opener=None):
 
 
 def fetch_snapshots(
-    api_key=None, *, opener=None, max_requests=DEFAULT_REQUEST_BUDGET,
-    max_pages=MAX_PAGES, request_interval=MIN_REQUEST_INTERVAL,
-    clock=None, sleeper=None
+    api_key=None,
+    *,
+    opener=None,
+    max_requests=DEFAULT_REQUEST_BUDGET,
+    max_pages=MAX_PAGES,
+    request_interval=MIN_REQUEST_INTERVAL,
+    clock=None,
+    sleeper=None,
 ):
     """Paced, capped, current-only refresh; fail without writing partial data."""
     key = _validated_key(api_key)
