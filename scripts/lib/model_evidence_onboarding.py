@@ -195,8 +195,11 @@ def build_suggestions(
                             if s["source"] == source["source"]
                         ),
                         "provenance_note": (
-                            source["source"] + " / " + source["metric"]
-                            + " / " + source["scale"]
+                            source["source"]
+                            + " / "
+                            + source["metric"]
+                            + " / "
+                            + source["scale"]
                             + " — upstream score is NOT an observed local "
                             "quantised model result"
                         ),
