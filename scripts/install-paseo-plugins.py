@@ -119,8 +119,14 @@ def resolve_repo_context_mode(
     # either case the plugin needs the real Node entrypoint, not a shell shim.
     paths = (
         resolved,
-        Path(realpath(str(Path(candidate).parent / "../lib/node_modules/context-mode/cli.mjs"))),
-        Path(realpath(str(Path(candidate).parent / "node_modules/context-mode/cli.mjs"))),
+        Path(
+            realpath(
+                str(Path(candidate).parent / "../lib/node_modules/context-mode/cli.mjs")
+            )
+        ),
+        Path(
+            realpath(str(Path(candidate).parent / "node_modules/context-mode/cli.mjs"))
+        ),
     )
     for path in paths:
         if path == bundled_root or bundled_root in path.parents:
@@ -137,8 +143,10 @@ def resolve_repo_context_mode(
 
 def configure_context_mode_binary(settings_dir, binary, *, backup=True, dry_run=False):
     """Update only binaryPath; reject unknown user state and unsafe file paths."""
-    if not isinstance(binary, str) or not os.path.isabs(binary) or any(
-        char in binary for char in ("\n", "\r", "\x00")
+    if (
+        not isinstance(binary, str)
+        or not os.path.isabs(binary)
+        or any(char in binary for char in ("\n", "\r", "\x00"))
     ):
         raise ValueError("unsafe context-mode binaryPath")
     directory = Path(settings_dir)
@@ -156,7 +164,8 @@ def configure_context_mode_binary(settings_dir, binary, *, backup=True, dry_run=
     previous_stat = None
     if target.exists():
         previous_stat = target.stat()
-        if (
+        # POSIX ownership checks do not establish Windows ACL security.
+        if os.name != "nt" and (
             previous_stat.st_uid != os.getuid()
             or stat.S_IMODE(previous_stat.st_mode) != 0o600
         ):
@@ -165,7 +174,9 @@ def configure_context_mode_binary(settings_dir, binary, *, backup=True, dry_run=
             previous = target.read_bytes()
             stored = json.loads(previous.decode("utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as error:
-            raise ValueError("context-mode settings unreadable; refusing overwrite") from error
+            raise ValueError(
+                "context-mode settings unreadable; refusing overwrite"
+            ) from error
         if (
             not isinstance(stored, dict)
             or stored.get("version") != 2
@@ -181,13 +192,14 @@ def configure_context_mode_binary(settings_dir, binary, *, backup=True, dry_run=
         return "unchanged"
     backup_path = Path(str(target) + ".bak")
     if backup and (
-        backup_path.is_symlink()
-        or (backup_path.exists() and not backup_path.is_file())
+        backup_path.is_symlink() or (backup_path.exists() and not backup_path.is_file())
     ):
         raise ValueError("context-mode settings backup is unsafe")
     if backup and previous is not None and backup_path.exists():
         if backup_path.read_bytes() != previous:
-            raise ValueError("context-mode settings backup conflict; refusing overwrite")
+            raise ValueError(
+                "context-mode settings backup conflict; refusing overwrite"
+            )
     if dry_run:
         return "would-write"
 
@@ -196,24 +208,32 @@ def configure_context_mode_binary(settings_dir, binary, *, backup=True, dry_run=
     # still quiesce Paseo Desktop before applying user-owned changes.
     if previous is not None:
         current_stat = target.stat()
-        if (
-            (current_stat.st_dev, current_stat.st_ino, current_stat.st_mtime_ns)
-            != (previous_stat.st_dev, previous_stat.st_ino, previous_stat.st_mtime_ns)
-            or target.read_bytes() != previous
-        ):
+        if (current_stat.st_dev, current_stat.st_ino, current_stat.st_mtime_ns) != (
+            previous_stat.st_dev,
+            previous_stat.st_ino,
+            previous_stat.st_mtime_ns,
+        ) or target.read_bytes() != previous:
             raise ValueError("context-mode settings changed concurrently")
     elif target.exists() or target.is_symlink():
         raise ValueError("context-mode settings appeared concurrently")
     if backup and previous is not None and not backup_path.exists():
         try:
             with backup_path.open("xb") as file:
-                os.fchmod(file.fileno(), 0o600)
+                if hasattr(os, "fchmod"):
+                    os.fchmod(file.fileno(), 0o600)
                 file.write(previous)
+            if not hasattr(os, "fchmod"):
+                backup_path.chmod(0o600)
         except FileExistsError as error:
-            raise ValueError("context-mode settings backup raced with another writer") from error
+            raise ValueError(
+                "context-mode settings backup raced with another writer"
+            ) from error
     fd, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=directory)
     try:
-        os.fchmod(fd, 0o600)
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        else:
+            os.chmod(temporary, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(serialized)
         os.replace(temporary, target)
@@ -221,6 +241,7 @@ def configure_context_mode_binary(settings_dir, binary, *, backup=True, dry_run=
         if os.path.exists(temporary):
             os.unlink(temporary)
     return "written"
+
 
 def managed_wrapper(path, chromium, *, backup=True):
     """Modify only a recognizable owner wrapper; preserve backups and file mode."""
@@ -528,7 +549,9 @@ def main(argv=None):
             if status != "resolved" or context_binary is None:
                 print(f"context-mode binary: {status}")
                 if args.apply and not args.dry_run:
-                    raise ValueError("managed context-mode CLI unavailable; refusing bundled fallback")
+                    raise ValueError(
+                        "managed context-mode CLI unavailable; refusing bundled fallback"
+                    )
             else:
                 outcome = configure_context_mode_binary(
                     context_settings_dir, context_binary, dry_run=True
