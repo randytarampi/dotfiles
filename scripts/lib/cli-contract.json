@@ -1674,6 +1674,25 @@
       ],
       "positional_operand": null,
       "child_scripts": []
+    },
+    {
+      "path": "scripts/suggest-model-evidence-mappings.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "failure_policy": "fail",
+      "accepted_flags": [
+        "--help",
+        "--models-file",
+        "--source-dir",
+        "--aa-cache-dir",
+        "--map-file",
+        "--profile"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
     }
   ]
 }
