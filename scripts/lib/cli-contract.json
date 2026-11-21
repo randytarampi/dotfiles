@@ -1645,7 +1645,9 @@
         "--dry-run",
         "--refresh",
         "--offline",
-        "--cache-dir"
+        "--cache-dir",
+        "--probe",
+        "--import-json"
       ],
       "positional_operand": null,
       "child_scripts": []

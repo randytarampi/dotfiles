@@ -15,11 +15,12 @@ from pathlib import Path
 from artificial_analysis import SameOriginRedirectHandler
 from model_evidence import _normalize_source, sources_dir
 
-SOURCE_URL = "https://whatmodel.sh/?format=json&n=2000&thin=1&retired=0"
+SOURCE_URL = "https://whatmodel.sh/?format=json"
 MAX_BYTES = 8 * 1024 * 1024
 MAX_ROWS = 2000
-# Upstream JSON defaults to 40 when n is omitted; require more coverage.
-MIN_EXPECTED_ROWS = 41
+# The public JSON API may expose only a reviewed subset (40 rows in the
+# 2026-11-21 live review); do not infer a full-catalogue population.
+MIN_EXPECTED_ROWS = 2
 LICENCE = "CC BY-SA 4.0"
 SOURCE_ID = "whatmodel"
 SCALE = "whatmodel-g-v1"
@@ -100,10 +101,8 @@ def normalize_response(payload, *, now=None):
     if updated > now:
         raise WhatmodelError("upstream update timestamp is in the future")
     incoming = payload["models"]
-    if not MIN_EXPECTED_ROWS <= len(incoming) < MAX_ROWS:
-        raise WhatmodelError(
-            "whatmodel response coverage incomplete or reached request cap"
-        )
+    if not MIN_EXPECTED_ROWS <= len(incoming) <= MAX_ROWS:
+        raise WhatmodelError("whatmodel returned fewer than two or too many rows")
     if payload.get("coverage") == "no reviewed rankings available":
         raise WhatmodelError("no reviewed scores")
     seen = set()
@@ -125,6 +124,7 @@ def normalize_response(payload, *, now=None):
         "licence_url": "https://creativecommons.org/licenses/by-sa/4.0/",
         "source_url": "https://whatmodel.sh/",
         "retrieved_rows": len(incoming),
+        "coverage": payload.get("coverage") if isinstance(payload.get("coverage"), str) else "unknown; incomplete",
         "models": sorted(rows, key=lambda row: row["id"]),
     }
 
@@ -145,7 +145,14 @@ def fetch_response(*, opener=None):
             payload = response.read(MAX_BYTES + 1)
             if len(payload) > MAX_BYTES:
                 raise WhatmodelError("whatmodel response too large")
-            return json.loads(payload)
+            try:
+                return json.loads(payload)
+            except (ValueError, UnicodeError):
+                raise WhatmodelError(
+                    "whatmodel served non-JSON to this client; no UA impersonation"
+                ) from None
+    except WhatmodelError:
+        raise
     except (OSError, ValueError):
         raise WhatmodelError("whatmodel unavailable or response invalid") from None
 

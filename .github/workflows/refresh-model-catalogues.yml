@@ -155,11 +155,10 @@ jobs:
         id: whatmodel_probe
         continue-on-error: true
         env:
-          PRIVATE_MODEL_EVIDENCE: ${{ runner.temp }}/whatmodel-private
         run: |
           set -euo pipefail
-          python3 scripts/refresh-model-evidence.py --refresh --cache-dir "${PRIVATE_MODEL_EVIDENCE}"
-          python3 scripts/refresh-model-evidence.py --offline --cache-dir "${PRIVATE_MODEL_EVIDENCE}"
+          # One read, no private snapshot; a non-JSON response is degraded, not success.
+          python3 scripts/refresh-model-evidence.py --probe
           echo "status=validated_private" >> "${GITHUB_OUTPUT}"
 
       - name: Summarize whatmodel quality probe
@@ -170,7 +169,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${PROBE_STATUS}" == "validated_private" && "${PROBE_OUTCOME}" == "success" ]]; then
-            echo "whatmodel: reviewed public quality evidence validated in private cache." >> "${GITHUB_STEP_SUMMARY}"
+            echo "whatmodel: public JSON first-page schema read (incomplete subset; advisory)." >> "${GITHUB_STEP_SUMMARY}"
           else
             echo "whatmodel: unavailable or incompatible; catalogue refresh remains independent." >> "${GITHUB_STEP_SUMMARY}"
           fi
