@@ -1625,7 +1625,9 @@
         "--dry-run",
         "--refresh",
         "--offline",
-        "--cache-dir"
+        "--cache-dir",
+        "--probe",
+        "--max-pages"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -1661,7 +1663,11 @@
         "--dry-run",
         "--refresh",
         "--offline",
-        "--cache-dir"
+        "--cache-dir",
+        "--probe",
+        "--surface",
+        "--max-pages",
+        "--max-requests"
       ],
       "positional_operand": null,
       "child_scripts": []

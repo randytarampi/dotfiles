@@ -37,6 +37,16 @@ def envelope():
                 "n": 12,
                 "maker_only": False,
             },
+            *[
+                {
+                    "id": "synthetic-" + str(index),
+                    "provider": "vendor",
+                    "score_full": 52.0,
+                    "n": 6,
+                    "maker_only": False,
+                }
+                for index in range(43)
+            ],
         ],
     }
 
@@ -60,9 +70,9 @@ def test_accepts_reviewed_comparable_score_and_preserves_provenance(tmp_path):
         lambda d: d.update({"comparison_set": "coding"}),
         lambda d: d.update({"data_license": {"name": "proprietary"}}),
         lambda d: d["models"].append(d["models"][0]),
-        lambda d: d["models"][0].update({"maker_only": True}),
-        lambda d: d["models"][0].update({"n": 1}),
-        lambda d: d["models"][0].update({"score_full": None}),
+        lambda d: [m.update({"maker_only": True}) for m in d["models"]],
+        lambda d: [m.update({"n": 1}) for m in d["models"]],
+        lambda d: [m.update({"score_full": None}) for m in d["models"]],
     ],
 )
 def test_rejects_incompatible_or_insufficient_response(mutation):
@@ -98,3 +108,24 @@ def test_no_data_licence_no_cross_source_identity():
     d.pop("data_license")
     with pytest.raises(WhatmodelError):
         normalize_response(d)
+
+
+def test_json_default_40_row_truncation_is_rejected_not_cached(tmp_path):
+    payload = envelope()
+    payload["models"] = payload["models"][:40]
+    with pytest.raises(WhatmodelError, match="coverage"):
+        normalize_response(payload)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_exact_requested_cap_is_ambiguous_and_rejected():
+    payload = envelope()
+    seed = payload["models"][-1]
+    payload["models"].extend(
+        [
+            {**seed, "id": "extra-" + str(i)}
+            for i in range(2000 - len(payload["models"]))
+        ]
+    )
+    with pytest.raises(WhatmodelError, match="request cap"):
+        normalize_response(payload)
