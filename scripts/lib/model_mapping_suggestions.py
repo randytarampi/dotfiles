@@ -41,8 +41,7 @@ def _tokens(label):
     name = label.split("/")[-1].lower()
     # Split runtime prefixes and quantisation markers for simpler auditing.
     name = re.sub(
-        r"(?:^|[-_:])(?:mlx|gguf|ollama|mxfp\d+|nvfp4|bf16|fp16|fp32)"
-        r"(?=$|[-_:])",
+        r"(?:^|[-_:])(?:mlx|gguf|ollama|mxfp\d+|nvfp4|bf16|fp16|fp32)" r"(?=$|[-_:])",
         "-",
         name,
     )
@@ -128,20 +127,17 @@ def qualified_local_models(records, details=None):
 
 def _provenance(source):
     name = source["source"]
-    link = (
-        "https://artificialanalysis.ai/data-api"
-        if name == "artificial-analysis"
-        else "https://benchlm.ai/data/access"
-        if name.startswith("benchlm-")
-        else "source-specific private cache"
-    )
+    if name == "artificial-analysis":
+        link = "https://artificialanalysis.ai/data-api"
+    elif name.startswith("benchlm-"):
+        link = "https://benchlm.ai/data/access"
+    else:
+        link = "source-specific private cache"
     observed = source.get("observed_at") or "UNKNOWN"
     coverage = source.get("coverage", "unreported")
     return (
-        "Source: " + link
-        + "; as-of: " + observed
-        + "; coverage: " + coverage
-        + "; checkpoint equivalence: UNVERIFIED"
+        f"Source: {link}; as-of: {observed}; coverage: {coverage}; "
+        "checkpoint equivalence: UNVERIFIED"
     )
 
 
