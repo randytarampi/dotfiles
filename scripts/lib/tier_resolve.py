@@ -689,7 +689,11 @@ def resolve_roles_from_list(
 
     # Explicit caller control: voice, local-engine resolution and other
     # shared consumers must never inherit a process-global evidence toggle.
-    if evidence_mode not in {"off", "shadow", "apply"}:
+    if evidence_mode == "apply":
+        raise ValueError(
+            "model evidence apply disabled pending independent host acceptance"
+        )
+    if evidence_mode not in {"off", "shadow"}:
         raise ValueError("invalid model evidence mode")
     if evidence_mode != "off":
         from model_evidence import rank_qualified
