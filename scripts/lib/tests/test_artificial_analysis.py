@@ -43,9 +43,11 @@ def page(number=1, total=1, *, model_id="synthetic-a", coding=25, version=4.1):
 
 def test_free_api_two_pages_and_missing_scores():
     calls = []
+
     def getter(number):
         calls.append(number)
         return page(number, 2, model_id="synthetic-" + str(number))
+
     payload, version, count = fetch_free("dummy", get_page=getter)
     assert calls == [1, 2]
     assert (version, count) == ("4.1", 2)

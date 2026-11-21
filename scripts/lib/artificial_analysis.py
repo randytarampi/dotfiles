@@ -71,7 +71,9 @@ def normalize_pages(pages):
     total, version = None, None
     for number, envelope in enumerate(pages, 1):
         if not isinstance(envelope, dict) or envelope.get("tier") not in {
-            "free", "pro", "commercial"
+            "free",
+            "pro",
+            "commercial",
         }:
             raise EvidenceError("malformed Free API envelope")
         pagination = envelope.get("pagination")
@@ -127,9 +129,7 @@ def normalize_pages(pages):
                     "intelligence": _numeric(
                         metrics.get("artificial_analysis_intelligence_index")
                     ),
-                    "coding": _numeric(
-                        metrics.get("artificial_analysis_coding_index")
-                    ),
+                    "coding": _numeric(metrics.get("artificial_analysis_coding_index")),
                     "agentic": _numeric(
                         metrics.get("artificial_analysis_agentic_index")
                     ),
