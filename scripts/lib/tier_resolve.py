@@ -734,18 +734,13 @@ def resolve_roles_from_list(
         "solo_2": pick("solo", "code-gen", index=1),
     }
 
-    # Route provenance must come from the discovered model, not from whichever
-    # category survived profile filtering. `solo` is built from the broader
-    # categories but is not truncated by a profile, so a solo-only model used
-    # to fall back to "ollama" and lose its real provider.
+    # Solo candidates survive profile truncation of other categories. Include
+    # them without allowing excluded raw inventory records to relabel a route.
     model_providers = {
         model["name"]: model.get("provider", "ollama")
-        for model in models
-        if isinstance(model, dict) and model.get("name")
+        for cat in ("reasoning", "code-gen", "lightweight", "vision", "audio", "solo")
+        for model in classified[cat]
     }
-    for cat in ("reasoning", "code-gen", "lightweight", "vision", "audio", "solo"):
-        for model in classified.get(cat, []):
-            model_providers.setdefault(model["name"], model.get("provider", "ollama"))
     resolved = {}
     for role, model in role_map.items():
         if model:
