@@ -96,7 +96,8 @@ def _parse_row(item, seen):
         "id": key,
         "creator_id": creator,
         "score": raw_score,
-        "evidence": "independent",
+        "evidence": "mixed",
+        "benchlm_maturity": "Supported",
     }
 
 
@@ -107,7 +108,9 @@ def _parse_page(payload, *, surface, offset, reference=None):
         raise BenchlmError("BenchLM ranking surface mismatch")
     date = _timestamp(payload.get("dataAsOf"))
     version = _version(payload)
-    if reference is not None and (date, version) != reference:
+    # Total must also be stable or an updated ranking may silently skip rows.
+    declared_total = (payload.get("pagination") or {}).get("total")
+    if reference is not None and (date, version, declared_total) != reference:
         raise BenchlmError("BenchLM pagination mixed scoring revisions")
     rows = payload.get("items")
     page = payload.get("pagination")
@@ -130,7 +133,7 @@ def _parse_page(payload, *, surface, offset, reference=None):
             raise BenchlmError("BenchLM pagination cursor invalid")
     elif offset + len(rows) < total:
         raise BenchlmError("BenchLM truncated final page")
-    return rows, next_offset, (date, version)
+    return rows, next_offset, (date, version, total)
 
 
 def _read_page(surface, offset, key, *, opener):
@@ -183,7 +186,7 @@ def fetch_snapshots(api_key=None, *, opener=None):
             raise BenchlmError("BenchLM ranking exceeded page limit")
         if len(collected) < 2:
             raise BenchlmError("BenchLM ranking lacks two supported exact identities")
-        date, version = reference
+        date, version, _ = reference
         source = SOURCE_PREFIX + "-" + surface
         snapshot = {
             "schema_version": 1,
@@ -209,9 +212,11 @@ def store_snapshots(snapshots, directory=None):
     directory = Path(directory or sources_dir())
     if directory.is_symlink():
         raise BenchlmError("refusing symlink evidence cache")
-    if len(snapshots) != len(SURFACES):
+    if not isinstance(snapshots, list) or len(snapshots) != len(SURFACES):
         raise BenchlmError("partial BenchLM snapshot set")
     expected = {SOURCE_PREFIX + "-" + s for s in SURFACES}
+    if any(not isinstance(row, dict) for row in snapshots):
+        raise BenchlmError("BenchLM snapshot is not an object")
     if {row.get("source") for row in snapshots} != expected:
         raise BenchlmError("BenchLM snapshot source set mismatch")
     now = datetime.now(timezone.utc)

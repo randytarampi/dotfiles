@@ -203,6 +203,51 @@ def test_rejects_duplicate_identity_and_wrong_source_set(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
+def test_supported_does_not_claim_every_underlying_result_was_independent():
+    seen = set()
+    result = _parse_row(
+        {
+            "modelKey": "x",
+            "creator": "maker",
+            "score": 58,
+            "evidenceLabel": "Supported",
+        },
+        seen,
+    )
+    assert result["evidence"] == "mixed"
+    assert result["benchlm_maturity"] == "Supported"
+
+
+def test_version_and_total_must_agree_across_paged_response():
+    first = {
+        "surface": "coding",
+        "dataAsOf": DATE,
+        "methodologyVersion": "6.0",
+        "items": [{"modelKey": "first"}],
+        "pagination": {"offset": 0, "total": 2, "nextOffset": 1},
+    }
+    _, next_offset, revision = _parse_page(first, surface="coding", offset=0)
+    second = {
+        **first,
+        "items": [{"modelKey": "second"}],
+        "pagination": {"offset": next_offset, "total": 3, "nextOffset": 2},
+    }
+    with pytest.raises(BenchlmError, match="mixed scoring revisions"):
+        _parse_page(second, surface="coding", offset=1, reference=revision)
+
+
+def test_duplicate_identity_rejected_even_if_unscored():
+    seen = set()
+    item = {
+        "modelKey": "same",
+        "creator": "maker",
+        "evidenceLabel": "Estimated",
+        "score": 15,
+    }
+    assert _parse_row(item, seen) is None
+    with pytest.raises(BenchlmError, match="duplicate"):
+        _parse_row(item, seen)
+
 def test_no_network_when_cache_read(monkeypatch, tmp_path):
     store_snapshots(fetch_snapshots("placeholder", opener=StubOpener()), tmp_path)
     monkeypatch.setattr(
