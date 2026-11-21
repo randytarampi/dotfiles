@@ -366,17 +366,29 @@ def test_rate_limit_is_visible_without_response_or_credentials():
     assert "private-value" not in str(error.value)
 
 
-def test_refresh_request_budget_stops_before_reading_next_surface():
-    upstream = StubOpener()
+def test_refresh_request_budget_stops_before_extra_pages():
+    from urllib.parse import parse_qs, urlsplit
+
+    class PagedOpener(StubOpener):
+        def open(self, request, timeout):
+            response = super().open(request, timeout)
+            result = json.loads(response.data.getvalue())
+            offset = int(parse_qs(urlsplit(request.full_url).query)["offset"][0])
+            result["pagination"] = {
+                "offset": offset,
+                "limit": 100,
+                "total": 30,
+                "nextOffset": offset + len(result["items"]),
+            }
+            return Response(result)
+
+    upstream = PagedOpener()
     with pytest.raises(BenchlmError, match="budget exceeded"):
         fetch_snapshots(
             "placeholder", opener=upstream, max_requests=4,
             request_interval=0,
-        ) if False else fetch_snapshots(
-            "placeholder", opener=upstream, max_requests=3,
-            request_interval=0,
         )
-    assert len(upstream.calls) == 0
+    assert len(upstream.calls) == 4
 
 
 def test_pacing_is_enforced_between_requests_without_real_sleep():
