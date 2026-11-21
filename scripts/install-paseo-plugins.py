@@ -28,6 +28,10 @@ PLUGINS = (
     ("omercnet/shared-browser", "node-24-paseo-0.13"),
 )
 GATE = "DOTFILES_RUN_PASEO_PLUGINS_SETUP"
+# Plugins that must not be installed unless their own ~/.env feature gate is on.
+PLUGIN_GATES = {"omercnet/context-mode": "DOTFILES_RUN_CONTEXT_MODE_SETUP"}
+CONTEXT_MODE_PLUGIN = "omercnet/context-mode"
+CONTEXT_MODE_SETTINGS_ID = "context-mode"
 START = "# >>> dotfiles: shared-browser chromium >>>"
 END = "# <<< dotfiles: shared-browser chromium <<<"
 
@@ -90,6 +94,87 @@ def resolve_chromium(
         ):
             return "resolved", candidate
     return "unresolved", None
+
+
+CONTEXT_MODE_DEFAULTS = {
+    "refreshIntervalMs": 15_000,
+    "autoInject": True,
+    "preferNativeIntegrations": True,
+}
+
+
+def resolve_repo_context_mode(
+    which=shutil.which, exists=os.path.isfile, realpath=os.path.realpath, home=None
+):
+    """Return the repo-managed context-mode CLI, never the plugin's bundled copy.
+
+    The Paseo plugin ships its own runtime under its install directory; pointing
+    the plugin at the npm global the dotfiles manage keeps one version in play
+    and honours the feature gate that owns that install.
+    """
+    candidate = which("context-mode")
+    if not candidate or not os.path.isabs(candidate):
+        return "unresolved", None
+    home = Path.home() if home is None else Path(home)
+    bundled_root = home / ".paseo" / "plugins"
+    resolved = realpath(candidate)
+    for path in (candidate, resolved):
+        try:
+            if bundled_root in Path(realpath(path)).parents:
+                return "bundled", None
+        except OSError:
+            continue
+    for path in (candidate, resolved):
+        if path.endswith((".mjs", ".js", ".cjs")):
+            return "resolved", path
+    for relative in (
+        "../lib/node_modules/context-mode/cli.mjs",
+        "../node_modules/context-mode/cli.mjs",
+    ):
+        module_path = (Path(candidate).parent / relative).resolve()
+        if exists(str(module_path)):
+            return "resolved", str(module_path)
+    return ("resolved", candidate) if exists(candidate) else ("unresolved", None)
+
+
+def configure_context_mode_binary(settings_dir, binary, *, backup=True):
+    """Point the Paseo context-mode plugin at the repo-managed executable.
+
+    Paseo stores plugin settings at ``<paseo home>/plugin-settings/<plugin id>/
+    <settings id>.json`` as ``{"version": N, "values": {...}}``. Only the
+    ``binaryPath`` value is owned here; other user settings are preserved.
+    """
+    directory = Path(settings_dir)
+    target = directory / f"{CONTEXT_MODE_SETTINGS_ID}.json"
+    values = dict(CONTEXT_MODE_DEFAULTS)
+    if target.is_file():
+        try:
+            existing = json.loads(target.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing = None
+        if isinstance(existing, dict) and isinstance(existing.get("values"), dict):
+            values.update(existing["values"])
+    values["binaryPath"] = binary
+    serialized = json.dumps({"version": 2, "values": values}, indent=2)
+    if target.is_file():
+        try:
+            if target.read_text(encoding="utf-8").strip() == serialized:
+                return "unchanged"
+        except OSError:
+            pass
+        if backup:
+            shutil.copy2(target, str(target) + ".bak")
+    directory.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=directory)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(serialized)
+        os.replace(temporary, target)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+    return "written"
 
 
 def managed_wrapper(path, chromium, *, backup=True):
@@ -167,16 +252,21 @@ def plan(
     node_version=None,
     daemon_codexbar_verified=False,
     current=None,
+    environ=None,
 ):
     """Return registry-id add/skip checks while retaining legacy callers."""
     if version is None and isinstance(which, list):
         return reconcile(which)
     which = which or shutil.which
     platform = sys.platform if platform is None else platform
+    env = os.environ if environ is None else environ
     selected, omitted = [], []
     for name, requirement in PLUGINS:
         reason = None
-        if name == "stevecastaneda/progress" and (
+        gate = PLUGIN_GATES.get(name)
+        if gate is not None and env.get(gate, "0") != "1":
+            reason = f"{gate} != 1"
+        elif name == "stevecastaneda/progress" and (
             node_version is None or node_version < (22, 18, 0)
         ):
             reason = "Node >=22.18 required"
@@ -371,6 +461,29 @@ def main(argv=None):
             )
         if "omercnet/shared-browser" in eligible and chromestatus != "resolved":
             print(f"shared-browser Chromium: {chromestatus}")
+        context_installed = any(
+            (entry.get("installation") or {})
+            .get("identity", {})
+            .get("registry", {})
+            .get("id")
+            == CONTEXT_MODE_PLUGIN
+            for entry in current
+        )
+        context_gate_on = os.environ.get(PLUGIN_GATES[CONTEXT_MODE_PLUGIN], "0") == "1"
+        context_binary_status, context_binary = "not-needed", None
+        if context_gate_on and (context_installed or CONTEXT_MODE_PLUGIN in installs):
+            context_binary_status, context_binary = resolve_repo_context_mode()
+            if context_binary and any(
+                char in context_binary for char in ("\n", "\r", "\x00")
+            ):
+                raise ValueError("unsafe context-mode executable path")
+            if context_binary_status == "resolved":
+                print(
+                    f"{'Would set' if args.dry_run else 'Setting'} "
+                    f"context-mode binaryPath={context_binary}"
+                )
+            else:
+                print(f"context-mode binary: {context_binary_status}")
         if args.dry_run:
             return 0
         if os.environ.get(GATE) != "1":
@@ -398,6 +511,17 @@ def main(argv=None):
                 except ValueError as exc:
                     failures.append(registry)
                     print(f"Failed to remove {registry}: {exc}", file=sys.stderr)
+        if context_binary:
+            outcome = configure_context_mode_binary(
+                Path.home() / ".paseo/plugin-settings/context-mode", context_binary
+            )
+            if outcome == "written":
+                try:
+                    run_plugin(paseo, ["reload", CONTEXT_MODE_SETTINGS_ID])
+                except ValueError as exc:
+                    failures.append("context-mode settings reload")
+                    print(f"Failed to reload context-mode: {exc}", file=sys.stderr)
+            print(f"context-mode settings: {outcome}")
         if chromium and "omercnet/shared-browser" in eligible:
             system = platform_module.system()
             home = Path.home()

@@ -1,6 +1,7 @@
 """Owner-gated, bounded Paseo plugin installation policy tests."""
 
 import importlib.util
+import json
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -420,3 +421,77 @@ def test_existing_legacy_chromium_block_does_not_rewrite_host_backup(tmp_path):
     assert module.managed_wrapper(wrapper, chromium) == "written"
     assert (wrapper.read_bytes(), wrapper.stat().st_mtime_ns) == before
     assert backup.read_text() == 'exec "$HOME/bin/paseo" daemon run\n'
+
+
+def test_context_mode_plugin_requires_its_own_gate():
+    """The Paseo context-mode plugin must follow DOTFILES_RUN_CONTEXT_MODE_SETUP."""
+    selected, omitted = module.plan(
+        lambda name: "/bin/" + name,
+        (0, 16, 2),
+        node_version=(26, 0, 0),
+        daemon_codexbar_verified=True,
+        environ={},
+    )
+    reasons = dict(omitted)
+    assert "omercnet/context-mode" not in selected
+    assert reasons["omercnet/context-mode"] == "DOTFILES_RUN_CONTEXT_MODE_SETUP != 1"
+
+    enabled, _ = module.plan(
+        lambda name: "/bin/" + name,
+        (0, 16, 2),
+        node_version=(26, 0, 0),
+        daemon_codexbar_verified=True,
+        environ={"DOTFILES_RUN_CONTEXT_MODE_SETUP": "1"},
+    )
+    assert "omercnet/context-mode" in enabled
+
+
+def test_repo_context_mode_never_resolves_the_bundled_copy(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    bundled = home / ".paseo/plugins/context-mode/abc/node_modules/context-mode/cli.mjs"
+    bundled.parent.mkdir(parents=True)
+    bundled.write_text("#!/usr/bin/env node\n")
+
+    status, path = module.resolve_repo_context_mode(
+        which=lambda _: str(bundled), exists=lambda p: True, home=home
+    )
+    assert (status, path) == ("bundled", None)
+
+    global_bin = tmp_path / "prefix/bin/context-mode"
+    global_bin.parent.mkdir(parents=True)
+    global_bin.write_text("#!/bin/sh\n")
+    (tmp_path / "prefix/lib/node_modules/context-mode").mkdir(
+        parents=True, exist_ok=True
+    )
+    module_path = tmp_path / "prefix/lib/node_modules/context-mode/cli.mjs"
+    module_path.write_text("#!/usr/bin/env node\n")
+
+    status, path = module.resolve_repo_context_mode(
+        which=lambda _: str(global_bin),
+        exists=lambda p: p == str(module_path),
+        realpath=lambda p: p,
+        home=home,
+    )
+    assert (status, path) == ("resolved", str(module_path.resolve()))
+
+
+def test_context_mode_settings_preserve_values_and_are_idempotent(tmp_path):
+    settings = tmp_path / "plugin-settings/context-mode"
+    settings.mkdir(parents=True)
+    target = settings / "context-mode.json"
+    target.write_text(
+        json.dumps({"version": 2, "values": {"autoInject": False, "binaryPath": None}})
+    )
+    binary = "/opt/homebrew/lib/node_modules/context-mode/cli.mjs"
+
+    assert module.configure_context_mode_binary(settings, binary) == "written"
+    written = json.loads(target.read_text())
+    assert written["version"] == 2
+    assert written["values"]["binaryPath"] == binary
+    assert written["values"]["autoInject"] is False
+    assert written["values"]["preferNativeIntegrations"] is True
+    assert (settings / "context-mode.json.bak").is_file()
+
+    before = target.stat().st_mtime_ns
+    assert module.configure_context_mode_binary(settings, binary) == "unchanged"
+    assert target.stat().st_mtime_ns == before
