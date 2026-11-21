@@ -184,9 +184,9 @@ def _parse_page(payload, *, surface, offset, reference=None, coverage_mode="comp
     return rows, next_offset, (date, version, mode, total)
 
 
-def _read_page(surface, offset, key, *, opener):
+def _read_page(surface, offset, key, *, opener, page_limit=PAGE_LIMIT):
     query = urllib.parse.urlencode(
-        {"surface": surface, "offset": offset, "limit": PAGE_LIMIT, "compact": "true"}
+        {"surface": surface, "offset": offset, "limit": page_limit, "compact": "true"}
     )
     request = urllib.request.Request(
         API_URL + "?" + query,
@@ -301,8 +301,10 @@ def probe_surface(api_key=None, *, surface="coding", opener=None):
         raise BenchlmError("invalid BenchLM surface")
     key = _validated_key(api_key)
     opener = opener or urllib.request.build_opener(SameOriginRedirectHandler())
-    payload = _read_page(surface, 0, key, opener=opener)
-    rows, cursor, _ = _parse_page(payload, surface=surface, offset=0)
+    payload = _read_page(surface, 0, key, opener=opener, page_limit=25)
+    rows, cursor, _ = _parse_page(
+        payload, surface=surface, offset=0, coverage_mode="first-100"
+    )
     seen = set()
     usable = [x for item in rows if (x := _parse_row(item, seen)) is not None]
     if len(usable) < 2:
@@ -355,7 +357,10 @@ def fetch_snapshots(
                 sleeper(delay)
         state["last"] = clock()
         state["used"] += 1
-        return _read_page(surface, offset, key, opener=opener)
+        return _read_page(
+            surface, offset, key, opener=opener,
+            page_limit=25 if coverage_mode == "first-100" else PAGE_LIMIT,
+        )
 
     bundle = {
         "id": datetime.now(timezone.utc).isoformat(),

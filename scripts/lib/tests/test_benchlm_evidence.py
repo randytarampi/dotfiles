@@ -362,6 +362,7 @@ def test_one_request_probe_never_writes_scores_or_follows_pagination(tmp_path):
     result = probe_surface("placeholder", surface="coding", opener=upstream)
     assert result["supported"] == 2
     assert len(upstream.calls) == 1
+    assert "limit=25" in upstream.calls[0].full_url
     assert list(tmp_path.iterdir()) == []
 
 
@@ -518,6 +519,7 @@ def test_explicit_partial_window_preserves_true_population_and_scale():
         coverage_mode="first-100",
     )
     assert len(upstream.calls) == 16
+    assert all("limit=25" in call.full_url for call in upstream.calls)
     assert all(row["retrieved_rows"] == 100 for row in snapshots)
     assert all(row["coverage"] == "first-100-subset" for row in snapshots)
     assert all(row["population_total"] == 214 for row in snapshots)
