@@ -673,14 +673,12 @@ def resolve_roles_from_list(
 
     # Explicit caller control: voice, local-engine resolution and other
     # shared consumers must never inherit a process-global evidence toggle.
-    if evidence_mode not in {"off", "shadow", "apply"}:
+    if evidence_mode not in {"off", "shadow"}:
         raise ValueError("invalid model evidence mode")
     if evidence_mode != "off":
         from model_evidence import rank_qualified
 
-        proposed = (
-            copy.deepcopy(classified) if evidence_mode == "shadow" else classified
-        )
+        proposed = copy.deepcopy(classified)
         audit = {}
         changed = rank_qualified(proposed, profile=profile, audit=audit)
         logger.warning(
@@ -693,6 +691,13 @@ def resolve_roles_from_list(
             audit.get("scale_mismatches", 0),
             audit.get("missing_identifiers", 0),
             changed,
+        )
+        logger.info(
+            "Model evidence unique eligibility=%d source_coverage=%s "
+            "duplicates_excluded=%d",
+            audit.get("eligible_unique", 0),
+            audit.get("coverage_by_source", {}),
+            audit.get("duplicate_slots_skipped", 0),
         )
         if audit.get("selected"):
             logger.warning(
@@ -712,8 +717,9 @@ def resolve_roles_from_list(
                     )
             if not changed:
                 logger.warning(
-                    "Model evidence shadow: no eligible ordering changes; "
-                    "inspect mapping, source freshness, scales and category gates"
+                    "Model evidence shadow: no proven ordering change; "
+                    "when selected={} there is no qualified comparable pair, "
+                    "not evidence of agreement with baseline"
                 )
 
     if not classified["solo"]:
