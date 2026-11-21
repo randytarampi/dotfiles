@@ -22,6 +22,7 @@ from pathlib import Path
 
 ENDPOINT = "https://artificialanalysis.ai/api/v2/language/models/free"
 SCHEMA_VERSION = 3
+MANIFEST_NAME = "manifest.json"
 MAX_PAGES = 20
 MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 COLUMNS = ("id", "slug", "name", "creator_id", "creator_name", "intelligence")
@@ -310,10 +311,10 @@ def write_snapshot(directory, csv_bytes, version, count, *, now=None):
         "snapshot": filename,
         "sha256": digest,
     }
-    if (directory / "manifest.json").is_symlink():
+    if (directory / MANIFEST_NAME).is_symlink():
         raise EvidenceError("refusing symlink manifest")
     _atomic_private(
-        directory / "manifest.json",
+        directory / MANIFEST_NAME,
         (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode("utf-8"),
     )
     return manifest
@@ -322,7 +323,7 @@ def write_snapshot(directory, csv_bytes, version, count, *, now=None):
 def load_snapshot(directory=None, *, max_age_days=30, now=None):
     """Return trustworthy local evidence, or None; never makes network calls."""
     directory = Path(directory or cache_dir())
-    manifest_path = directory / "manifest.json"
+    manifest_path = directory / MANIFEST_NAME
     if directory.is_symlink() or manifest_path.is_symlink():
         return None
     try:

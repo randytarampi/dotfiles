@@ -399,30 +399,19 @@ def _model_identity(model_name):
     return family, params, markers
 
 
-def merged_local_pool(include_cloud=False):
-    """Merge active engine pools with oMLX-first equivalence preference.
+def merge_local_pools(ollama_models, provider_pools):
+    """Merge already-captured engine pools with oMLX-first equivalence.
 
-    When an oMLX model is equivalent to an Ollama model — same normalized
-    (family, params) identity, or the exact same name — the oMLX entry
-    replaces the Ollama entry (oMLX serves MLX-quantized weights natively
-    on Apple Silicon). Distinct models are all kept. The dropped Ollama
-    name is recorded on the kept entry as ``equivalent_ollama_names`` so
-    classification (tier_resolve) can union capability metadata that only
-    Ollama reports (e.g. ``audio`` via ``ollama show``); engine pool
-    entries themselves carry no capabilities at merge time.
+    ``provider_pools`` is an iterable of ``(provider, engine_models)``. The
+    default discovery path lives in :func:`merged_local_pool`; onboarding
+    captures typed discovery once and reuses this identical merge so the
+    observed pool and the production pool cannot diverge.
     """
-    models = iter_engine_models("ollama", include_cloud)
+    models = list(ollama_models)
     ollama_identities = {
         _model_identity(model["name"]): model["name"] for model in models
     }
-    for provider in active_engines():
-        if provider == "ollama":
-            continue
-        try:
-            engine_models = iter_engine_models(provider, include_cloud)
-        except Exception as err:
-            logger.info("Local engine %s discovery failed: %s", provider, err)
-            continue
+    for provider, engine_models in provider_pools:
         for model in engine_models:
             identity = _model_identity(model.get("name", ""))
             if model.get("name") in ollama_identities.values() or (
@@ -465,6 +454,30 @@ def merged_local_pool(include_cloud=False):
             else:
                 models.append(model)
     return models
+
+
+def merged_local_pool(include_cloud=False):
+    """Merge active engine pools with oMLX-first equivalence preference.
+
+    When an oMLX model is equivalent to an Ollama model — same normalized
+    (family, params) identity, or the exact same name — the oMLX entry
+    replaces the Ollama entry (oMLX serves MLX-quantized weights natively
+    on Apple Silicon). Distinct models are all kept. The dropped Ollama
+    name is recorded on the kept entry as ``equivalent_ollama_names`` so
+    classification (tier_resolve) can union capability metadata that only
+    Ollama reports (e.g. ``audio`` via ``ollama show``); engine pool
+    entries themselves carry no capabilities at merge time.
+    """
+    models = iter_engine_models("ollama", include_cloud)
+    pools = []
+    for provider in active_engines():
+        if provider == "ollama":
+            continue
+        try:
+            pools.append((provider, iter_engine_models(provider, include_cloud)))
+        except Exception as err:
+            logger.info("Local engine %s discovery failed: %s", provider, err)
+    return merge_local_pools(models, pools)
 
 
 def audio_models(provider):

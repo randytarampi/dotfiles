@@ -95,6 +95,7 @@ def classify_models_for_preset(
     tier: str,
     min_reasoning_embedding: int = 0,
     profile: Optional[str] = None,
+    evidence_mode: str = "off",
 ) -> Dict[str, str]:
     from tier_resolve import resolve_roles_from_list
 
@@ -103,6 +104,7 @@ def classify_models_for_preset(
         min_reasoning_embedding=min_reasoning_embedding,
         moe_codegen_reuse=uses_local_placeholders(registry, tier),
         profile=profile,
+        evidence_mode=evidence_mode,
     )
 
 

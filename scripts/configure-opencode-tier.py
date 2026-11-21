@@ -236,6 +236,7 @@ def orchestrate_tier_switch(
     category_models: Optional[list] = None,
     min_reasoning_embedding: int = 0,
     dry_run: bool = False,
+    evidence_mode: str = "off",
 ):
     """Materialize a tier with model overrides, local fallbacks and proxy routing.
 
@@ -371,6 +372,7 @@ def orchestrate_tier_switch(
                 resolution_preset,
                 min_reasoning_embedding,
                 profile=profile,
+                evidence_mode=evidence_mode,
             )
 
     tier_registry.apply_placeholder_overrides(local_role_models, category_models)
@@ -669,8 +671,22 @@ def main():
         choices=available_tiers,
         help="Preferred interface: active OpenCode tier to set",
     )
+    parser.add_argument(
+        "--model-evidence",
+        choices=("off", "shadow"),
+        default=None,
+        help="Offline benchmark research mode (off or non-mutating shadow). "
+        "No evidence-based apply path is shipped.",
+    )
     args = parser.parse_args()
     load_env()
+    evidence_mode = args.model_evidence or "off"
+    if os.environ.get("DOTFILES_USE_MODEL_EVIDENCE_RANKING") == "1":
+        logger.info(
+            "Legacy DOTFILES_USE_MODEL_EVIDENCE_RANKING ignored; "
+            "evidence is shadow-only until host task acceptance"
+        )
+    logger.info("Effective local model evidence mode: %s", evidence_mode)
     if args.min_reasoning_embedding is None:
         try:
             args.min_reasoning_embedding = int(
@@ -718,6 +734,7 @@ def main():
         category_models=args.category_models,
         min_reasoning_embedding=args.min_reasoning_embedding,
         dry_run=args.dry_run,
+        evidence_mode=evidence_mode,
     )
 
 
