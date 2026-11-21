@@ -249,3 +249,43 @@ def test_audit_names_exact_source_when_two_candidates_are_comparable():
         "metric": "overall",
         "candidates": 2,
     }
+
+
+
+def test_duplicate_route_cannot_displace_a_distinct_fallback():
+    source, refs = fixture()
+    entries = [candidate("slow"), candidate("fast"), candidate("fast")]
+    before = [model["name"] for model in entries]
+    audit = {}
+    changed = rank_qualified(
+        {"code-gen": entries}, catalogues=[source], mappings=refs, audit=audit
+    )
+    assert changed == 0
+    assert [model["name"] for model in entries] == before
+    assert audit["by_source"]["whatmodel"]["code-gen"] == {
+        "qualified": 2,
+        "tool_capable": 2,
+        "mapped": 2,
+        "unmapped": 0,
+        "scored": 2,
+        "duplicates": 1,
+    }
+    assert audit["comparable"] == 1
+    assert audit["selected"] == {}
+
+
+def test_audit_reports_unmapped_tool_qualified_models_per_source():
+    source, refs = fixture()
+    entries = [candidate("slow"), candidate("fast"), candidate("new")]
+    audit = {}
+    rank_qualified(
+        {"code-gen": entries}, catalogues=[source], mappings=refs, audit=audit
+    )
+    assert audit["by_source"]["whatmodel"]["code-gen"] == {
+        "qualified": 3,
+        "tool_capable": 3,
+        "mapped": 2,
+        "unmapped": 1,
+        "scored": 2,
+        "duplicates": 0,
+    }

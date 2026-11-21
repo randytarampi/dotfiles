@@ -688,7 +688,7 @@ def main():
             if os.environ.get("DOTFILES_USE_MODEL_EVIDENCE_RANKING") == "1"
             else "off"
         )
-    logger.warning("Effective local model evidence mode: %s", evidence_mode)
+    logger.info("Effective local model evidence mode: %s", evidence_mode)
     if args.min_reasoning_embedding is None:
         try:
             args.min_reasoning_embedding = int(
