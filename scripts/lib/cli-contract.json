@@ -676,7 +676,8 @@
         "--local-fallback-preset",
         "--category-model",
         "--local-fallback-placeholder",
-        "--min-reasoning-embedding"
+        "--min-reasoning-embedding",
+        "--model-evidence"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -1650,6 +1651,29 @@
         "--max-pages",
         "--max-requests",
         "--coverage"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/suggest-model-evidence-mappings.py",
+      "capabilities": [
+        "public"
+      ],
+      "enforcement": "strict",
+      "failure_policy": "fail_fast",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--models-file",
+        "--cache-dir",
+        "--aa-cache-dir",
+        "--map",
+        "--max-candidates",
+        "--profile",
+        "--min-reasoning-embedding",
+        "--json",
+        "--accept"
       ],
       "positional_operand": null,
       "child_scripts": []

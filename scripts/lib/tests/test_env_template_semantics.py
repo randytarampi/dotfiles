@@ -42,6 +42,8 @@ def assignment_records(content):
 OPTIONAL_QUALITY_KEYS = (
     b"ARTIFICIAL_ANALYSIS_API_KEY",
     b"BENCHLM_DATA_KEY",
+    b"DOTFILES_USE_MODEL_EVIDENCE_RANKING",
+    b"DOTFILES_MODEL_EVIDENCE_MAP",
 )
 
 REMOTE_GATES = (
@@ -82,6 +84,8 @@ class EnvTemplateSemanticsTests(unittest.TestCase):
         expected = {
             b"ARTIFICIAL_ANALYSIS_API_KEY": b"# ARTIFICIAL_ANALYSIS_API_KEY=''",
             b"BENCHLM_DATA_KEY": b"# BENCHLM_DATA_KEY=''",
+            b"DOTFILES_USE_MODEL_EVIDENCE_RANKING": b"# DOTFILES_USE_MODEL_EVIDENCE_RANKING='0'",
+            b"DOTFILES_MODEL_EVIDENCE_MAP": b"# DOTFILES_MODEL_EVIDENCE_MAP=''",
         }
         assignments = [line for _, line in assignment_records(TEMPLATE.read_bytes())]
         for key, prefix in expected.items():

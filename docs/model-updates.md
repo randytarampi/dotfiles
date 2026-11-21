@@ -25,6 +25,30 @@ From **5 December 2026** BenchLM Free advertises 25 rows per read and only the f
 - No automatic retries, no provider-score averaging across scales, and no inference that a hosted score predicts a quantized local build.
 - Recovery: a failed refresh preserves the previous generation; inspect the sanitized error, restore access, and re-run deliberately. Do not delete a cache to "reset" a failure.
 
+## 21 November 2026: shadow comparison and read-only mapping
+
+The evidence producers feed an **offline, read-only** comparison. It never changes a generated role, fallback chain, client configuration or deployment. `off` is the default; `shadow` is explicit and only available on the OpenCode tier generator.
+
+```
+python3 scripts/configure-opencode-tier.py --preset local --dry-run --model-evidence shadow
+```
+
+`shadow` deep-copies the qualified candidate categories, compares only distinct exact-mapped routes within one source and versioned scale, and prints an audit. It cannot alter assignments. There is no `apply` mode, and `DOTFILES_USE_MODEL_EVIDENCE_RANKING=1` is ignored rather than silently activating anything. Voice, Pi, JetBrains, LiteLLM, Claude profile and Paseo consumers do not inherit evidence ordering.
+
+**Mapping file.** `~/.config/dotfiles/model-evidence-map.json` (or `DOTFILES_MODEL_EVIDENCE_MAP`) is a private, manually reviewed schema-v1 file:
+
+```json
+{"schema_version":1,"mappings":{"omlx/example":{"artificial-analysis":{"model_id":"aa-example","creator_id":"lab","scale":"aa-intelligence-5"}}}}
+```
+
+An entry is only used when the route, upstream model id, creator id and scale all match exactly. A hosted score is not evidence that a local quantisation behaves the same, that a tool capability exists, or that a route is free.
+
+**Audit fields.** Per source and per category the shadow output reports qualified, tool-capable, matched, unmapped, scale-mismatch, missing-identifier and duplicate counts, plus the selected source/metric, its coverage, and the number of distinct candidates and eligible pairs. `comparable` is a count of candidate score occurrences, not pairs; the per-category `eligible_pairs` is the number that decides whether a comparison is possible, and it is potential before `quiet` suppression. A first-100 subset never orders candidates, and every seat of a route repeated across fallback seats is excluded from comparison while the seats themselves are preserved. The audit names its outcome: `no-qualified-pair`, `quiet-suppressed`, `proposed-reorder` or `same-order`. Only `same-order` means a comparison was made and the baseline already matched; the two other no-change outcomes are not evidence agreement.
+
+**Read-only suggestions.** `python3 scripts/suggest-model-evidence-mappings.py` lists installed, post-qualification candidates with candidate upstream identities and caveats. It writes nothing, has no `--apply`, and refuses to suggest from an unfiltered inventory if live discovery or qualification yields no candidates. Artificial Analysis display labels are only applied to Artificial Analysis rows; another source with the same id cannot borrow them.
+
+**Boundaries.** The resolver's existing capability, memory and profile gates run first, and `quiet` keeps its resource-first order. Curated `DOTFILES_CATEGORY_MODELS` / `DOTFILES_ROLE_MODELS` overrides remain authoritative. Reverting is always `--model-evidence off`; no cache or map needs deletion.
+
 ## 13 November 2026: Inkling 2 Small — Ollama Cloud candidate
 
 The curated Ollama Cloud catalogue now includes `inkling-2-small` ([Ollama model page](https://ollama.com/library/inkling-2-small)); the optional Junie `ollama-cloud-inkling` group selects the exact direct `https://ollama.com/v1` model ID. A local daemon's `inkling-2-small:cloud` stub is **not** the direct cloud wire ID. Junie can derive a `litellm-ollama-cloud-inkling` twin, but the generator must omit it unless the exact `ollama-cloud/inkling-2-small` alias appears in the authenticated LiteLLM catalogue. The group does not invent a `fasterModel`.

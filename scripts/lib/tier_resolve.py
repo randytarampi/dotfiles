@@ -13,6 +13,7 @@ Provides:
     a {role: "ollama/model_name"} mapping.
 """
 
+import copy
 import re
 import subprocess
 
@@ -271,6 +272,8 @@ def resolve_roles_from_list(
     min_reasoning_embedding: int = 0,
     moe_codegen_reuse: bool = False,
     profile=None,
+    evidence_mode="off",
+    category_observer=None,
 ) -> dict:
     """Classify local Ollama models into role categories and return {role: "ollama/model_name"}.
 
@@ -667,6 +670,90 @@ def resolve_roles_from_list(
     _apply_profile_policy(
         classified, models, profile, min_reasoning_embedding=min_reasoning_embedding
     )
+
+    # Read-only integration seam for mapping onboarding. The callback sees the
+    # exact post-qualification, post-profile candidate categories but cannot
+    # change the model list or any role assignment.
+    if category_observer is not None:
+        if not callable(category_observer):
+            raise ValueError("invalid category observer")
+        category_observer(
+            copy.deepcopy(
+                {
+                    name: classified.get(name, [])
+                    for name in ("reasoning", "code-gen", "lightweight", "solo")
+                }
+            )
+        )
+
+    # Explicit caller control: voice, local-engine resolution and other shared
+    # consumers must never inherit a process-global evidence toggle.
+    if evidence_mode not in {"off", "shadow"}:
+        raise ValueError("invalid model evidence mode")
+    if evidence_mode != "off":
+        from model_evidence import rank_qualified
+
+        proposed = copy.deepcopy(classified)
+        audit = {}
+        changed = rank_qualified(proposed, profile=profile, audit=audit)
+        potential_pairs = sum(
+            stats.get("eligible_pairs", 0)
+            for per_source in audit.get("coverage_by_category", {}).values()
+            for stats in per_source.values()
+        )
+        logger.info(
+            "Model evidence %s: outcome=%s sources=%d mappings=%d "
+            "comparable_scores=%d potential_pairs=%d scale_mismatches=%d "
+            "missing_identifiers=%d partial_sources_excluded=%d "
+            "reordered_categories=%d",
+            evidence_mode,
+            audit.get("outcome", "unknown"),
+            audit.get("sources", 0),
+            audit.get("mappings", 0),
+            audit.get("comparable", 0),
+            potential_pairs,
+            audit.get("scale_mismatches", 0),
+            audit.get("missing_identifiers", 0),
+            audit.get("partial_sources_excluded", 0),
+            changed,
+        )
+        logger.info(
+            "Model evidence unique eligibility=%d source_coverage=%s "
+            "duplicate_seats_excluded=%d",
+            audit.get("eligible_unique", 0),
+            audit.get("coverage_by_source", {}),
+            audit.get("duplicate_slots_skipped", 0),
+        )
+        if audit.get("coverage_by_category"):
+            logger.info(
+                "Model evidence coverage per source/category: %s",
+                audit["coverage_by_category"],
+            )
+        if audit.get("selected"):
+            logger.info(
+                "Model evidence selected comparable sets: %s", audit["selected"]
+            )
+        if evidence_mode == "shadow":
+
+            def route_name(model):
+                return model.get("provider", "ollama") + "/" + model["name"]
+
+            for category in ("reasoning", "code-gen", "lightweight", "solo"):
+                before = [route_name(model) for model in classified.get(category, [])]
+                after = [route_name(model) for model in proposed.get(category, [])]
+                if before != after:
+                    logger.warning(
+                        "Model evidence shadow %s: baseline=%s proposed=%s "
+                        "(no configuration change)",
+                        category,
+                        before,
+                        after,
+                    )
+            if not changed:
+                logger.info(
+                    "Model evidence shadow: no proven ordering change; inspect "
+                    "mapping, source freshness, scales and category gates"
+                )
 
     if not classified["solo"]:
         logger.warning(
