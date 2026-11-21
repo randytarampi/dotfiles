@@ -39,9 +39,7 @@ def assignment_records(content):
 
 # New quality-input keys intentionally stay outside the frozen historical
 # assignment list, and receive separate default-off/secret-empty checks.
-OPTIONAL_QUALITY_KEYS = (
-    b"ARTIFICIAL_ANALYSIS_API_KEY",
-)
+OPTIONAL_QUALITY_KEYS = (b"ARTIFICIAL_ANALYSIS_API_KEY",)
 
 REMOTE_GATES = (
     b"DOTFILES_RUN_TAILSCALE_ACCESS_SETUP",
