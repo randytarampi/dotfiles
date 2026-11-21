@@ -41,9 +41,6 @@ def assignment_records(content):
 # assignment list, and receive separate default-off/secret-empty checks.
 OPTIONAL_QUALITY_KEYS = (
     b"ARTIFICIAL_ANALYSIS_API_KEY",
-    b"DOTFILES_USE_ARTIFICIAL_ANALYSIS_RANKING",
-    b"DOTFILES_ARTIFICIAL_ANALYSIS_MODEL_MAP",
-    b"DOTFILES_USE_MODEL_EVIDENCE_RANKING",
 )
 
 REMOTE_GATES = (
@@ -83,9 +80,6 @@ class EnvTemplateSemanticsTests(unittest.TestCase):
     def test_optional_quality_keys_remain_comment_only_and_default_off(self):
         expected = {
             b"ARTIFICIAL_ANALYSIS_API_KEY": b"# ARTIFICIAL_ANALYSIS_API_KEY=''",
-            b"DOTFILES_USE_ARTIFICIAL_ANALYSIS_RANKING": b"# DOTFILES_USE_ARTIFICIAL_ANALYSIS_RANKING='0'",
-            b"DOTFILES_ARTIFICIAL_ANALYSIS_MODEL_MAP": b"# DOTFILES_ARTIFICIAL_ANALYSIS_MODEL_MAP=''",
-            b"DOTFILES_USE_MODEL_EVIDENCE_RANKING": b"# DOTFILES_USE_MODEL_EVIDENCE_RANKING='0'",
         }
         assignments = [line for _, line in assignment_records(TEMPLATE.read_bytes())]
         for key, prefix in expected.items():
