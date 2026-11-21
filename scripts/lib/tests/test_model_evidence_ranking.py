@@ -180,8 +180,14 @@ def test_actual_tier_consumer_calls_opt_in_ranker(monkeypatch):
             return 1
 
         with patch("model_evidence.rank_qualified", side_effect=reorder):
-            changed = tier_resolve.resolve_roles_from_list(fleet, evidence_mode="apply")
-    assert changed["code-gen"] != baseline["code-gen"]
+            shadow = tier_resolve.resolve_roles_from_list(
+                fleet, evidence_mode="shadow"
+            )
+    assert shadow == baseline
+    import pytest
+
+    with pytest.raises(ValueError, match="invalid model evidence mode"):
+        tier_resolve.resolve_roles_from_list(fleet, evidence_mode="apply")
 
 
 def test_process_environment_cannot_rerank_shared_voice_or_local_winner(monkeypatch):

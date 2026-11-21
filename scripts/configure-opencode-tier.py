@@ -673,20 +673,18 @@ def main():
     )
     parser.add_argument(
         "--model-evidence",
-        choices=("off", "shadow", "apply"),
+        choices=("off", "shadow"),
         default=None,
-        help="Offline benchmark ranking mode (off, read-only shadow, or apply). "
-        "Overrides ~/.env; default off unless the legacy opt-in is set.",
+        help="Offline benchmark research mode (off or non-mutating shadow). "
+        "No evidence-based apply path is shipped.",
     )
     args = parser.parse_args()
     load_env()
-    if args.model_evidence is not None:
-        evidence_mode = args.model_evidence
-    else:
-        evidence_mode = (
-            "apply"
-            if os.environ.get("DOTFILES_USE_MODEL_EVIDENCE_RANKING") == "1"
-            else "off"
+    evidence_mode = args.model_evidence or "off"
+    if os.environ.get("DOTFILES_USE_MODEL_EVIDENCE_RANKING") == "1":
+        logger.info(
+            "Legacy DOTFILES_USE_MODEL_EVIDENCE_RANKING ignored; "
+            "evidence is shadow-only until host task acceptance"
         )
     logger.info("Effective local model evidence mode: %s", evidence_mode)
     if args.min_reasoning_embedding is None:
