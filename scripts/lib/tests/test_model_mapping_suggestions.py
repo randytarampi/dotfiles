@@ -152,3 +152,62 @@ def test_no_automatic_approval_and_unknown_model_refused():
             fleet(),
             [source()],
         )
+
+
+def test_malformed_or_loosely_permissioned_existing_map_is_refused(tmp_path):
+    approved = approved_patch(
+        ["omlx/Ornith-1.5-35B-A3B-MLX-4bit=benchlm-coding:ornith-1.5-35b-a3b"],
+        fleet(),
+        [source()],
+    )
+    path = tmp_path / "map.json"
+    path.write_text("{not json", encoding="utf-8")
+    path.chmod(0o600)
+    with pytest.raises(MappingSuggestionError, match="unreadable or malformed"):
+        merge_approved(approved, path=path, apply=True)
+    path.write_text(json.dumps({"schema_version": 1, "mappings": {}}), encoding="utf-8")
+    path.chmod(0o644)
+    with pytest.raises(MappingSuggestionError, match="owned private regular file"):
+        merge_approved(approved, path=path, apply=True)
+
+
+def test_symlinked_parent_directory_is_refused(tmp_path):
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real)
+    approved = approved_patch(
+        ["omlx/Ornith-1.5-35B-A3B-MLX-4bit=benchlm-coding:ornith-1.5-35b-a3b"],
+        fleet(),
+        [source()],
+    )
+    with pytest.raises(MappingSuggestionError, match="symlink"):
+        merge_approved(approved, path=link / "map.json", apply=True)
+
+
+def test_failed_replace_leaves_previous_map_intact(tmp_path, monkeypatch):
+    approved = approved_patch(
+        ["omlx/Ornith-1.5-35B-A3B-MLX-4bit=benchlm-coding:ornith-1.5-35b-a3b"],
+        fleet(),
+        [source()],
+    )
+    path = tmp_path / "map.json"
+    merge_approved(approved, path=path, apply=True)
+    before = path.read_bytes()
+
+    def disk_full(*args, **kwargs):
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr("model_mapping_suggestions._write_private", disk_full)
+    extra = {
+        "omlx/Ornith-1.5-35B-A3B-MLX-4bit": {
+            "benchlm-overall": {
+                "model_id": "ornith-1.5-35b-a3b",
+                "creator_id": "maker",
+                "scale": "benchalign-v5-method6-overall",
+            }
+        }
+    }
+    with pytest.raises(OSError):
+        merge_approved(extra, path=path, apply=True)
+    assert path.read_bytes() == before
