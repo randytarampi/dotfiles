@@ -26,7 +26,9 @@ def _name_key(value):
 
 
 def _param_token(value):
-    result = re.search(r"(?<![a-z0-9])(\d+(?:\.\d+)?[bm])(?![a-z0-9])", value.casefold())
+    result = re.search(
+        r"(?<![a-z0-9])(\d+(?:\.\d+)?[bm])(?![a-z0-9])", value.casefold()
+    )
     return result.group(1) if result else None
 
 
@@ -88,7 +90,9 @@ def _private_metadata(source, directory):
     return metadata, notice
 
 
-def build_suggestions(classified, catalogues, aa_snapshot=None, directory=None, mappings=None):
+def build_suggestions(
+    classified, catalogues, aa_snapshot=None, directory=None, mappings=None
+):
     """Return private, score-free owner-review proposals; never a final mapping."""
     mappings = mappings or {}
     aa_snapshot = aa_snapshot or {}
@@ -186,7 +190,8 @@ def build_suggestions(classified, catalogues, aa_snapshot=None, directory=None, 
                         "owner_verified": False,
                         "already_mapped": already,
                         "coverage": next(
-                            s["coverage"] for s in sources
+                            s["coverage"]
+                            for s in sources
                             if s["source"] == source["source"]
                         ),
                     }

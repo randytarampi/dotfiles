@@ -55,11 +55,7 @@ def test_different_parameter_count_is_never_a_name_suggestion(tmp_path):
         "scale": "aa-intelligence-5",
         "models": {"a": {"creator_id": "lab", "score": 70}},
     }
-    aa = {
-        "models": [
-            {"id": "a", "name": "Gemma-4-27B", "slug": "gemma-4-27b"}
-        ]
-    }
+    aa = {"models": [{"id": "a", "name": "Gemma-4-27B", "slug": "gemma-4-27b"}]}
     out = build_suggestions(
         {"reasoning": [model("Gemma-4-12B-MLX-8bit")]},
         [source],
@@ -147,7 +143,6 @@ def test_category_observer_gets_deep_copy_and_preserves_baseline_roles():
     assert observed == original
     assert captured["code-gen"] == []
     assert observed["code-gen"] != ""
-
 
 
 def test_mapping_suggestions_require_tools_and_role_relevant_metric(tmp_path):

@@ -39,23 +39,30 @@ def _models_from_file(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument(
-        "--models-file", type=Path,
+        "--models-file",
+        type=Path,
         help="Optional offline array of local models (default: active engine discovery)",
     )
     parser.add_argument(
-        "--source-dir", type=Path, default=sources_dir(),
+        "--source-dir",
+        type=Path,
+        default=sources_dir(),
         help="Private already-refreshed model evidence source directory",
     )
     parser.add_argument(
-        "--aa-cache-dir", type=Path, default=cache_dir(),
+        "--aa-cache-dir",
+        type=Path,
+        default=cache_dir(),
         help="Private Artificial Analysis cache location",
     )
     parser.add_argument(
-        "--map-file", type=Path,
+        "--map-file",
+        type=Path,
         help="Optional existing private mapping for read-only status",
     )
     parser.add_argument(
-        "--profile", choices=("quiet", "loud", "solo"),
+        "--profile",
+        choices=("quiet", "loud", "solo"),
         help="Apply matching local profile policy before suggesting mappings",
     )
     args = parser.parse_args()
