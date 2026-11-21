@@ -231,6 +231,30 @@ def probe_free(api_key, *, get_page=None):
     return {"pages": total, "first_page_models": count}
 
 
+def preflight_cache(directory):
+    """Fail before transport when an existing cache layout is not private.
+
+    Creates nothing. A missing layout is valid because ``write_snapshot`` will
+    create it privately after a successful fetch.
+    """
+    directory = Path(directory)
+    if directory.is_symlink():
+        raise EvidenceError("refusing symlink cache directory")
+    if not directory.exists():
+        return
+    if not directory.is_dir():
+        raise EvidenceError("refusing non-directory cache path")
+    if stat.S_IMODE(directory.stat().st_mode) & 0o077:
+        raise EvidenceError("cache directory must be private (0700)")
+    snapshots = directory / "snapshots"
+    if snapshots.is_symlink():
+        raise EvidenceError("refusing symlink snapshot directory")
+    if snapshots.exists() and (
+        not snapshots.is_dir() or stat.S_IMODE(snapshots.stat().st_mode) & 0o077
+    ):
+        raise EvidenceError("snapshot directory must be private (0700)")
+
+
 def _private_directory(path):
     if path.is_symlink():
         raise EvidenceError("refusing symlink cache directory")

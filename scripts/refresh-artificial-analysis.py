@@ -15,6 +15,7 @@ from artificial_analysis import (  # noqa: E402
     cache_dir,
     fetch_free,
     load_snapshot,
+    preflight_cache,
     probe_free,
     write_snapshot,
 )
@@ -43,6 +44,11 @@ def main():
     if args.dry_run:
         print("Artificial Analysis: dry-run; no network request or cache write")
         return 0
+    try:
+        preflight_cache(args.cache_dir)
+    except (EvidenceError, OSError) as error:
+        print("Artificial Analysis cache unavailable: " + str(error), file=sys.stderr)
+        return 1
     if args.probe:
         try:
             probe_free(os.environ.get("ARTIFICIAL_ANALYSIS_API_KEY", ""))

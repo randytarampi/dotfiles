@@ -238,3 +238,63 @@ def test_benchlm_bundle_valid_requires_one_coherent_generation():
 
     rows = _bundle_rows()
     assert _benchlm_bundle_valid(rows, manifest_bundle={"id": "other"}) is False
+
+
+def _write_generation(directory):
+    members = sorted(BENCHLM_SOURCES)
+    root = directory / "generations" / "gen-1"
+    root.mkdir(parents=True)
+    for name in BENCHLM_SOURCES:
+        metric = name.removeprefix("benchlm-")
+        payload = source(
+            source=name,
+            metric=metric,
+            scale="benchalign-v5-" + metric,
+            bundle={"id": "gen-1", "members": members},
+        )
+        (root / (name + ".json")).write_text(json.dumps(payload), encoding="utf-8")
+    (directory / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "generation": "gen-1",
+                "bundle": {"id": "gen-1", "members": members},
+                "sources": [name + ".json" for name in BENCHLM_SOURCES],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _generic_payload():
+    payload = source(source="private", metric="overall", scale="private-v1")
+    for key in ("bundle", "coverage", "retrieved_rows", "population_total"):
+        payload.pop(key, None)
+    return payload
+
+
+def test_manifest_supersedes_only_flat_benchlm(tmp_path):
+    _write_generation(tmp_path)
+    (tmp_path / "benchlm-coding.json").write_text(
+        json.dumps(source(bundle={"id": "old", "members": ["benchlm-coding"]})),
+        encoding="utf-8",
+    )
+    (tmp_path / "private.json").write_text(
+        json.dumps(_generic_payload()), encoding="utf-8"
+    )
+    loaded = load_catalogues(tmp_path, aa_evidence={}, now=NOW)
+    names = [row["source"] for row in loaded]
+    assert names.count("benchlm-coding") == 1
+    assert "private" in names
+
+
+def test_corrupt_manifest_keeps_generic_sources(tmp_path):
+    (tmp_path / "benchlm-coding.json").write_text(
+        json.dumps(source()), encoding="utf-8"
+    )
+    (tmp_path / "private.json").write_text(
+        json.dumps(_generic_payload()), encoding="utf-8"
+    )
+    (tmp_path / "manifest.json").write_text("[]", encoding="utf-8")
+    loaded = load_catalogues(tmp_path, aa_evidence={}, now=NOW)
+    assert [row["source"] for row in loaded] == ["private"]
