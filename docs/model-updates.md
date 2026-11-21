@@ -4,6 +4,27 @@
 
 Use this playbook when adding or changing models, switching tiers, or updating provider configuration. Keep the source JSON, tier behavior, documentation, and generated configuration aligned.
 
+## 21 November 2026: private model-quality evidence producers
+
+Two private, offline-first producers collect external quality data. **Neither changes model selection.** The ordinary resolver stays network-free and no role or fallback assignment depends on these caches; selection integration, if any, is a separate contract.
+
+### Artificial Analysis Free (`ARTIFICIAL_ANALYSIS_API_KEY`)
+
+`scripts/refresh-artificial-analysis.py --probe` reads one page and writes nothing. `--refresh` reads the bounded Free pages and writes a checksummed, content-addressed snapshot under `~/.cache/dotfiles/artificial-analysis/`; `--offline` validates that private cache without network. Only the Intelligence index is stored; Coding and Agentic fields are null at the provider and are not synthesised. Schema v3 keeps `id`, `slug`, `name`, `creator_id`, `creator_name` and `intelligence` so a human can join a local route to an upstream identity; v1/v2 caches remain readable. Snapshots are valid for 30 days. A valid-JSON but non-object manifest, a bad checksum, a symlink, an unknown schema or a stale timestamp makes the source unavailable rather than raising.
+
+### BenchLM Free (`BENCHLM_DATA_KEY`, separate key)
+
+`scripts/refresh-benchlm-evidence.py --probe --surface coding` spends one request, reports only that the first-page schema is valid, and writes nothing. `--refresh` reads the four current surfaces (`reasoning`, `coding`, `agentic`, `overall`) with a hard request budget — 12 by default for complete coverage, 16 for `--coverage first-100` — paced at 2.1 s and failing closed on 429 with a sanitized `Retry-After` note. Only rows whose `evidenceStatus` is `supported` are kept; `maturity` is recorded as metadata and is **not** an eligibility gate. A complete refresh publishes a generation directory and writes `manifest.json` last, so an interrupted publish keeps the previous generation readable. `--offline` reads that generation and refuses a mixed, unbundled or singleton bundle.
+
+From **5 December 2026** BenchLM Free advertises 25 rows per read and only the first 100 rows of a list. Complete mode then fails closed before any request; use `--coverage first-100`, which is explicitly incomplete, carries a distinct `-top100` scale, and cannot be treated as a complete leaderboard. Do not buy a paid tier as a workaround.
+
+### Operating rules
+
+- Keys are optional and stay commented in `.env.example`; caches are private (0600 files, 0700 directories) and never committed or published.
+- The trusted catalogue workflow may run advisory, one-read probes with a secret. It publishes only the existing public candidate artefact; private snapshots from an Actions runner never reach this host.
+- No automatic retries, no provider-score averaging across scales, and no inference that a hosted score predicts a quantized local build.
+- Recovery: a failed refresh preserves the previous generation; inspect the sanitized error, restore access, and re-run deliberately. Do not delete a cache to "reset" a failure.
+
 ## 13 November 2026: Inkling 2 Small — Ollama Cloud candidate
 
 The curated Ollama Cloud catalogue now includes `inkling-2-small` ([Ollama model page](https://ollama.com/library/inkling-2-small)); the optional Junie `ollama-cloud-inkling` group selects the exact direct `https://ollama.com/v1` model ID. A local daemon's `inkling-2-small:cloud` stub is **not** the direct cloud wire ID. Junie can derive a `litellm-ollama-cloud-inkling` twin, but the generator must omit it unless the exact `ollama-cloud/inkling-2-small` alias appears in the authenticated LiteLLM catalogue. The group does not invent a `fasterModel`.
