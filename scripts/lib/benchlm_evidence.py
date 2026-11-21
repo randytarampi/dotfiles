@@ -100,9 +100,7 @@ def _parse_row(item, seen):
         return None
     maturity = item.get("maturity")
     if maturity is not None and (
-        not isinstance(maturity, str)
-        or len(maturity) > 80
-        or not maturity.strip()
+        not isinstance(maturity, str) or len(maturity) > 80 or not maturity.strip()
     ):
         raise BenchlmError("BenchLM model maturity malformed")
     raw_score = _field(item, "score", "finalScore")
@@ -138,20 +136,14 @@ def _pagination(rows, page, offset, coverage_mode):
     if next_offset is None:
         if end < window:
             raise BenchlmError("BenchLM truncated final page")
-    elif (
-        type(next_offset) is not int
-        or next_offset != end
-        or next_offset > total
-    ):
+    elif type(next_offset) is not int or next_offset != end or next_offset > total:
         raise BenchlmError("BenchLM pagination cursor invalid")
     if coverage_mode == "first-100" and end == window:
         return total, None
     return total, next_offset
 
 
-def _parse_page(
-    payload, *, surface, offset, reference=None, coverage_mode="complete"
-):
+def _parse_page(payload, *, surface, offset, reference=None, coverage_mode="complete"):
     if not isinstance(payload, dict):
         raise BenchlmError("BenchLM response is not an object")
     if payload.get("surface") != surface:
@@ -286,9 +278,7 @@ def _snapshot_for_surface(surface, bundle, request_page, max_pages, coverage_mod
         "attribution": ATTRIBUTION,
         "source_url": "https://benchlm.ai/data/access",
         "usage_terms": "https://benchlm.ai/terms#data-access",
-        "coverage": (
-            "complete" if observed_rows == total else "first-100-subset"
-        ),
+        "coverage": ("complete" if observed_rows == total else "first-100-subset"),
         "retrieved_rows": observed_rows,
         "population_total": total,
         "models": sorted(rows, key=lambda row: row["id"]),

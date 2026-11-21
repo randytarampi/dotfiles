@@ -79,12 +79,17 @@ def main():
         offline_sources(args.cache_dir)
     except BenchlmError as error:
         print(
-            "BenchLM Free: " + str(error) + "; old evidence left unchanged when fetch failed",
+            "BenchLM Free: "
+            + str(error)
+            + "; old evidence left unchanged when fetch failed",
             file=sys.stderr,
         )
         return 1
     except OSError:
-        print("BenchLM Free: unavailable; old evidence may require inspection", file=sys.stderr)
+        print(
+            "BenchLM Free: unavailable; old evidence may require inspection",
+            file=sys.stderr,
+        )
         return 1
     print(
         "BenchLM Free: four private current rankings validated "

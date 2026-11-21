@@ -167,7 +167,7 @@ def test_invalid_envelope_and_pagination_fail_closed(failure):
         "surface": "coding",
         "dataAsOf": DATE,
         "methodologyVersion": "6.0",
-                "rankingMode": "bench-align-v5",
+        "rankingMode": "bench-align-v5",
         "items": [{"modelKey": "x"}],
         "pagination": {"offset": 0, "total": 1, "nextOffset": None},
     }
@@ -228,7 +228,7 @@ def test_version_and_total_must_agree_across_paged_response():
         "surface": "coding",
         "dataAsOf": DATE,
         "methodologyVersion": "6.0",
-                "rankingMode": "bench-align-v5",
+        "rankingMode": "bench-align-v5",
         "items": [{"modelKey": "first"}],
         "pagination": {"offset": 0, "total": 2, "nextOffset": 1},
     }
@@ -276,7 +276,7 @@ def test_invalid_pagination_type_is_bounded_error():
         "surface": "coding",
         "dataAsOf": DATE,
         "methodologyVersion": "6.0",
-                "rankingMode": "bench-align-v5",
+        "rankingMode": "bench-align-v5",
         "items": [{"modelKey": "first"}],
         "pagination": "not-an-object",
     }
@@ -462,16 +462,19 @@ def test_live_status_is_not_model_maturity():
 
 
 def test_live_unsupported_status_is_excluded_even_if_maturity_supported():
-    assert _parse_row(
-        {
-            "modelKey": "provider:estimate",
-            "creator": "provider",
-            "score": 80.0,
-            "evidenceStatus": "estimated",
-            "maturity": "supported",
-        },
-        set(),
-    ) is None
+    assert (
+        _parse_row(
+            {
+                "modelKey": "provider:estimate",
+                "creator": "provider",
+                "score": 80.0,
+                "evidenceStatus": "estimated",
+                "maturity": "supported",
+            },
+            set(),
+        )
+        is None
+    )
 
 
 def test_explicit_partial_window_preserves_true_population_and_scale():
@@ -479,7 +482,9 @@ def test_explicit_partial_window_preserves_true_population_and_scale():
         def open(self, request, timeout):
             response = super().open(request, timeout)
             envelope = json.loads(response.data.getvalue())
-            envelope["availableSurfaces"] = list(("coding", "reasoning", "overall", "agentic"))
+            envelope["availableSurfaces"] = list(
+                ("coding", "reasoning", "overall", "agentic")
+            )
             envelope["planNotice"] = (
                 "From December 5, 2026, Free returns 25 rows a read and "
                 "the first 100 rows of a list."
@@ -488,23 +493,29 @@ def test_explicit_partial_window_preserves_true_population_and_scale():
             envelope["pagination"]["total"] = 214
             # Simulate four successive 25-row pages and 100-row Free ceiling.
             from urllib.parse import parse_qs, urlsplit
+
             offset = int(parse_qs(urlsplit(request.full_url).query)["offset"][0])
             envelope["items"] = [
-                {"modelKey": "provider:" + str(i), "creator": "provider",
-                 "score": float(i % 100), "evidenceStatus": "supported",
-                 "maturity": "developing"}
+                {
+                    "modelKey": "provider:" + str(i),
+                    "creator": "provider",
+                    "score": float(i % 100),
+                    "evidenceStatus": "supported",
+                    "maturity": "developing",
+                }
                 for i in range(offset, offset + 25)
             ]
             envelope["pagination"]["offset"] = offset
-            envelope["pagination"]["nextOffset"] = (
-                offset + 25 if offset < 75 else None
-            )
+            envelope["pagination"]["nextOffset"] = offset + 25 if offset < 75 else None
             return Response(envelope)
 
     upstream = FreeOpener()
     snapshots = fetch_snapshots(
-        "placeholder", opener=upstream, max_requests=16,
-        request_interval=0, coverage_mode="first-100",
+        "placeholder",
+        opener=upstream,
+        max_requests=16,
+        request_interval=0,
+        coverage_mode="first-100",
     )
     assert len(upstream.calls) == 16
     assert all(row["retrieved_rows"] == 100 for row in snapshots)

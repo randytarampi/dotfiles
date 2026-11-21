@@ -192,9 +192,10 @@ def test_minimal_v2_cache_remains_readable_while_v3_restores_join_keys(tmp_path)
     csv_bytes, version, count = normalize_pages([page()])
     manifest = write_snapshot(tmp_path, csv_bytes, version, count, now=now)
     minimal = (
-        ",".join(MINIMAL_V2_COLUMNS)
-        + "\\nsynthetic-a,synthetic-vendor,10\\n"
-    ).replace("\\n", "\n").encode("utf-8")
+        (",".join(MINIMAL_V2_COLUMNS) + "\\nsynthetic-a,synthetic-vendor,10\\n")
+        .replace("\\n", "\n")
+        .encode("utf-8")
+    )
     digest = hashlib.sha256(minimal).hexdigest()
     (tmp_path / "snapshots" / (digest + ".csv")).write_bytes(minimal)
     manifest.update(
