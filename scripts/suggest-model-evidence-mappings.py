@@ -130,7 +130,7 @@ def main():
                 "No changes made; use --accept for a JSON preview, --apply only after owner review."
             )
         return 0
-    except (MappingSuggestionError, OSError, ValueError) as error:
+    except (OSError, ValueError) as error:
         print("mapping onboarding unavailable: " + str(error), file=sys.stderr)
         return 1
 

@@ -39,9 +39,15 @@ class MappingSuggestionError(ValueError):
 def _tokens(label):
     # Model slugs can include provider namespaces and runtime quantization tags.
     name = label.split("/")[-1].lower()
+    # Split runtime prefixes and quantisation markers for simpler auditing.
     name = re.sub(
-        r"(?:^|[-_:])(?:mlx|gguf|ollama|mxfp\d+|nvfp4|bf16|fp16|fp32|"
-        r"q[2-8](?:_[a-z0-9]+)?|\d+bit)(?=$|[-_:])",
+        r"(?:^|[-_:])(?:mlx|gguf|ollama|mxfp\d+|nvfp4|bf16|fp16|fp32)"
+        r"(?=$|[-_:])",
+        "-",
+        name,
+    )
+    name = re.sub(
+        r"(?:^|[-_:])(?:q[2-8](?:_[a-z0-9]+)?|\d+bit)(?=$|[-_:])",
         "-",
         name,
     )
@@ -102,6 +108,8 @@ def qualified_local_models(records, details=None):
         metadata = details(name, provider) if details else item
         if not isinstance(metadata, dict):
             continue
+        if metadata.get("model_type") not in (None, "llm", "vlm"):
+            continue
         caps = set(item.get("capabilities") or []) | set(
             metadata.get("capabilities") or []
         )
@@ -137,7 +145,7 @@ def suggestions_for(models, catalogues, aa_snapshot=None, *, maximum=3):
                     (_similarity(local["route"], label) for label in labels),
                     default=0.0,
                 )
-                if best == 0:
+                if best <= 0:
                     continue
                 matched.append(
                     {
@@ -146,7 +154,11 @@ def suggestions_for(models, catalogues, aa_snapshot=None, *, maximum=3):
                         "model_id": model_id,
                         "creator_id": evidence["creator_id"],
                         "scale": source["scale"],
-                        "match": "canonical-name" if best == 1.0 else "lexical-only",
+                        "match": (
+                            "identical-normalized-tokens"
+                            if best >= 0.999
+                            else "lexical-only"
+                        ),
                         "score": best,
                         "provenance": "private cached source; identity unverified",
                     }

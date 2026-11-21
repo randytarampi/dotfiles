@@ -1,7 +1,6 @@
 """Adversarial offline onboarding, approval, backup and identity tests."""
 
 import json
-import os
 import stat
 
 import pytest
@@ -64,7 +63,7 @@ def test_installed_suggestions_identify_quantized_name_without_silently_mapping(
     ornith = next(row for row in report if "Ornith" in row["route"])
     mini = next(row for row in report if "inkling" in row["route"])
     assert ornith["candidates"][0]["model_id"] == "ornith-1.5-35b-a3b"
-    assert ornith["candidates"][0]["match"] == "canonical-name"
+    assert ornith["candidates"][0]["match"] == "identical-normalized-tokens"
     assert "quantization" in ornith["caveat"]
     assert mini["candidates"] == []
     assert "score" not in str(report)
