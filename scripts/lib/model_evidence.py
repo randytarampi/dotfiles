@@ -235,14 +235,41 @@ def _candidate_score(model, catalogue, mappings):
     return entry["score"]
 
 
-def rank_qualified(classified, *, catalogues=None, mappings=None, profile=None):
+def rank_qualified(classified, *, catalogues=None, mappings=None, profile=None, audit=None):
     """Move only comparable slots within their category, never between scales."""
+    if audit is not None:
+        audit.update({
+            "sources": 0, "mappings": 0, "comparable": 0,
+            "scale_mismatches": 0, "missing_identifiers": 0,
+        })
     if profile == "quiet":
         return 0
     catalogues = catalogues if catalogues is not None else load_catalogues()
     mappings = mappings if mappings is not None else load_private_mappings()
+    if audit is not None:
+        audit["sources"] = len(catalogues)
+        audit["mappings"] = len(mappings)
     if not catalogues or not mappings:
         return 0
+    if audit is not None:
+        for category, models in classified.items():
+            if category not in ROLE_METRICS:
+                continue
+            for model in models:
+                route = model.get("provider", "ollama") + "/" + model["name"]
+                assigned = mappings.get(route, {})
+                for source in catalogues:
+                    ref = assigned.get(source["source"])
+                    if not ref:
+                        continue
+                    if ref["scale"] != source["scale"]:
+                        audit["scale_mismatches"] += 1
+                    elif (
+                        ref["model_id"] not in source["models"]
+                        or source["models"][ref["model_id"]]["creator_id"]
+                        != ref["creator_id"]
+                    ):
+                        audit["missing_identifiers"] += 1
     changed = 0
     for category, preferences in ROLE_METRICS.items():
         entries = classified.get(category)
@@ -259,6 +286,8 @@ def rank_qualified(classified, *, catalogues=None, mappings=None, profile=None):
                     for index, model in enumerate(entries)
                 ]
                 comparable = [(i, s) for i, s in scored if s is not None]
+                if audit is not None:
+                    audit["comparable"] += len(comparable)
                 if len(comparable) >= 2:
                     possibilities.append((source["source"], comparable))
             if possibilities:
