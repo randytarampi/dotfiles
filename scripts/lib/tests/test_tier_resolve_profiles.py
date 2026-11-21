@@ -481,3 +481,30 @@ def test_quiet_gemma_selection_sizes_by_name_when_details_omit_counts():
     # Size must come from the name tag when the detail lookup omits the
     # count — an unknown-size Gemma must not outrank a known smaller one.
     assert resolved["reasoning"] == "ollama/gemma4:8b"
+
+
+def test_solo_only_model_keeps_its_engine_route():
+    """A profile may empty every other category; solo must keep omlx, not ollama."""
+    fleet = [{"name": "Qwen3.8-27B-4bit", "provider": "omlx", "param_count": 27}]
+    details = {
+        "Qwen3.8-27B-4bit": {
+            "param_count": 27,
+            "capabilities": ["thinking", "completion", "tools", "vision"],
+            "is_moe": False,
+        }
+    }
+
+    def keep_only_solo(classified, model_entries, profile, min_reasoning_embedding=0):
+        for category in ("reasoning", "code-gen", "lightweight", "vision", "audio"):
+            classified[category] = []
+
+    with (
+        patch.object(
+            tier_resolve,
+            "get_model_details",
+            side_effect=lambda name, provider="ollama": details[name],
+        ),
+        patch.object(tier_resolve, "_apply_profile_policy", side_effect=keep_only_solo),
+    ):
+        resolved = tier_resolve.resolve_roles_from_list(fleet)
+    assert resolved["solo"] == "omlx/Qwen3.8-27B-4bit"
