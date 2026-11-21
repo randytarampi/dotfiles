@@ -358,7 +358,10 @@ def fetch_snapshots(
         state["last"] = clock()
         state["used"] += 1
         return _read_page(
-            surface, offset, key, opener=opener,
+            surface,
+            offset,
+            key,
+            opener=opener,
             page_limit=25 if coverage_mode == "first-100" else PAGE_LIMIT,
         )
 
