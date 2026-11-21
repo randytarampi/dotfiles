@@ -146,7 +146,9 @@ def _normalize_source(payload, name, *, now):
             or not isinstance(members, list)
             or not 1 <= len(members) <= 16
             or len(set(map(str, members))) != len(members)
-            or not all(isinstance(item, str) and SOURCE_ID.fullmatch(item) for item in members)
+            or not all(
+                isinstance(item, str) and SOURCE_ID.fullmatch(item) for item in members
+            )
             or name not in members
         ):
             return None
@@ -166,9 +168,9 @@ def _batch_complete(item, catalogues):
         return True
     by_source = {entry["source"]: entry for entry in catalogues}
     return all(
-        by_source.get(name, {}).get("bundle") == bundle
-        for name in bundle["members"]
+        by_source.get(name, {}).get("bundle") == bundle for name in bundle["members"]
     )
+
 
 def load_catalogues(directory=None, *, aa_evidence=None, now=None):
     """Read AA Intelligence and private v1 datasets without network access."""

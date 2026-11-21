@@ -265,7 +265,6 @@ def test_partial_or_mixed_batch_is_ineligible_for_resolution(tmp_path):
     assert load_catalogues(tmp_path, aa_evidence={}) == []
 
 
-
 def test_invalid_pagination_type_is_bounded_error():
     data = {
         "surface": "coding",

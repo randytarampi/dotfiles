@@ -137,6 +137,7 @@ def _parse_page(payload, *, surface, offset, reference=None):
         raise BenchlmError("BenchLM pagination mixed scoring revisions")
     return rows, next_offset, (date, version, total)
 
+
 def _read_page(surface, offset, key, *, opener):
     query = urllib.parse.urlencode(
         {"surface": surface, "offset": offset, "limit": PAGE_LIMIT, "compact": "true"}
@@ -216,6 +217,7 @@ def fetch_snapshots(api_key=None, *, opener=None):
         "members": sorted(SOURCE_PREFIX + "-" + s for s in SURFACES),
     }
     return [_snapshot_for_surface(s, key, opener, bundle) for s in SURFACES]
+
 
 def store_snapshots(snapshots, directory=None):
     """Validate all sources before mutating the last-good local snapshots."""
