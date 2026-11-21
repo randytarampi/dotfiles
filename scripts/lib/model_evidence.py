@@ -248,25 +248,64 @@ def _audit_candidate_identity(model, source, mappings):
     return None
 
 
+def _model_route(model):
+    return model.get("provider", "ollama") + "/" + model["name"]
+
+
 def _audit_source_coverage(classified, catalogues, mappings, audit):
-    for category in ROLE_METRICS:
-        for model in classified.get(category, []):
-            for source in catalogues:
+    by_source = {}
+    for source in catalogues:
+        categories = {}
+        for category in ROLE_METRICS:
+            entries = classified.get(category, [])
+            unique = {_model_route(model): model for model in entries}
+            qualified = len(unique)
+            eligible = {
+                route: model
+                for route, model in unique.items()
+                if "tools" in (model.get("capabilities") or [])
+            }
+            mapped = sum(
+                source["source"] in mappings.get(route, {})
+                for route in eligible
+            )
+            scored = sum(
+                _candidate_score(model, source, mappings) is not None
+                for model in eligible.values()
+            )
+            categories[category] = {
+                "qualified": qualified,
+                "tool_capable": len(eligible),
+                "mapped": mapped,
+                "unmapped": len(eligible) - mapped,
+                "scored": scored,
+                "duplicates": len(entries) - qualified,
+            }
+            for model in eligible.values():
                 reason = _audit_candidate_identity(model, source, mappings)
                 if reason is not None:
                     audit[reason] += 1
+        by_source[source["source"]] = categories
+    audit["by_source"] = by_source
 
 
 def _preferred_comparables(entries, preferences, catalogues, mappings, audit):
     """Use the first available task-specific metric, choosing most mapped slots."""
+    multiplicity = {}
+    for model in entries:
+        route = _model_route(model)
+        multiplicity[route] = multiplicity.get(route, 0) + 1
     for metric in preferences:
         possibilities = []
         for source in catalogues:
             if source["metric"] != metric:
                 continue
+            # Preserve repeated category seats; never rank the same route
+            # twice and accidentally displace a different fallback.
             scored = [
                 (index, _candidate_score(model, source, mappings))
                 for index, model in enumerate(entries)
+                if multiplicity[_model_route(model)] == 1
             ]
             comparable = [
                 (index, score) for index, score in scored if score is not None
@@ -308,6 +347,7 @@ def rank_qualified(
                 "scale_mismatches": 0,
                 "missing_identifiers": 0,
                 "selected": {},
+                "by_source": {},
             }
         )
     if profile == "quiet":
