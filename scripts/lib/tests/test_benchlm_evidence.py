@@ -52,6 +52,7 @@ class StubOpener:
                 "surface": surface,
                 "dataAsOf": DATE,
                 "methodologyVersion": "6.0",
+                "rankingMode": "bench-align-v5",
                 "items": [
                     {
                         "modelKey": "provider:low",
@@ -166,6 +167,7 @@ def test_invalid_envelope_and_pagination_fail_closed(failure):
         "surface": "coding",
         "dataAsOf": DATE,
         "methodologyVersion": "6.0",
+        "rankingMode": "bench-align-v5",
         "items": [{"modelKey": "x"}],
         "pagination": {"offset": 0, "total": 1, "nextOffset": None},
     }
@@ -218,7 +220,7 @@ def test_supported_does_not_claim_every_underlying_result_was_independent():
         seen,
     )
     assert result["evidence"] == "mixed"
-    assert result["benchlm_maturity"] == "Supported"
+    assert result["benchlm_evidence_status"] == "supported"
 
 
 def test_version_and_total_must_agree_across_paged_response():
@@ -226,6 +228,7 @@ def test_version_and_total_must_agree_across_paged_response():
         "surface": "coding",
         "dataAsOf": DATE,
         "methodologyVersion": "6.0",
+        "rankingMode": "bench-align-v5",
         "items": [{"modelKey": "first"}],
         "pagination": {"offset": 0, "total": 2, "nextOffset": 1},
     }
@@ -273,6 +276,7 @@ def test_invalid_pagination_type_is_bounded_error():
         "surface": "coding",
         "dataAsOf": DATE,
         "methodologyVersion": "6.0",
+        "rankingMode": "bench-align-v5",
         "items": [{"modelKey": "first"}],
         "pagination": "not-an-object",
     }
@@ -311,14 +315,14 @@ def test_real_tier_consumer_uses_benchlm_only_with_opt_in_and_complete_cache(
                 "benchlm-coding": {
                     "model_id": "provider:high",
                     "creator_id": "provider",
-                    "scale": "benchalign-6.0-coding",
+                    "scale": "benchalign-bench-align-v5-6.0-coding",
                 }
             },
             "ollama/coder-beta:8b": {
                 "benchlm-coding": {
                     "model_id": "provider:low",
                     "creator_id": "provider",
-                    "scale": "benchalign-6.0-coding",
+                    "scale": "benchalign-bench-align-v5-6.0-coding",
                 }
             },
         },
@@ -358,6 +362,7 @@ def test_one_request_probe_never_writes_scores_or_follows_pagination(tmp_path):
     result = probe_surface("placeholder", surface="coding", opener=upstream)
     assert result["supported"] == 2
     assert len(upstream.calls) == 1
+    assert "limit=25" in upstream.calls[0].full_url
     assert list(tmp_path.iterdir()) == []
 
 
@@ -440,3 +445,95 @@ def test_request_budget_prevents_unbounded_pagination():
         request_interval=0,
     )
     assert len(upstream.calls) == 4
+
+
+def test_live_status_is_not_model_maturity():
+    row = _parse_row(
+        {
+            "modelKey": "provider:qwen",
+            "creator": "provider",
+            "score": 76.2,
+            "evidenceStatus": "supported",
+            "maturity": "developing",
+        },
+        set(),
+    )
+    assert row["benchlm_evidence_status"] == "supported"
+    assert row["benchlm_maturity"] == "developing"
+
+
+def test_live_unsupported_status_is_excluded_even_if_maturity_supported():
+    assert (
+        _parse_row(
+            {
+                "modelKey": "provider:estimate",
+                "creator": "provider",
+                "score": 80.0,
+                "evidenceStatus": "estimated",
+                "maturity": "supported",
+            },
+            set(),
+        )
+        is None
+    )
+
+
+def test_explicit_partial_window_preserves_true_population_and_scale():
+    class FreeOpener(StubOpener):
+        def open(self, request, timeout):
+            response = super().open(request, timeout)
+            envelope = json.loads(response.data.getvalue())
+            envelope["availableSurfaces"] = list(
+                ("coding", "reasoning", "overall", "agentic")
+            )
+            envelope["planNotice"] = (
+                "From December 5, 2026, Free returns 25 rows a read and "
+                "the first 100 rows of a list."
+            )
+            envelope["rankingMode"] = "bench-align-v5"
+            envelope["pagination"]["total"] = 214
+            # Simulate four successive 25-row pages and 100-row Free ceiling.
+            from urllib.parse import parse_qs, urlsplit
+
+            offset = int(parse_qs(urlsplit(request.full_url).query)["offset"][0])
+            envelope["items"] = [
+                {
+                    "modelKey": "provider:" + str(i),
+                    "creator": "provider",
+                    "score": float(i % 100),
+                    "evidenceStatus": "supported",
+                    "maturity": "developing",
+                }
+                for i in range(offset, offset + 25)
+            ]
+            envelope["pagination"]["offset"] = offset
+            envelope["pagination"]["nextOffset"] = offset + 25 if offset < 75 else None
+            return Response(envelope)
+
+    upstream = FreeOpener()
+    snapshots = fetch_snapshots(
+        "placeholder",
+        opener=upstream,
+        max_requests=16,
+        request_interval=0,
+        coverage_mode="first-100",
+    )
+    assert len(upstream.calls) == 16
+    assert all("limit=25" in call.full_url for call in upstream.calls)
+    assert all(row["retrieved_rows"] == 100 for row in snapshots)
+    assert all(row["coverage"] == "first-100-subset" for row in snapshots)
+    assert all(row["population_total"] == 214 for row in snapshots)
+    assert all("bench-align-v5" in row["scale"] for row in snapshots)
+
+
+def test_incomplete_first_100_window_is_rejected():
+    example = {
+        "surface": "coding",
+        "dataAsOf": DATE,
+        "methodologyVersion": "6.0",
+        "rankingMode": "bench-align-v5",
+        "items": [{"modelKey": "x", "creator": "provider", "score": 5}],
+        "pagination": {"offset": 0, "total": 214, "nextOffset": None},
+    }
+    with pytest.raises(BenchlmError, match="truncated"):
+        _parse_page(example, surface="coding", offset=0, coverage_mode="first-100")

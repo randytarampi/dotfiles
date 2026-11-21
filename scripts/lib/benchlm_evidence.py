@@ -1,7 +1,7 @@
 """BenchLM Free current-ranking adapter for private, offline model evidence.
 
 The Data REST API requires BENCHLM_DATA_KEY; score rows are internal-use only.
-Every published score requires an explicit BenchAlign method, supported maturity,
+Every published score requires an explicit BenchAlign method, Supported evidenceStatus,
 and an owner-reviewed local-to-upstream identity map. No runtime network calls.
 """
 
@@ -25,6 +25,7 @@ PAGE_LIMIT = 100
 MAX_PAGES = 20
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 DEFAULT_REQUEST_BUDGET = 12
+FREE_WINDOW_ROWS = 100  # Explicit, incomplete Free top-100 window after 5 December.
 MIN_REQUEST_INTERVAL = 2.1  # Conservative spacing below 30 requests/minute.
 SOURCE_PREFIX = "benchlm"
 ATTRIBUTION = "BenchLM.ai, BenchAlign current rankings; internal analysis only"
@@ -73,6 +74,11 @@ def _field(item, *names):
 
 
 def _parse_row(item, seen):
+    """Supported evidence status is not model maturity.
+
+    Live BenchLM exposes evidenceStatus=supported alongside maturity=developing;
+    conflating these axes discarded every real row in the original adapter.
+    """
     if not isinstance(item, dict):
         raise BenchlmError("BenchLM row is not an object")
     key = _field(item, "modelKey", "modelId", "key")
@@ -87,9 +93,16 @@ def _parse_row(item, seen):
     if key in seen:
         raise BenchlmError("BenchLM duplicate model identity")
     seen.add(key)
-    maturity = _field(item, "evidenceLabel", "evidenceStatus", "maturity")
-    if not isinstance(maturity, str) or maturity.lower() != "supported":
+    status = item.get("evidenceStatus")
+    if status is None:
+        status = item.get("evidenceLabel")  # Legacy synthetic snapshots only.
+    if not isinstance(status, str) or status.casefold() != "supported":
         return None
+    maturity = item.get("maturity")
+    if maturity is not None and (
+        not isinstance(maturity, str) or len(maturity) > 80 or not maturity.strip()
+    ):
+        raise BenchlmError("BenchLM model maturity malformed")
     raw_score = _field(item, "score", "finalScore")
     if type(raw_score) not in (float, int) or not math.isfinite(raw_score):
         return None
@@ -100,12 +113,13 @@ def _parse_row(item, seen):
         "creator_id": creator,
         "score": raw_score,
         "evidence": "mixed",
-        "benchlm_maturity": "Supported",
+        "benchlm_evidence_status": "supported",
+        "benchlm_maturity": maturity or "unknown",
     }
 
 
-def _pagination(rows, page, offset):
-    """Check the exact bounded cursor contract before following any next page."""
+def _pagination(rows, page, offset, coverage_mode):
+    """Enforce complete data, or a deliberately bounded first-100 Free window."""
     if not isinstance(rows, list) or not isinstance(page, dict):
         raise BenchlmError("BenchLM ranking or pagination missing")
     if not rows or len(rows) > PAGE_LIMIT:
@@ -115,35 +129,64 @@ def _pagination(rows, page, offset):
     total, next_offset = page.get("total"), page.get("nextOffset")
     if type(total) is not int or total < len(rows) or total > MAX_PAGES * PAGE_LIMIT:
         raise BenchlmError("BenchLM ranking total outside supported bounds")
+    window = min(total, FREE_WINDOW_ROWS) if coverage_mode == "first-100" else total
+    end = offset + len(rows)
+    if end > window:
+        raise BenchlmError("BenchLM returned rows outside selected coverage window")
     if next_offset is None:
-        if offset + len(rows) < total:
+        if end < window:
             raise BenchlmError("BenchLM truncated final page")
-    elif (
-        type(next_offset) is not int
-        or next_offset != offset + len(rows)
-        or next_offset > total
-    ):
+    elif type(next_offset) is not int or next_offset != end or next_offset > total:
         raise BenchlmError("BenchLM pagination cursor invalid")
+    if coverage_mode == "first-100" and end == window:
+        return total, None
     return total, next_offset
 
 
-def _parse_page(payload, *, surface, offset, reference=None):
+def _parse_page(payload, *, surface, offset, reference=None, coverage_mode="complete"):
     if not isinstance(payload, dict):
         raise BenchlmError("BenchLM response is not an object")
     if payload.get("surface") != surface:
         raise BenchlmError("BenchLM ranking surface mismatch")
+    available = payload.get("availableSurfaces")
+    if available is not None and (
+        not isinstance(available, list)
+        or any(not isinstance(name, str) for name in available)
+        or surface not in available
+    ):
+        raise BenchlmError("BenchLM surface absent from advertised availability")
+    notice = payload.get("planNotice")
+    if notice is not None and (not isinstance(notice, str) or len(notice) > 2048):
+        raise BenchlmError("BenchLM plan notice malformed")
     date = _timestamp(payload.get("dataAsOf"))
     version = _version(payload)
+    mode = payload.get("rankingMode")
+    if not isinstance(mode, str) or not mode.strip() or len(mode) > 96:
+        raise BenchlmError("BenchLM ranking mode missing or invalid")
+    if any(ord(char) < 33 for char in mode):
+        raise BenchlmError("BenchLM ranking mode invalid")
     rows = payload.get("items")
-    total, next_offset = _pagination(rows, payload.get("pagination"), offset)
-    if reference is not None and (date, version, total) != reference:
+    total, next_offset = _pagination(
+        rows, payload.get("pagination"), offset, coverage_mode
+    )
+    if (
+        coverage_mode == "complete"
+        and total > FREE_WINDOW_ROWS
+        and isinstance(notice, str)
+        and "first 100" in notice.lower()
+        and datetime.now(timezone.utc).date() >= datetime(2026, 12, 5).date()
+    ):
+        raise BenchlmError(
+            "BenchLM Free announces a first-100 cap; request --coverage first-100"
+        )
+    if reference is not None and (date, version, mode, total) != reference:
         raise BenchlmError("BenchLM pagination mixed scoring revisions")
-    return rows, next_offset, (date, version, total)
+    return rows, next_offset, (date, version, mode, total)
 
 
-def _read_page(surface, offset, key, *, opener):
+def _read_page(surface, offset, key, *, opener, page_limit=PAGE_LIMIT):
     query = urllib.parse.urlencode(
-        {"surface": surface, "offset": offset, "limit": PAGE_LIMIT, "compact": "true"}
+        {"surface": surface, "offset": offset, "limit": page_limit, "compact": "true"}
     )
     request = urllib.request.Request(
         API_URL + "?" + query,
@@ -183,17 +226,24 @@ def _read_page(surface, offset, key, *, opener):
         raise BenchlmError("BenchLM Free ranking request or decoding failed") from None
 
 
-def _collect_surface_rows(surface, request_page, max_pages):
-    """Read one complete consistent surface within the caller's request cap."""
+def _collect_surface_rows(surface, request_page, max_pages, coverage_mode):
+    """Read one consistent surface within the caller's approved coverage."""
     collected, seen = [], set()
-    cursor, reference = 0, None
+    cursor, reference, observed_rows = 0, None, 0
     for page_index in range(max_pages):
         payload = request_page(surface, cursor)
         raw, next_cursor, reference = _parse_page(
-            payload, surface=surface, offset=cursor, reference=reference
+            payload,
+            surface=surface,
+            offset=cursor,
+            reference=reference,
+            coverage_mode=coverage_mode,
         )
-        if page_index == 0 and math.ceil(reference[2] / PAGE_LIMIT) > max_pages:
-            raise BenchlmError("BenchLM surface exceeds max-pages; no cache written")
+        total = reference[3]
+        window = min(total, FREE_WINDOW_ROWS) if coverage_mode == "first-100" else total
+        if page_index == 0 and math.ceil(window / len(raw)) > max_pages:
+            raise BenchlmError("BenchLM window exceeds max-pages; no cache written")
+        observed_rows += len(raw)
         for item in raw:
             parsed = _parse_row(item, seen)
             if parsed is not None:
@@ -202,26 +252,37 @@ def _collect_surface_rows(surface, request_page, max_pages):
             break
         cursor = next_cursor
     else:
-        raise BenchlmError("BenchLM surface exceeded max-pages; no cache written")
+        raise BenchlmError("BenchLM window exceeded max-pages; no cache written")
+    if observed_rows != window:
+        raise BenchlmError("BenchLM incomplete coverage window")
     if len(collected) < 2:
-        raise BenchlmError("BenchLM ranking lacks two supported exact identities")
-    return collected, reference
+        raise BenchlmError("BenchLM ranking lacks two Supported exact identities")
+    return collected, reference, observed_rows
 
 
-def _snapshot_for_surface(surface, bundle, request_page, max_pages):
-    rows, reference = _collect_surface_rows(surface, request_page, max_pages)
-    date, version, _ = reference
+def _snapshot_for_surface(surface, bundle, request_page, max_pages, coverage_mode):
+    rows, reference, observed_rows = _collect_surface_rows(
+        surface, request_page, max_pages, coverage_mode
+    )
+    date, version, mode, total = reference
     source = SOURCE_PREFIX + "-" + surface
     snapshot = {
         "schema_version": 1,
         "bundle": bundle,
         "source": source,
         "metric": surface,
-        "scale": "benchalign-" + version + "-" + surface,
+        "scale": "benchalign-" + mode + "-" + version + "-" + surface,
+        "ranking_mode": mode,
+        "methodology_version": version,
         "observed_at": date,
         "attribution": ATTRIBUTION,
         "source_url": "https://benchlm.ai/data/access",
         "usage_terms": "https://benchlm.ai/terms#data-access",
+        # Partial mode is a coverage *policy*, not an inference of completeness
+        # from a total field that the Free API may itself cap at 100.
+        "coverage": "first-100-subset" if coverage_mode == "first-100" else "complete",
+        "retrieved_rows": observed_rows,
+        "population_total": total,
         "models": sorted(rows, key=lambda row: row["id"]),
     }
     if _normalize_source(snapshot, source, now=datetime.now(timezone.utc)) is None:
@@ -242,13 +303,22 @@ def probe_surface(api_key=None, *, surface="coding", opener=None):
         raise BenchlmError("invalid BenchLM surface")
     key = _validated_key(api_key)
     opener = opener or urllib.request.build_opener(SameOriginRedirectHandler())
-    payload = _read_page(surface, 0, key, opener=opener)
-    rows, cursor, _ = _parse_page(payload, surface=surface, offset=0)
+    payload = _read_page(surface, 0, key, opener=opener, page_limit=25)
+    rows, cursor, _ = _parse_page(
+        payload, surface=surface, offset=0, coverage_mode="first-100"
+    )
     seen = set()
     usable = [x for item in rows if (x := _parse_row(item, seen)) is not None]
     if len(usable) < 2:
         raise BenchlmError("BenchLM first page has insufficient Supported rows")
-    return {"surface": surface, "supported": len(usable), "more": cursor is not None}
+    return {
+        "surface": surface,
+        "supported": len(usable),
+        "more": cursor is not None,
+        "ranking_mode": payload["rankingMode"],
+        "total_rows": payload["pagination"]["total"],
+        "plan_notice_present": bool(payload.get("planNotice")),
+    }
 
 
 def fetch_snapshots(
@@ -260,9 +330,12 @@ def fetch_snapshots(
     request_interval=MIN_REQUEST_INTERVAL,
     clock=None,
     sleeper=None,
+    coverage_mode="complete",
 ):
     """Paced, capped, current-only refresh; fail without writing partial data."""
     key = _validated_key(api_key)
+    if coverage_mode not in {"complete", "first-100"}:
+        raise BenchlmError("invalid BenchLM coverage mode")
     if type(max_pages) is not int or not 1 <= max_pages <= MAX_PAGES:
         raise BenchlmError("invalid BenchLM max-pages cap")
     if type(max_requests) is not int or not len(SURFACES) <= max_requests <= 80:
@@ -286,14 +359,20 @@ def fetch_snapshots(
                 sleeper(delay)
         state["last"] = clock()
         state["used"] += 1
-        return _read_page(surface, offset, key, opener=opener)
+        return _read_page(
+            surface,
+            offset,
+            key,
+            opener=opener,
+            page_limit=25 if coverage_mode == "first-100" else PAGE_LIMIT,
+        )
 
     bundle = {
         "id": datetime.now(timezone.utc).isoformat(),
         "members": sorted(SOURCE_PREFIX + "-" + s for s in SURFACES),
     }
     return [
-        _snapshot_for_surface(surface, bundle, request_page, max_pages)
+        _snapshot_for_surface(surface, bundle, request_page, max_pages, coverage_mode)
         for surface in SURFACES
     ]
 

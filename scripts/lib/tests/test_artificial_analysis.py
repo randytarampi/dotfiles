@@ -67,6 +67,7 @@ def test_free_api_two_pages_and_missing_scores():
     assert b"synthetic-1" in payload
     assert b"synthetic-2" in payload
     assert b"intelligence" in payload
+    assert b"slug,name,creator_id,creator_name" in payload
     assert b"agentic" not in payload
     assert b"coding" not in payload
 
@@ -95,6 +96,9 @@ def test_snapshot_round_trip_and_corruption(tmp_path):
     assert found["manifest"] == manifest
     assert found["models"][0]["intelligence"] == "10"
     assert "coding" not in found["models"][0]
+    assert found["models"][0]["slug"] == "synthetic-a"
+    assert found["models"][0]["name"] == "Synthetic synthetic-a"
+    assert found["models"][0]["creator_name"] == "Synthetic"
     csv_file = tmp_path / "snapshots" / manifest["snapshot"]
     csv_file.write_text("tampered", encoding="utf-8")
     assert load_snapshot(tmp_path, now=now) is None
@@ -179,3 +183,23 @@ def test_aa_single_page_probe_and_max_page_guard_use_only_one_read():
     with pytest.raises(EvidenceError, match="max-pages"):
         fetch_free("dummy", get_page=getter, max_pages=1)
     assert calls == [1, 1]
+
+
+def test_minimal_v2_cache_remains_readable_while_v3_restores_join_keys(tmp_path):
+    from artificial_analysis import MINIMAL_V2_COLUMNS
+
+    now = datetime(2026, 11, 21, tzinfo=timezone.utc)
+    csv_bytes, version, count = normalize_pages([page()])
+    manifest = write_snapshot(tmp_path, csv_bytes, version, count, now=now)
+    minimal = (
+        (",".join(MINIMAL_V2_COLUMNS) + "\\nsynthetic-a,synthetic-vendor,10\\n")
+        .replace("\\n", "\n")
+        .encode("utf-8")
+    )
+    digest = hashlib.sha256(minimal).hexdigest()
+    (tmp_path / "snapshots" / (digest + ".csv")).write_bytes(minimal)
+    manifest.update(
+        {"schema_version": 2, "snapshot": digest + ".csv", "sha256": digest}
+    )
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    assert load_snapshot(tmp_path, now=now)["models"][0]["id"] == "synthetic-a"
