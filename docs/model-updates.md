@@ -38,6 +38,37 @@ Mapping example with **synthetic identities** (not an actual benchmark claim): `
 
 **Verification and rollback:** `PYTHONPATH=scripts/lib poetry run python -m pytest scripts/lib/tests/test_benchlm_evidence.py scripts/lib/tests/test_benchlm_workflow.py -q` exercises synthetic invariants; `make verify` is the repository integrated gate. Disable the opt-in ranking or omit the private BenchLM identity mapping to restore size/capabilities fallback. Host acceptance, including real BenchLM response shape, on-device oMLX/Ollama performance and developer entitlement, remains owner-only.
 
+### Mapping onboarding: a controlled local product, not a name-to-score guess
+
+`python3 scripts/suggest-model-evidence-mappings.py` enumerates enabled,
+installed Ollama/oMLX models through the existing engine discovery and local
+metadata adapters. It reads validated private AA and BenchLM caches, lists each
+locally tool-and-completion-qualified model, and suggests up to three upstream
+source IDs using conservative, non-authoritative name matching. Output includes
+the **exact** source ID, model ID, creator ID, score scale, mapping provenance,
+and a quantisation warning. No scores, token values, or licence-restricted row
+exports are printed. If no plausible join exists, the model is explicitly
+reported as unmapped. Discovery errors are failures, never an empty fleet.
+
+To preview a specific *human-verified* identity, use
+`--accept 'omlx/Model-MLX-4bit=benchlm-coding:upstream:model-key'`.
+The preview emits a complete private schema-v1 map in JSON, but **does not write**.
+Only `--apply` writes the private `~/.config/dotfiles/model-evidence-map.json`
+with 0600 permissions, preserving compatible existing entries and creating
+`model-evidence-map.json.bak` before replacing an existing map (refuses to
+overwrite an existing backup). Applying is an **owner-only decision**, never
+part of an unattended job. The review must confirm the original checkpoint,
+revision, parameter count, quantisation and creator independently of the label.
+No automated name suggestion is itself approval. `--models-file` is a local
+fixture/replay mode and cannot be combined with `--apply`.
+
+The shadow audit now reports distinct locally eligible routes and mapped,
+unmapped and scale-mismatched counts **per source**, excluding duplicate
+category slots when testing the two-candidate minimum. Repeated model slots
+are preserved for baseline selection but do not create fictitious independent
+evidence. Default `off` remains unchanged. `apply` remains experimental and
+must not be enabled without measured task improvements.
+
 ### Shadow-first rollout and quota-bounded probes (implementation review)
 
 **Decision:** Keep the quality adapters available for evidence collection, not mandatory model selection. The OpenCode tier generator accepts `--model-evidence off|shadow|apply` (default off, or the explicitly configured legacy opt-in). `shadow` computes proposed category ordering without changing any generated role; it reports source count, mappings, exact comparable matches, missing identities, scale mismatches, selected source/metric and baseline/proposed names. The explicit CLI mode takes precedence over `~/.env`; `scripts/lib/tier_resolve.py` defaults to `off` for voice and local-engine consumers. Do not promote `apply` until one mapped pair improves independently measured tasks against the current curated baseline.

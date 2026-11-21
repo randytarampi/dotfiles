@@ -249,3 +249,41 @@ def test_audit_names_exact_source_when_two_candidates_are_comparable():
         "metric": "overall",
         "candidates": 2,
     }
+
+
+def test_duplicate_slots_cannot_supply_second_distinct_candidate():
+    source, mappings = fixture()
+    models = [candidate("slow"), candidate("slow")]
+    audit = {}
+    assert (
+        rank_qualified(
+            {"code-gen": models}, catalogues=[source],
+            mappings=mappings, audit=audit,
+        )
+        == 0
+    )
+    assert [m["name"] for m in models] == ["slow", "slow"]
+    assert audit["duplicate_slots_skipped"] == 1
+    assert audit["eligible_unique"] == 1
+
+
+def test_shadow_coverage_counts_unmapped_unique_models_per_source():
+    source, mappings = fixture()
+    models = [
+        candidate("slow"), candidate("slow"),
+        candidate("unmapped"), candidate("fast"),
+    ]
+    audit = {}
+    rank_qualified(
+        {"code-gen": models}, catalogues=[source],
+        mappings=mappings, audit=audit,
+    )
+    assert audit["coverage_by_source"]["whatmodel"] == {
+        "qualified": 3,
+        "matched": 2,
+        "unmapped": 1,
+        "scale_mismatches": 0,
+        "missing_identifiers": 0,
+    }
+    assert audit["eligible_unique"] == 3
+    assert audit["unmapped_candidates"] == 1

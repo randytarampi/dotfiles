@@ -235,46 +235,71 @@ def _candidate_score(model, catalogue, mappings):
     return entry["score"]
 
 
+def _route(model):
+    return model.get("provider", "ollama") + "/" + model["name"]
+
+
 def _audit_candidate_identity(model, source, mappings):
-    route = model.get("provider", "ollama") + "/" + model["name"]
-    ref = mappings.get(route, {}).get(source["source"])
+    ref = mappings.get(_route(model), {}).get(source["source"])
     if ref is None:
-        return None
+        return "unmapped"
     if ref["scale"] != source["scale"]:
         return "scale_mismatches"
     entry = source["models"].get(ref["model_id"])
     if entry is None or entry["creator_id"] != ref["creator_id"]:
         return "missing_identifiers"
-    return None
+    return "matched"
 
 
 def _audit_source_coverage(classified, catalogues, mappings, audit):
-    for category in ROLE_METRICS:
-        for model in classified.get(category, []):
-            for source in catalogues:
-                reason = _audit_candidate_identity(model, source, mappings)
-                if reason is not None:
-                    audit[reason] += 1
+    """Count unique qualified identities, not slots duplicated across roles."""
+    qualified = {
+        _route(model): model
+        for cat in ROLE_METRICS
+        for model in classified.get(cat, [])
+        if "tools" in (model.get("capabilities") or [])
+    }
+    audit["eligible_unique"] = len(qualified)
+    for source in catalogues:
+        stats = {
+            "qualified": len(qualified),
+            "matched": 0,
+            "unmapped": 0,
+            "scale_mismatches": 0,
+            "missing_identifiers": 0,
+        }
+        for model in qualified.values():
+            result = _audit_candidate_identity(model, source, mappings)
+            stats[result] += 1
+        audit["coverage_by_source"][source["source"]] = stats
+        audit["unmapped_candidates"] += stats["unmapped"]
+        audit["scale_mismatches"] += stats["scale_mismatches"]
+        audit["missing_identifiers"] += stats["missing_identifiers"]
 
 
 def _preferred_comparables(entries, preferences, catalogues, mappings, audit):
-    """Use the first available task-specific metric, choosing most mapped slots."""
+    """Rank distinct local routes only; repeated slots cannot count as evidence."""
     for metric in preferences:
         possibilities = []
         for source in catalogues:
             if source["metric"] != metric:
                 continue
-            scored = [
-                (index, _candidate_score(model, source, mappings))
-                for index, model in enumerate(entries)
-            ]
-            comparable = [
-                (index, score) for index, score in scored if score is not None
-            ]
+            scored = []
+            seen_routes = set()
+            for index, model in enumerate(entries):
+                route = _route(model)
+                if route in seen_routes:
+                    if audit is not None:
+                        audit["duplicate_slots_skipped"] += 1
+                    continue
+                seen_routes.add(route)
+                score = _candidate_score(model, source, mappings)
+                if score is not None:
+                    scored.append((index, score))
             if audit is not None:
-                audit["comparable"] += len(comparable)
-            if len(comparable) >= 2:
-                possibilities.append((source["source"], comparable))
+                audit["comparable"] += len(scored)
+            if len(scored) >= 2:
+                possibilities.append((source["source"], scored))
         if possibilities:
             chosen_source, selection = sorted(
                 possibilities, key=lambda item: (-len(item[1]), item[0])
@@ -307,6 +332,10 @@ def rank_qualified(
                 "comparable": 0,
                 "scale_mismatches": 0,
                 "missing_identifiers": 0,
+                "unmapped_candidates": 0,
+                "eligible_unique": 0,
+                "duplicate_slots_skipped": 0,
+                "coverage_by_source": {},
                 "selected": {},
             }
         )
