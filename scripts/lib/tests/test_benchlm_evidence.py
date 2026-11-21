@@ -385,6 +385,12 @@ def test_refresh_request_budget_stops_before_extra_pages():
             response = super().open(request, timeout)
             result = json.loads(response.data.getvalue())
             offset = int(parse_qs(urlsplit(request.full_url).query)["offset"][0])
+            # Distinct page identities ensure this test reaches the budget
+            # boundary, rather than failing earlier at duplicate validation.
+            result["items"] = [
+                {**item, "modelKey": item["modelKey"] + ":" + str(offset)}
+                for item in result["items"]
+            ]
             result["pagination"] = {
                 "offset": offset,
                 "limit": 100,
