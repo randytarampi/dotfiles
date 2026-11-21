@@ -130,8 +130,10 @@ def test_exact_source_cap_is_not_claimed_complete():
         ]
     )
     assert normalize_response(payload)["retrieved_rows"] == 2000
-    assert normalize_response(payload)["coverage"] == "reviewed subset; incomplete coverage"
-
+    assert (
+        normalize_response(payload)["coverage"]
+        == "reviewed subset; incomplete coverage"
+    )
 
 
 def test_live_non_json_response_has_clear_client_negotiation_error():
