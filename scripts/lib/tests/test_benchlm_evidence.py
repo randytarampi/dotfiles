@@ -166,7 +166,7 @@ def test_estimated_and_missing_creator_never_promote():
 
 def test_rejects_duplicate_identity_and_wrong_source_set(tmp_path):
     snapshots = fetch_snapshots("placeholder", opener=StubOpener())
-    with pytest.raises(BenchlmError, match="snapshot source set"):
+    with pytest.raises(BenchlmError, match="partial"):
         store_snapshots(snapshots[:2], tmp_path)
     assert list(tmp_path.iterdir()) == []
 

@@ -21,7 +21,7 @@ from model_evidence import sources_dir  # noqa: E402
 def main():
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     add_common_args(parser)
-    actions = parser.add_mutually_exclusive_group(required=True)
+    actions = parser.add_mutually_exclusive_group()
     actions.add_argument("--refresh", action="store_true", help="Read Free current scores")
     actions.add_argument("--offline", action="store_true", help="Validate private cache")
     parser.add_argument("--cache-dir", type=Path, default=sources_dir())
