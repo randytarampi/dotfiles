@@ -13,6 +13,7 @@ Provides:
     a {role: "ollama/model_name"} mapping.
 """
 
+import copy
 import os
 import re
 import subprocess
@@ -272,6 +273,7 @@ def resolve_roles_from_list(
     min_reasoning_embedding: int = 0,
     moe_codegen_reuse: bool = False,
     profile=None,
+    evidence_mode="off",
 ) -> dict:
     """Classify local Ollama models into role categories and return {role: "ollama/model_name"}.
 
@@ -669,15 +671,50 @@ def resolve_roles_from_list(
         classified, models, profile, min_reasoning_embedding=min_reasoning_embedding
     )
 
-    # Optional *offline* evidence ranking. Hard category qualification and all
-    # existing fallback policies execute first; unmatched records keep their
-    # original positions. There is no network call or API key at resolution.
-    if os.environ.get("DOTFILES_USE_MODEL_EVIDENCE_RANKING") == "1":
+    # Explicit caller control: voice, local-engine resolution and other
+    # shared consumers must never inherit a process-global evidence toggle.
+    if evidence_mode not in {"off", "shadow", "apply"}:
+        raise ValueError("invalid model evidence mode")
+    if evidence_mode != "off":
         from model_evidence import rank_qualified
 
-        changed = rank_qualified(classified, profile=profile)
-        if changed:
-            logger.info("Quality evidence reordered %d local category(s)", changed)
+        proposed = (
+            copy.deepcopy(classified) if evidence_mode == "shadow" else classified
+        )
+        audit = {}
+        changed = rank_qualified(proposed, profile=profile, audit=audit)
+        logger.warning(
+            "Model evidence %s: sources=%d mappings=%d comparable=%d "
+            "scale_mismatches=%d missing_identifiers=%d reordered_categories=%d",
+            evidence_mode,
+            audit.get("sources", 0),
+            audit.get("mappings", 0),
+            audit.get("comparable", 0),
+            audit.get("scale_mismatches", 0),
+            audit.get("missing_identifiers", 0),
+            changed,
+        )
+        if audit.get("selected"):
+            logger.warning(
+                "Model evidence selected comparable sets: %s", audit["selected"]
+            )
+        if evidence_mode == "shadow":
+            for category in ("reasoning", "code-gen", "lightweight", "solo"):
+                before = [m["name"] for m in classified.get(category, [])]
+                after = [m["name"] for m in proposed.get(category, [])]
+                if before != after:
+                    logger.warning(
+                        "Model evidence shadow %s: baseline=%s proposed=%s "
+                        "(no configuration change)",
+                        category,
+                        before,
+                        after,
+                    )
+            if not changed:
+                logger.warning(
+                    "Model evidence shadow: no eligible ordering changes; "
+                    "inspect mapping, source freshness, scales and category gates"
+                )
 
     if not classified["solo"]:
         logger.warning(

@@ -676,7 +676,8 @@
         "--local-fallback-preset",
         "--category-model",
         "--local-fallback-placeholder",
-        "--min-reasoning-embedding"
+        "--min-reasoning-embedding",
+        "--model-evidence"
       ],
       "positional_operand": null,
       "child_scripts": []
