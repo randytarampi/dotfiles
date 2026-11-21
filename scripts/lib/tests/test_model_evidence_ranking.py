@@ -252,6 +252,9 @@ def test_audit_names_exact_source_when_two_candidates_are_comparable():
         "source": "whatmodel",
         "metric": "overall",
         "candidates": 2,
+        "coverage": "unreported",
+        "retrieved_rows": None,
+        "population_total": None,
     }
 
 
@@ -297,3 +300,18 @@ def test_shadow_coverage_counts_unmapped_unique_models_per_source():
     }
     assert audit["eligible_unique"] == 3
     assert audit["unmapped_candidates"] == 1
+
+
+def test_first_100_benchlm_coverage_is_explicit_in_shadow_audit(tmp_path):
+    source, mappings = fixture()
+    source.update(
+        {"coverage": "first-100-subset", "retrieved_rows": 100,
+         "population_total": 214}
+    )
+    audit = {}
+    rank_qualified(
+        {"code-gen": [candidate("slow"), candidate("fast")]},
+        catalogues=[source], mappings=mappings, audit=audit,
+    )
+    assert audit["selected"]["code-gen"]["coverage"] == "first-100-subset"
+    assert audit["selected"]["code-gen"]["population_total"] == 214

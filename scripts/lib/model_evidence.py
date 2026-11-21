@@ -136,6 +136,26 @@ def _normalize_source(payload, name, *, now):
         records[model_id] = {"creator_id": creator, "score": score}
     if not records:
         return None
+    coverage = payload.get("coverage")
+    metadata = {}
+    if coverage is not None:
+        if coverage not in {"complete", "first-100-subset"}:
+            return None
+        count, population = payload.get("retrieved_rows"), payload.get(
+            "population_total"
+        )
+        if (
+            type(count) is not int
+            or type(population) is not int
+            or not 2 <= count <= population <= 2000
+            or (coverage == "complete") != (count == population)
+        ):
+            return None
+        metadata = {
+            "coverage": coverage,
+            "retrieved_rows": count,
+            "population_total": population,
+        }
     bundle = payload.get("bundle")
     if bundle is not None:
         if not isinstance(bundle, dict):
@@ -154,6 +174,7 @@ def _normalize_source(payload, name, *, now):
             return None
     return {
         **({"bundle": bundle} if bundle is not None else {}),
+        **metadata,
         "source": name,
         "metric": payload["metric"],
         "scale": payload["scale"],
@@ -362,10 +383,17 @@ def rank_qualified(
             continue
         source_id, metric, selection = choice
         if audit is not None:
+            chosen = next(
+                (source for source in catalogues if source["source"] == source_id),
+                {},
+            )
             audit["selected"][category] = {
                 "source": source_id,
                 "metric": metric,
                 "candidates": len(selection),
+                "coverage": chosen.get("coverage", "unreported"),
+                "retrieved_rows": chosen.get("retrieved_rows"),
+                "population_total": chosen.get("population_total"),
             }
         changed += _reorder_comparable_slots(entries, selection)
     return changed
