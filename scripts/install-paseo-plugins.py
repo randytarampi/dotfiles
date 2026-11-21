@@ -111,9 +111,16 @@ def resolve_repo_context_mode(
     if not candidate or not os.path.isabs(candidate):
         return "unresolved", None
     home = Path.home() if home is None else Path(home)
-    bundled_root = Path(realpath(str(home / ".paseo/plugins")))
-    resolved = Path(realpath(candidate))
-    if resolved == bundled_root or bundled_root in resolved.parents:
+    bundled_literal = (home / ".paseo/plugins").absolute()
+    bundled_root = Path(realpath(str(bundled_literal))).resolve()
+    original_path = Path(os.path.abspath(candidate))
+    resolved = Path(realpath(candidate)).resolve()
+    if (
+        bundled_literal == original_path
+        or bundled_literal in original_path.parents
+        or resolved == bundled_root
+        or bundled_root in resolved.parents
+    ):
         return "bundled", None
     # npm's global executable may be a symlink or a Windows .cmd shim. In
     # either case the plugin needs the real Node entrypoint, not a shell shim.
@@ -123,10 +130,10 @@ def resolve_repo_context_mode(
             realpath(
                 str(Path(candidate).parent / "../lib/node_modules/context-mode/cli.mjs")
             )
-        ),
+        ).resolve(),
         Path(
             realpath(str(Path(candidate).parent / "node_modules/context-mode/cli.mjs"))
-        ),
+        ).resolve(),
     )
     for path in paths:
         if path == bundled_root or bundled_root in path.parents:
