@@ -483,28 +483,42 @@ def test_quiet_gemma_selection_sizes_by_name_when_details_omit_counts():
     assert resolved["reasoning"] == "ollama/gemma4:8b"
 
 
-def test_solo_only_model_keeps_its_engine_route():
-    """A profile may empty every other category; solo must keep omlx, not ollama."""
-    fleet = [{"name": "Qwen3.8-27B-4bit", "provider": "omlx", "param_count": 27}]
+@pytest.mark.parametrize("duplicate_position", [None, "first", "last"])
+def test_solo_only_model_keeps_its_engine_route(duplicate_position):
+    """Real quiet policy and excluded duplicates must preserve the solo route."""
+    qwen = "Qwen3.8-27B-4bit"
+    fleet = [
+        FLEET[0],
+        FLEET[2],
+        {"name": qwen, "provider": "omlx", "param_count": 27},
+    ]
     details = {
-        "Qwen3.8-27B-4bit": {
+        **DETAILS,
+        qwen: {
             "param_count": 27,
             "capabilities": ["thinking", "completion", "tools", "vision"],
             "is_moe": False,
-        }
+        },
     }
+    excluded = {
+        "name": qwen,
+        "provider": "ollama",
+        "model_type": "embedding",
+        "param_count": 27,
+    }
+    if duplicate_position == "first":
+        fleet.insert(0, excluded)
+    elif duplicate_position == "last":
+        fleet.append(excluded)
 
-    def keep_only_solo(classified, model_entries, profile, min_reasoning_embedding=0):
-        for category in ("reasoning", "code-gen", "lightweight", "vision", "audio"):
-            classified[category] = []
+    def metadata(name, provider="ollama"):
+        assert (name, provider) != (qwen, "ollama")
+        return details[name]
 
-    with (
-        patch.object(
-            tier_resolve,
-            "get_model_details",
-            side_effect=lambda name, provider="ollama": details[name],
-        ),
-        patch.object(tier_resolve, "_apply_profile_policy", side_effect=keep_only_solo),
-    ):
-        resolved = tier_resolve.resolve_roles_from_list(fleet)
-    assert resolved["solo"] == "omlx/Qwen3.8-27B-4bit"
+    with patch.object(tier_resolve, "get_model_details", side_effect=metadata):
+        resolved = tier_resolve.resolve_roles_from_list(fleet, profile="quiet")
+    assert resolved["code-gen"] == "ollama/mellum:6b"
+    assert resolved["reasoning"] == "ollama/gemma4:12b"
+    assert resolved["vision"] == "ollama/gemma4:12b"
+    assert resolved["lightweight"] == "ollama/gemma4:12b"
+    assert resolved["solo"] == f"omlx/{qwen}"
