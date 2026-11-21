@@ -179,6 +179,7 @@ def _normalize_source(payload, name, *, now):
         "source": name,
         "metric": payload["metric"],
         "scale": payload["scale"],
+        "observed_at": payload["observed_at"],
         "models": records,
     }
 
@@ -219,6 +220,7 @@ def load_catalogues(directory=None, *, aa_evidence=None, now=None):
                     "source": "artificial-analysis",
                     "metric": "intelligence",
                     "scale": "aa-intelligence-" + str(version),
+                    "observed_at": (aa.get("manifest") or {}).get("observed_at"),
                     "models": records,
                 }
             )

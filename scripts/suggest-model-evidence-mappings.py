@@ -125,6 +125,7 @@ def main():
                         + choice["match"]
                         + ")"
                     )
+                    print("    " + choice["provenance"])
                 print("  " + row["caveat"])
             print(
                 "No changes made; use --accept for a JSON preview, --apply only after owner review."

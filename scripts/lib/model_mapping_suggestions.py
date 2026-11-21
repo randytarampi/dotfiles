@@ -126,6 +126,25 @@ def qualified_local_models(records, details=None):
     return sorted(qualified, key=lambda m: m["route"])
 
 
+def _provenance(source):
+    name = source["source"]
+    link = (
+        "https://artificialanalysis.ai/data-api"
+        if name == "artificial-analysis"
+        else "https://benchlm.ai/data/access"
+        if name.startswith("benchlm-")
+        else "source-specific private cache"
+    )
+    observed = source.get("observed_at") or "UNKNOWN"
+    coverage = source.get("coverage", "unreported")
+    return (
+        "Source: " + link
+        + "; as-of: " + observed
+        + "; coverage: " + coverage
+        + "; checkpoint equivalence: UNVERIFIED"
+    )
+
+
 def suggestions_for(models, catalogues, aa_snapshot=None, *, maximum=3):
     """Return candidates for human inspection, with no score or key material."""
     if type(maximum) is not int or not 1 <= maximum <= 10:
@@ -160,7 +179,7 @@ def suggestions_for(models, catalogues, aa_snapshot=None, *, maximum=3):
                             else "lexical-only"
                         ),
                         "score": best,
-                        "provenance": "private cached source; identity unverified",
+                        "provenance": _provenance(source),
                     }
                 )
         matched.sort(

@@ -65,6 +65,8 @@ def test_installed_suggestions_identify_quantized_name_without_silently_mapping(
     assert ornith["candidates"][0]["model_id"] == "ornith-1.5-35b-a3b"
     assert ornith["candidates"][0]["match"] == "identical-normalized-tokens"
     assert "quantization" in ornith["caveat"]
+    assert "benchlm.ai/data/access" in ornith["candidates"][0]["provenance"]
+    assert "UNVERIFIED" in ornith["candidates"][0]["provenance"]
     assert mini["candidates"] == []
     assert "score" not in str(report)
 
