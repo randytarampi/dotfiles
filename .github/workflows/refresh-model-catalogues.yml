@@ -118,6 +118,70 @@ jobs:
           path: artifacts/model-catalogues/free-model-candidates.json
           if-no-files-found: error
 
+      # Separate private API probe; never copy licensed rows into the public
+      # candidate artifact or grant its token to the Woofbot publisher.
+      - name: Probe Artificial Analysis Free API evidence (advisory)
+        id: aa_probe
+        continue-on-error: true
+        env:
+          ARTIFICIAL_ANALYSIS_API_KEY: ${{ secrets.ARTIFICIAL_ANALYSIS_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ARTIFICIAL_ANALYSIS_API_KEY}" ]]; then
+            echo "status=skipped_no_key" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          # One-read weekly schema canary: no private benchmark data persisted.
+          python3 scripts/refresh-artificial-analysis.py --probe
+          echo "status=schema_validated" >> "${GITHUB_OUTPUT}"
+
+      - name: Summarize optional Artificial Analysis probe
+        if: always()
+        env:
+          PROBE_OUTCOME: ${{ steps.aa_probe.outcome }}
+          PROBE_STATUS: ${{ steps.aa_probe.outputs.status }}
+        run: |
+          set -euo pipefail
+          if [[ "${PROBE_STATUS}" == "schema_validated" && "${PROBE_OUTCOME}" == "success" ]]; then
+            echo "Artificial Analysis Free: first-page schema validated (advisory)." >> "${GITHUB_STEP_SUMMARY}"
+          elif [[ "${PROBE_STATUS}" == "skipped_no_key" ]]; then
+            echo "Artificial Analysis Free: skipped (secret not configured)." >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "Artificial Analysis Free: unavailable/degraded; catalogue publication is independent." >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      # Optional, trusted manual-only BenchLM Free probe: no unattended data reads.
+      - name: Probe BenchLM Free current rankings (owner-only advisory)
+        if: github.event_name == 'workflow_dispatch' && github.actor == github.repository_owner
+        id: benchlm_probe
+        continue-on-error: true
+        env:
+          BENCHLM_DATA_KEY: ${{ secrets.BENCHLM_DATA_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${BENCHLM_DATA_KEY}" ]]; then
+            echo "status=skipped_no_key" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          # One request by the owner, not four potentially long paid-quota surfaces.
+          python3 scripts/refresh-benchlm-evidence.py --probe --surface coding
+          echo "status=schema_validated" >> "${GITHUB_OUTPUT}"
+
+      - name: Summarize BenchLM Free probe
+        if: always() && github.event_name == 'workflow_dispatch'
+        env:
+          BENCHLM_STATUS: ${{ steps.benchlm_probe.outputs.status }}
+          BENCHLM_OUTCOME: ${{ steps.benchlm_probe.outcome }}
+        run: |
+          set -euo pipefail
+          if [[ "${BENCHLM_STATUS}" == "schema_validated" && "${BENCHLM_OUTCOME}" == "success" ]]; then
+            echo "BenchLM Free: Coding first-page schema validated privately." >> "${GITHUB_STEP_SUMMARY}"
+          elif [[ "${BENCHLM_STATUS}" == "skipped_no_key" ]]; then
+            echo "BenchLM Free: skipped (optional BENCHLM_DATA_KEY not configured)." >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "BenchLM Free: unavailable or schema-incompatible; no publisher impact." >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
   publish:
     needs: refresh
     if: needs.refresh.result == 'success' && needs.refresh.outputs.status == 'available'
