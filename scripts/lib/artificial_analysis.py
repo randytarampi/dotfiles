@@ -161,7 +161,7 @@ def _request_page(page, api_key):
             if exc.code == 429
             else "Artificial Analysis request failed"
         ) from None
-    except (urllib.error.URLError, TimeoutError, ValueError, OSError):
+    except (TimeoutError, ValueError, OSError):
         raise EvidenceError("Artificial Analysis network or JSON failure") from None
 
 
@@ -281,5 +281,5 @@ def load_snapshot(directory=None, *, max_age_days=30, now=None):
                 if row[metric]:
                     _numeric(float(row[metric]))
         return {"manifest": manifest, "models": rows, "source": "aa_cache"}
-    except (OSError, ValueError, KeyError, TypeError, UnicodeError, OverflowError):
+    except (OSError, ValueError, KeyError, TypeError, OverflowError):
         return None

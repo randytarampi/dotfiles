@@ -1,7 +1,5 @@
 """Synthetic, licence-safe Artificial Analysis Free API regression tests."""
 
-import hashlib
-import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
