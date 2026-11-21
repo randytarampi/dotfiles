@@ -1,6 +1,7 @@
 """Synthetic adversarial tests: BenchLM Free private ranking evidence."""
 
 import json
+import stat
 from datetime import date, datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -557,3 +558,13 @@ def test_offline_rejects_mixed_coverage(tmp_path):
     path.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(BenchlmError, match="coverage"):
         offline_sources(tmp_path)
+
+
+def test_store_does_not_chmod_a_preexisting_directory(tmp_path):
+    existing = tmp_path / "cache"
+    existing.mkdir()
+    existing.chmod(0o755)
+    snapshots = fetch_snapshots("placeholder", opener=StubOpener(), request_interval=0)
+    store_snapshots(snapshots, existing)
+    assert stat.S_IMODE(existing.stat().st_mode) == 0o755
+    assert (existing / "manifest.json").exists()
