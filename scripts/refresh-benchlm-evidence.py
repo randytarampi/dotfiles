@@ -38,8 +38,8 @@ def main():
     parser.add_argument(
         "--max-requests",
         type=int,
-        default=12,
-        help="Hard total HTTP request budget for full refresh (default 12)",
+        default=None,
+        help="Hard request budget (12 complete, 16 first-100, or explicit override)",
     )
     parser.add_argument(
         "--max-pages",
@@ -71,7 +71,11 @@ def main():
             return 0
         if args.refresh:
             snapshots = fetch_snapshots(
-                max_requests=args.max_requests,
+                max_requests=(
+                    args.max_requests
+                    if args.max_requests is not None
+                    else (16 if args.coverage == "first-100" else 12)
+                ),
                 max_pages=args.max_pages,
                 coverage_mode=args.coverage,
             )
