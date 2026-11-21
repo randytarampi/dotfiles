@@ -30,7 +30,7 @@ Suggested identities are **proposals**, not executable mappings. The tool delibe
 
 ## Decision and rollback
 
-If no comparable candidate pair exists, report **unmappable / not testable**, not benchmark agreement. If two eligible models exist, compare actual coding/reasoning/tool-call quality, context, TTFT, throughput and memory on the same host against curated `DOTFILES_CATEGORY_MODELS` / `DOTFILES_ROLE_MODELS` preferences. Keep `--model-evidence off` as the production default pending a demonstrated measured win. Scores never override capability gates and no provider outage blocks local selection.
+If no comparable candidate pair exists, report **unmappable / not testable**, not benchmark agreement. If two eligible models exist, compare actual coding/reasoning/tool-call quality, context, TTFT, throughput and memory on the same host against curated `DOTFILES_CATEGORY_MODELS` / `DOTFILES_ROLE_MODELS` preferences. Keep `--model-evidence off` as the production default pending a demonstrated measured win. The executable currently accepts only off/shadow; `apply` is deliberately rejected until a separately authorised change is reviewed. Scores never override capability gates and no provider outage blocks local selection.
 
 **Known limitation:** BenchLM four-file publication is atomic per file, not a transaction. Interrupted replacement can make all evidence unusable until a new complete generation is published. The one-read schema probes cannot verify the full dataset.
 
