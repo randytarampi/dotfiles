@@ -183,6 +183,7 @@ def test_actual_tier_consumer_calls_opt_in_ranker(monkeypatch):
             changed = tier_resolve.resolve_roles_from_list(fleet, evidence_mode="apply")
     assert changed["code-gen"] != baseline["code-gen"]
 
+
 def test_process_environment_cannot_rerank_shared_voice_or_local_winner(monkeypatch):
     from unittest.mock import patch
 
@@ -199,9 +200,10 @@ def test_process_environment_cannot_rerank_shared_voice_or_local_winner(monkeypa
         "is_moe": False,
     }
     with patch.object(tier_resolve, "get_model_details", side_effect=details):
-        with patch("model_evidence.rank_qualified", side_effect=AssertionError(
-            "unscoped resolver must not rank"
-        )):
+        with patch(
+            "model_evidence.rank_qualified",
+            side_effect=AssertionError("unscoped resolver must not rank"),
+        ):
             output = tier_resolve.resolve_roles_from_list(fleet)
     assert output["code-gen"] == "ollama/coder-b:8b"
 
@@ -211,12 +213,16 @@ def test_shadow_audit_explains_stale_scale_and_keeps_original_order():
     mappings["omlx/slow"]["whatmodel"]["scale"] = "retired-scale"
     models = [candidate("slow"), candidate("fast")]
     audit = {}
-    assert rank_qualified(
-        {"code-gen": models}, catalogues=[source],
-        mappings=mappings, audit=audit,
-    ) == 0
+    assert (
+        rank_qualified(
+            {"code-gen": models},
+            catalogues=[source],
+            mappings=mappings,
+            audit=audit,
+        )
+        == 0
+    )
     assert audit["sources"] == 1
     assert audit["scale_mismatches"] >= 1
     assert audit["comparable"] == 1
     assert models[0]["name"] == "slow"
-

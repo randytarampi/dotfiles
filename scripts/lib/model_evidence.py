@@ -235,13 +235,20 @@ def _candidate_score(model, catalogue, mappings):
     return entry["score"]
 
 
-def rank_qualified(classified, *, catalogues=None, mappings=None, profile=None, audit=None):
+def rank_qualified(
+    classified, *, catalogues=None, mappings=None, profile=None, audit=None
+):
     """Move only comparable slots within their category, never between scales."""
     if audit is not None:
-        audit.update({
-            "sources": 0, "mappings": 0, "comparable": 0,
-            "scale_mismatches": 0, "missing_identifiers": 0,
-        })
+        audit.update(
+            {
+                "sources": 0,
+                "mappings": 0,
+                "comparable": 0,
+                "scale_mismatches": 0,
+                "missing_identifiers": 0,
+            }
+        )
     if profile == "quiet":
         return 0
     catalogues = catalogues if catalogues is not None else load_catalogues()

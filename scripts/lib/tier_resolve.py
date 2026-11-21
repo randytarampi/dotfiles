@@ -678,7 +678,9 @@ def resolve_roles_from_list(
     if evidence_mode != "off":
         from model_evidence import rank_qualified
 
-        proposed = copy.deepcopy(classified) if evidence_mode == "shadow" else classified
+        proposed = (
+            copy.deepcopy(classified) if evidence_mode == "shadow" else classified
+        )
         audit = {}
         changed = rank_qualified(proposed, profile=profile, audit=audit)
         logger.warning(
@@ -700,7 +702,9 @@ def resolve_roles_from_list(
                     logger.warning(
                         "Model evidence shadow %s: baseline=%s proposed=%s "
                         "(no configuration change)",
-                        category, before, after,
+                        category,
+                        before,
+                        after,
                     )
             if not changed:
                 logger.warning(

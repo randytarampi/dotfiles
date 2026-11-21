@@ -684,7 +684,8 @@ def main():
         evidence_mode = args.model_evidence
     else:
         evidence_mode = (
-            "apply" if os.environ.get("DOTFILES_USE_MODEL_EVIDENCE_RANKING") == "1"
+            "apply"
+            if os.environ.get("DOTFILES_USE_MODEL_EVIDENCE_RANKING") == "1"
             else "off"
         )
     logger.warning("Effective local model evidence mode: %s", evidence_mode)
