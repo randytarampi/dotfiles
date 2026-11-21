@@ -232,10 +232,17 @@ def test_audit_names_exact_source_when_two_candidates_are_comparable():
     source, mappings = fixture()
     models = [candidate("slow"), candidate("fast")]
     audit = {}
-    assert rank_qualified(
-        {"code-gen": models}, catalogues=[source],
-        mappings=mappings, audit=audit,
-    ) == 1
+    assert (
+        rank_qualified(
+            {"code-gen": models},
+            catalogues=[source],
+            mappings=mappings,
+            audit=audit,
+        )
+        == 1
+    )
     assert audit["selected"]["code-gen"] == {
-        "source": "whatmodel", "metric": "overall", "candidates": 2,
+        "source": "whatmodel",
+        "metric": "overall",
+        "candidates": 2,
     }

@@ -695,7 +695,9 @@ def resolve_roles_from_list(
             changed,
         )
         if audit.get("selected"):
-            logger.warning("Model evidence selected comparable sets: %s", audit["selected"])
+            logger.warning(
+                "Model evidence selected comparable sets: %s", audit["selected"]
+            )
         if evidence_mode == "shadow":
             for category in ("reasoning", "code-gen", "lightweight", "solo"):
                 before = [m["name"] for m in classified.get(category, [])]
