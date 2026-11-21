@@ -124,9 +124,15 @@ def build_suggestions(classified, catalogues, aa_snapshot=None, directory=None, 
                 "aliases": _display_aliases(details),
             }
     local = {}
+    excluded_no_tools = set()
     for category in ROLE_METRICS:
         for model in classified.get(category, []):
             route = _route(model)
+            # Use exactly the ranker's hard eligibility gate, not just the
+            # broader category's preliminary capability requirements.
+            if "tools" not in (model.get("capabilities") or []):
+                excluded_no_tools.add(route)
+                continue
             if route not in local:
                 local[route] = {"categories": [], "model": model}
             if category not in local[route]["categories"]:
@@ -138,7 +144,14 @@ def build_suggestions(classified, catalogues, aa_snapshot=None, directory=None, 
         local_key = _name_key(model_name)
         local_param = _param_token(model_name)
         candidates = []
+        eligible_metrics = {
+            metric
+            for category in record["categories"]
+            for metric in ROLE_METRICS[category]
+        }
         for source in catalogues:
+            if source["metric"] not in eligible_metrics:
+                continue
             for ident, entry in sorted(source["models"].items()):
                 record_key = (source["source"], ident)
                 upstream = records[record_key]
@@ -200,7 +213,8 @@ def build_suggestions(classified, catalogues, aa_snapshot=None, directory=None, 
         "benchmark_api_requests": 0,
         "writes": 0,
         "automatic_approvals": 0,
-        "qualified_unique_routes": len(proposals),
+        "qualified_tool_capable_unique_routes": len(proposals),
+        "excluded_without_tool_capability": len(excluded_no_tools),
         "sources": sources,
         "potential_matches_by_source": dict(sorted(counts.items())),
         "models": proposals,

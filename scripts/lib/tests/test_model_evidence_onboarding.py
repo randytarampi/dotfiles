@@ -34,7 +34,7 @@ def test_aa_uuid_source_can_be_suggested_by_restored_private_display_keys(tmp_pa
     out = build_suggestions(
         category, [source], aa_snapshot=aa, directory=tmp_path, mappings={}
     )
-    assert out["qualified_unique_routes"] == 1
+    assert out["qualified_tool_capable_unique_routes"] == 1
     suggestion = out["models"][0]["candidates"][0]
     assert suggestion["candidate"] == {
         "model_id": "opaque-uuid",
@@ -147,3 +147,25 @@ def test_category_observer_gets_deep_copy_and_preserves_baseline_roles():
     assert observed == original
     assert captured["code-gen"] == []
     assert observed["code-gen"] != ""
+
+
+
+def test_mapping_suggestions_require_tools_and_role_relevant_metric(tmp_path):
+    aa = {
+        "source": "artificial-analysis",
+        "metric": "intelligence",
+        "scale": "aa-intelligence-5",
+        "models": {"opaque": {"creator_id": "lab", "score": 87}},
+    }
+    descriptors = {"models": [{"id": "opaque", "slug": "coder-7b"}]}
+    no_tools = {"name": "coder-7b", "provider": "omlx", "capabilities": ["completion"]}
+    has_tools = model("coder-7b")
+    result = build_suggestions(
+        {"code-gen": [no_tools]}, [aa], aa_snapshot=descriptors, directory=tmp_path
+    )
+    assert result["qualified_tool_capable_unique_routes"] == 0
+    assert result["excluded_without_tool_capability"] == 1
+    result = build_suggestions(
+        {"code-gen": [has_tools]}, [aa], aa_snapshot=descriptors, directory=tmp_path
+    )
+    assert result["models"][0]["candidates"] == []
