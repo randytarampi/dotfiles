@@ -348,10 +348,14 @@ def test_real_tier_consumer_uses_benchlm_only_with_opt_in_and_complete_cache(
         for name in ("coder-beta:8b", "coder-alpha:7b")
     ]
     qualified = {"code-gen": eligible}
-    assert rank_qualified(
-        qualified, catalogues=offline_sources(tmp_path),
-        mappings=mapping["mappings"],
-    ) == 1
+    assert (
+        rank_qualified(
+            qualified,
+            catalogues=offline_sources(tmp_path),
+            mappings=mapping["mappings"],
+        )
+        == 1
+    )
     assert qualified["code-gen"][0]["name"] == "coder-alpha:7b"
     (tmp_path / "benchlm-reasoning.json").unlink()
     with patch.object(tier_resolve, "get_model_details", side_effect=details):

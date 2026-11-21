@@ -51,17 +51,26 @@ def _installed():
 def main():
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     add_common_args(parser)
-    parser.add_argument("--models-file", type=Path, help="Offline fixture; no local model probe")
+    parser.add_argument(
+        "--models-file", type=Path, help="Offline fixture; no local model probe"
+    )
     parser.add_argument("--cache-dir", type=Path, default=sources_dir())
     parser.add_argument("--aa-cache-dir", type=Path, default=cache_dir())
     parser.add_argument("--map", type=Path, default=mapping_path())
     parser.add_argument("--max-candidates", type=int, default=3)
-    parser.add_argument("--json", action="store_true", help="Print a machine-readable private report")
     parser.add_argument(
-        "--accept", action="append", default=[], metavar="ROUTE=SOURCE:MODEL_ID",
+        "--json", action="store_true", help="Print a machine-readable private report"
+    )
+    parser.add_argument(
+        "--accept",
+        action="append",
+        default=[],
+        metavar="ROUTE=SOURCE:MODEL_ID",
         help="Explicitly approve an exact existing source row; repeatable",
     )
-    parser.add_argument("--apply", action="store_true", help="Write approved identities to private map")
+    parser.add_argument(
+        "--apply", action="store_true", help="Write approved identities to private map"
+    )
     args = parser.parse_args()
     if args.apply and not args.accept:
         parser.error("--apply requires one or more --accept approvals")
@@ -80,7 +89,8 @@ def main():
         if args.accept:
             result = merge_approved(
                 approved_patch(args.accept, local, sources),
-                path=args.map, apply=args.apply,
+                path=args.map,
+                apply=args.apply,
             )
             print(json.dumps(result, sort_keys=True, indent=2))
             if not args.apply:
@@ -98,16 +108,27 @@ def main():
             for row in report:
                 print(row["route"], "quantization=", row["quantization"] or "UNKNOWN")
                 if not row["candidates"]:
-                    print("  No plausible exact upstream identity in available snapshots")
+                    print(
+                        "  No plausible exact upstream identity in available snapshots"
+                    )
                 for choice in row["candidates"]:
                     print(
-                        "  " + choice["source"] + ": " + choice["model_id"]
-                        + " (creator=" + choice["creator_id"]
-                        + ", scale=" + choice["scale"] + ", "
-                        + choice["match"] + ")"
+                        "  "
+                        + choice["source"]
+                        + ": "
+                        + choice["model_id"]
+                        + " (creator="
+                        + choice["creator_id"]
+                        + ", scale="
+                        + choice["scale"]
+                        + ", "
+                        + choice["match"]
+                        + ")"
                     )
                 print("  " + row["caveat"])
-            print("No changes made; use --accept for a JSON preview, --apply only after owner review.")
+            print(
+                "No changes made; use --accept for a JSON preview, --apply only after owner review."
+            )
         return 0
     except (MappingSuggestionError, OSError, ValueError) as error:
         print("mapping onboarding unavailable: " + str(error), file=sys.stderr)

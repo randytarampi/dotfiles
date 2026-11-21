@@ -180,9 +180,7 @@ def test_actual_tier_consumer_calls_opt_in_ranker(monkeypatch):
             return 1
 
         with patch("model_evidence.rank_qualified", side_effect=reorder):
-            shadow = tier_resolve.resolve_roles_from_list(
-                fleet, evidence_mode="shadow"
-            )
+            shadow = tier_resolve.resolve_roles_from_list(fleet, evidence_mode="shadow")
     assert shadow == baseline
     import pytest
 
@@ -263,8 +261,10 @@ def test_duplicate_slots_cannot_supply_second_distinct_candidate():
     audit = {}
     assert (
         rank_qualified(
-            {"code-gen": models}, catalogues=[source],
-            mappings=mappings, audit=audit,
+            {"code-gen": models},
+            catalogues=[source],
+            mappings=mappings,
+            audit=audit,
         )
         == 0
     )
@@ -276,13 +276,17 @@ def test_duplicate_slots_cannot_supply_second_distinct_candidate():
 def test_shadow_coverage_counts_unmapped_unique_models_per_source():
     source, mappings = fixture()
     models = [
-        candidate("slow"), candidate("slow"),
-        candidate("unmapped"), candidate("fast"),
+        candidate("slow"),
+        candidate("slow"),
+        candidate("unmapped"),
+        candidate("fast"),
     ]
     audit = {}
     rank_qualified(
-        {"code-gen": models}, catalogues=[source],
-        mappings=mappings, audit=audit,
+        {"code-gen": models},
+        catalogues=[source],
+        mappings=mappings,
+        audit=audit,
     )
     assert audit["coverage_by_source"]["whatmodel"] == {
         "qualified": 3,

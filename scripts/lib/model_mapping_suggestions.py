@@ -18,7 +18,17 @@ RUNTIME_SUFFIXES = frozenset(
     {"mlx", "gguf", "ollama", "bf16", "fp16", "fp32", "mxfp8", "nvfp4"}
 )
 DISTINGUISHING = frozenset(
-    {"mini", "small", "medium", "large", "coder", "instruct", "thinking", "vl", "vision"}
+    {
+        "mini",
+        "small",
+        "medium",
+        "large",
+        "coder",
+        "instruct",
+        "thinking",
+        "vl",
+        "vision",
+    }
 )
 
 
@@ -32,10 +42,12 @@ def _tokens(label):
     name = re.sub(
         r"(?:^|[-_:])(?:mlx|gguf|ollama|mxfp\d+|nvfp4|bf16|fp16|fp32|"
         r"q[2-8](?:_[a-z0-9]+)?|\d+bit)(?=$|[-_:])",
-        "-", name,
+        "-",
+        name,
     )
     return tuple(
-        part for part in re.findall(
+        part
+        for part in re.findall(
             r"[a-z]+\d+(?:\.\d+)?[abtm]?|[a-z]+|\d+(?:\.\d+)?[abtm]?",
             name,
         )
@@ -70,27 +82,39 @@ def qualified_local_models(records, details=None):
             continue
         name = item["name"]
         provider = item.get("provider", "ollama")
-        if provider not in {"ollama", "omlx"} or not name or "/" in name and name.endswith("/"):
+        if (
+            provider not in {"ollama", "omlx"}
+            or not name
+            or "/" in name
+            and name.endswith("/")
+        ):
             continue
         route = provider + "/" + name
         if route in seen:
             continue
         seen.add(route)
         if is_specialized_model_name(name) or item.get("model_type") not in (
-            None, "llm", "vlm"
+            None,
+            "llm",
+            "vlm",
         ):
             continue
         metadata = details(name, provider) if details else item
         if not isinstance(metadata, dict):
             continue
-        caps = set(item.get("capabilities") or []) | set(metadata.get("capabilities") or [])
+        caps = set(item.get("capabilities") or []) | set(
+            metadata.get("capabilities") or []
+        )
         if not {"completion", "tools"}.issubset(caps):
             continue
-        qualified.append({
-            "route": route,
-            "capabilities": sorted(caps),
-            "quantization": metadata.get("quantization") or item.get("quantization"),
-        })
+        qualified.append(
+            {
+                "route": route,
+                "capabilities": sorted(caps),
+                "quantization": metadata.get("quantization")
+                or item.get("quantization"),
+            }
+        )
     return sorted(qualified, key=lambda m: m["route"])
 
 
@@ -115,30 +139,34 @@ def suggestions_for(models, catalogues, aa_snapshot=None, *, maximum=3):
                 )
                 if best == 0:
                     continue
-                matched.append({
-                    "source": source["source"],
-                    "metric": source["metric"],
-                    "model_id": model_id,
-                    "creator_id": evidence["creator_id"],
-                    "scale": source["scale"],
-                    "match": "canonical-name" if best == 1.0 else "lexical-only",
-                    "score": best,
-                    "provenance": "private cached source; identity unverified",
-                })
+                matched.append(
+                    {
+                        "source": source["source"],
+                        "metric": source["metric"],
+                        "model_id": model_id,
+                        "creator_id": evidence["creator_id"],
+                        "scale": source["scale"],
+                        "match": "canonical-name" if best == 1.0 else "lexical-only",
+                        "score": best,
+                        "provenance": "private cached source; identity unverified",
+                    }
+                )
         matched.sort(
             key=lambda item: (-item["score"], item["source"], item["model_id"])
         )
-        report.append({
-            **local,
-            "candidates": [
-                {k: v for k, v in c.items() if k != "score"}
-                for c in matched[:maximum]
-            ],
-            "caveat": (
-                "Name similarity never proves checkpoint, runtime or "
-                "quantization equivalence; verify the original model card."
-            ),
-        })
+        report.append(
+            {
+                **local,
+                "candidates": [
+                    {k: v for k, v in c.items() if k != "score"}
+                    for c in matched[:maximum]
+                ],
+                "caveat": (
+                    "Name similarity never proves checkpoint, runtime or "
+                    "quantization equivalence; verify the original model card."
+                ),
+            }
+        )
     return report
 
 
@@ -157,7 +185,9 @@ def approved_patch(approvals, models, catalogues):
         catalogue = by_source[source]
         record = catalogue["models"].get(model_id)
         if record is None:
-            raise MappingSuggestionError("model id not found in eligible private source")
+            raise MappingSuggestionError(
+                "model id not found in eligible private source"
+            )
         ref = {
             "model_id": model_id,
             "creator_id": record["creator_id"],
@@ -197,17 +227,23 @@ def merge_approved(approved, *, path=None, apply=False):
             or stat.S_IMODE(state.st_mode) != 0o600
             or state.st_uid != os.getuid()
         ):
-            raise MappingSuggestionError("existing map must be owned private regular file")
+            raise MappingSuggestionError(
+                "existing map must be owned private regular file"
+            )
         try:
             original = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            raise MappingSuggestionError("existing map is unreadable or malformed") from None
+            raise MappingSuggestionError(
+                "existing map is unreadable or malformed"
+            ) from None
         if (
             original.get("schema_version") != 1
             or not isinstance(original.get("mappings"), dict)
             or original["mappings"] != load_private_mappings(path)
         ):
-            raise MappingSuggestionError("existing map contains unknown or invalid entries")
+            raise MappingSuggestionError(
+                "existing map contains unknown or invalid entries"
+            )
     else:
         original = {"schema_version": 1, "mappings": {}}
     result = json.loads(json.dumps(original))
@@ -215,7 +251,9 @@ def merge_approved(approved, *, path=None, apply=False):
         target = result["mappings"].setdefault(route, {})
         for source, item in by_source.items():
             if source in target and target[source] != item:
-                raise MappingSuggestionError("existing mapping conflict; review it manually")
+                raise MappingSuggestionError(
+                    "existing mapping conflict; review it manually"
+                )
             target[source] = item
     if result == original:
         return result

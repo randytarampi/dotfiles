@@ -46,10 +46,12 @@ def source():
         "scale": "benchalign-v5-method6-coding",
         "models": {
             "ornith-1.5-35b-a3b": {
-                "creator_id": "maker", "score": 91.0,
+                "creator_id": "maker",
+                "score": 91.0,
             },
             "inkling-2-small": {
-                "creator_id": "maker", "score": 82.0,
+                "creator_id": "maker",
+                "score": 82.0,
             },
         },
     }
@@ -71,7 +73,8 @@ def test_installed_suggestions_identify_quantized_name_without_silently_mapping(
 def test_acceptance_requires_installed_exact_source_identity_and_preview(tmp_path):
     approved = approved_patch(
         ["omlx/Ornith-1.5-35B-A3B-MLX-4bit=benchlm-coding:ornith-1.5-35b-a3b"],
-        fleet(), [source()],
+        fleet(),
+        [source()],
     )
     path = tmp_path / "model-evidence-map.json"
     result = merge_approved(approved, path=path)
@@ -87,17 +90,20 @@ def test_acceptance_requires_installed_exact_source_identity_and_preview(tmp_pat
 def test_owner_map_conflict_and_symlink_cannot_be_replaced(tmp_path):
     approved = approved_patch(
         ["omlx/Ornith-1.5-35B-A3B-MLX-4bit=benchlm-coding:ornith-1.5-35b-a3b"],
-        fleet(), [source()],
+        fleet(),
+        [source()],
     )
     path = tmp_path / "private-map.json"
     merge_approved(approved, path=path, apply=True)
-    different = {"omlx/Ornith-1.5-35B-A3B-MLX-4bit": {
-        "benchlm-coding": {
-            "model_id": "inkling-2-small",
-            "creator_id": "maker",
-            "scale": source()["scale"],
+    different = {
+        "omlx/Ornith-1.5-35B-A3B-MLX-4bit": {
+            "benchlm-coding": {
+                "model_id": "inkling-2-small",
+                "creator_id": "maker",
+                "scale": source()["scale"],
+            }
         }
-    }}
+    }
     with pytest.raises(MappingSuggestionError, match="conflict"):
         merge_approved(different, path=path, apply=True)
     path.unlink()
@@ -110,10 +116,12 @@ def test_no_automatic_approval_and_unknown_model_refused():
     with pytest.raises(MappingSuggestionError, match="route or source"):
         approved_patch(
             ["omlx/nonexistent=benchlm-coding:ornith-1.5-35b-a3b"],
-            fleet(), [source()],
+            fleet(),
+            [source()],
         )
     with pytest.raises(MappingSuggestionError, match="not found"):
         approved_patch(
             ["omlx/Ornith-1.5-35B-A3B-MLX-4bit=benchlm-coding:not-a-model"],
-            fleet(), [source()],
+            fleet(),
+            [source()],
         )
