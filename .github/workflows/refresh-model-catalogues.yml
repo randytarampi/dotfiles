@@ -178,6 +178,39 @@ jobs:
             echo "whatmodel: unavailable or incompatible; catalogue refresh remains independent." >> "${GITHUB_STEP_SUMMARY}"
           fi
 
+      # Optional, trusted manual-only BenchLM Free probe: no unattended data reads.
+      - name: Probe BenchLM Free current rankings (owner-only advisory)
+        if: github.event_name == 'workflow_dispatch' && github.actor == github.repository_owner
+        id: benchlm_probe
+        continue-on-error: true
+        env:
+          BENCHLM_DATA_KEY: ${{ secrets.BENCHLM_DATA_KEY }}
+          BENCHLM_PRIVATE_CACHE: ${{ runner.temp }}/benchlm-private
+        run: |
+          set -euo pipefail
+          if [[ -z "${BENCHLM_DATA_KEY}" ]]; then
+            echo "status=skipped_no_key" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          python3 scripts/refresh-benchlm-evidence.py --refresh --cache-dir "${BENCHLM_PRIVATE_CACHE}"
+          python3 scripts/refresh-benchlm-evidence.py --offline --cache-dir "${BENCHLM_PRIVATE_CACHE}"
+          echo "status=validated_private" >> "${GITHUB_OUTPUT}"
+
+      - name: Summarize BenchLM Free probe
+        if: always() && github.event_name == 'workflow_dispatch'
+        env:
+          BENCHLM_STATUS: ${{ steps.benchlm_probe.outputs.status }}
+          BENCHLM_OUTCOME: ${{ steps.benchlm_probe.outcome }}
+        run: |
+          set -euo pipefail
+          if [[ "${BENCHLM_STATUS}" == "validated_private" && "${BENCHLM_OUTCOME}" == "success" ]]; then
+            echo "BenchLM Free: supported current rankings validated privately." >> "${GITHUB_STEP_SUMMARY}"
+          elif [[ "${BENCHLM_STATUS}" == "skipped_no_key" ]]; then
+            echo "BenchLM Free: skipped (optional BENCHLM_DATA_KEY not configured)." >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "BenchLM Free: unavailable or schema-incompatible; no publisher impact." >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
   publish:
     needs: refresh
     if: needs.refresh.result == 'success' && needs.refresh.outputs.status == 'available'
