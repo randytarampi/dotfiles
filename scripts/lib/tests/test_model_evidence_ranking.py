@@ -194,11 +194,12 @@ def test_process_environment_cannot_rerank_shared_voice_or_local_winner(monkeypa
         {"name": "coder-a:7b", "provider": "ollama"},
         {"name": "coder-b:8b", "provider": "ollama"},
     ]
-    details = lambda name: {
-        "capabilities": ["completion", "thinking", "tools"],
-        "param_count": 7 if "coder-a" in name else 8,
-        "is_moe": False,
-    }
+    def details(name):
+        return {
+            "capabilities": ["completion", "thinking", "tools"],
+            "param_count": 7 if "coder-a" in name else 8,
+            "is_moe": False,
+        }
     with patch.object(tier_resolve, "get_model_details", side_effect=details):
         with patch(
             "model_evidence.rank_qualified",

@@ -235,10 +235,68 @@ def _candidate_score(model, catalogue, mappings):
     return entry["score"]
 
 
+def _audit_candidate_identity(model, source, mappings):
+    route = model.get("provider", "ollama") + "/" + model["name"]
+    ref = mappings.get(route, {}).get(source["source"])
+    if ref is None:
+        return None
+    if ref["scale"] != source["scale"]:
+        return "scale_mismatches"
+    entry = source["models"].get(ref["model_id"])
+    if entry is None or entry["creator_id"] != ref["creator_id"]:
+        return "missing_identifiers"
+    return None
+
+
+def _audit_source_coverage(classified, catalogues, mappings, audit):
+    for category in ROLE_METRICS:
+        for model in classified.get(category, []):
+            for source in catalogues:
+                reason = _audit_candidate_identity(model, source, mappings)
+                if reason is not None:
+                    audit[reason] += 1
+
+
+def _preferred_comparables(entries, preferences, catalogues, mappings, audit):
+    """Use the first available task-specific metric, choosing most mapped slots."""
+    for metric in preferences:
+        possibilities = []
+        for source in catalogues:
+            if source["metric"] != metric:
+                continue
+            scored = [
+                (index, _candidate_score(model, source, mappings))
+                for index, model in enumerate(entries)
+            ]
+            comparable = [(index, score) for index, score in scored if score is not None]
+            if audit is not None:
+                audit["comparable"] += len(comparable)
+            if len(comparable) >= 2:
+                possibilities.append((source["source"], comparable))
+        if possibilities:
+            chosen_source, selection = sorted(
+                possibilities, key=lambda item: (-len(item[1]), item[0])
+            )[0]
+            return chosen_source, metric, selection
+    return None
+
+
+def _reorder_comparable_slots(entries, selection):
+    slots = [index for index, _ in selection]
+    sorted_items = sorted(selection, key=lambda pair: pair[1], reverse=True)
+    replacements = [entries[index] for index, _ in sorted_items]
+    changed = any(
+        entries[index] is not item for index, item in zip(slots, replacements)
+    )
+    for index, item in zip(slots, replacements):
+        entries[index] = item
+    return int(changed)
+
+
 def rank_qualified(
     classified, *, catalogues=None, mappings=None, profile=None, audit=None
 ):
-    """Move only comparable slots within their category, never between scales."""
+    """Move only comparable category slots within a versioned source scale."""
     if audit is not None:
         audit.update(
             {
@@ -260,62 +318,23 @@ def rank_qualified(
     if not catalogues or not mappings:
         return 0
     if audit is not None:
-        for category, models in classified.items():
-            if category not in ROLE_METRICS:
-                continue
-            for model in models:
-                route = model.get("provider", "ollama") + "/" + model["name"]
-                assigned = mappings.get(route, {})
-                for source in catalogues:
-                    ref = assigned.get(source["source"])
-                    if not ref:
-                        continue
-                    if ref["scale"] != source["scale"]:
-                        audit["scale_mismatches"] += 1
-                    elif (
-                        ref["model_id"] not in source["models"]
-                        or source["models"][ref["model_id"]]["creator_id"]
-                        != ref["creator_id"]
-                    ):
-                        audit["missing_identifiers"] += 1
+        _audit_source_coverage(classified, catalogues, mappings, audit)
     changed = 0
     for category, preferences in ROLE_METRICS.items():
         entries = classified.get(category)
         if not entries:
             continue
-        selection = None
-        for metric in preferences:
-            possibilities = []
-            for source in catalogues:
-                if source["metric"] != metric:
-                    continue
-                scored = [
-                    (index, _candidate_score(model, source, mappings))
-                    for index, model in enumerate(entries)
-                ]
-                comparable = [(i, s) for i, s in scored if s is not None]
-                if audit is not None:
-                    audit["comparable"] += len(comparable)
-                if len(comparable) >= 2:
-                    possibilities.append((source["source"], comparable))
-            if possibilities:
-                chosen_source, selection = sorted(
-                    possibilities, key=lambda item: (-len(item[1]), item[0])
-                )[0]
-                if audit is not None:
-                    audit["selected"][category] = {
-                        "source": chosen_source,
-                        "metric": metric,
-                        "candidates": len(selection),
-                    }
-                break
-        if selection is None:
+        choice = _preferred_comparables(
+            entries, preferences, catalogues, mappings, audit
+        )
+        if choice is None:
             continue
-        slots = [index for index, _ in selection]
-        sorted_items = sorted(selection, key=lambda pair: pair[1], reverse=True)
-        replacements = [entries[index] for index, _ in sorted_items]
-        if any(entries[index] is not item for index, item in zip(slots, replacements)):
-            changed += 1
-        for index, item in zip(slots, replacements):
-            entries[index] = item
+        source_id, metric, selection = choice
+        if audit is not None:
+            audit["selected"][category] = {
+                "source": source_id,
+                "metric": metric,
+                "candidates": len(selection),
+            }
+        changed += _reorder_comparable_slots(entries, selection)
     return changed
