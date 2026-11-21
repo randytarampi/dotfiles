@@ -151,3 +151,35 @@ def test_stale_and_self_reported_rows_are_excluded(tmp_path):
     payload["observed_at"] = (now - timedelta(days=31)).isoformat()
     p.write_text(json.dumps(payload), encoding="utf-8")
     assert load_catalogues(tmp_path, aa_evidence={}, now=now) == []
+
+
+def test_actual_tier_consumer_calls_opt_in_ranker(monkeypatch):
+    from unittest.mock import patch
+
+    import tier_resolve
+
+    fleet = [
+        {"name": "coder-a:7b", "provider": "ollama", "param_count": 7},
+        {"name": "coder-b:8b", "provider": "ollama", "param_count": 8},
+    ]
+
+    def details(name, provider="ollama"):
+        return {
+            "param_count": 8 if "coder-b" in name else 7,
+            "capabilities": ["completion", "thinking", "tools"],
+            "is_moe": False,
+        }
+
+    monkeypatch.delenv("DOTFILES_USE_MODEL_EVIDENCE_RANKING", raising=False)
+    with patch.object(tier_resolve, "get_model_details", side_effect=details):
+        baseline = tier_resolve.resolve_roles_from_list(fleet)
+        monkeypatch.setenv("DOTFILES_USE_MODEL_EVIDENCE_RANKING", "1")
+
+        def reorder(classified, *, profile=None):
+            assert profile is None
+            classified["code-gen"].reverse()
+            return 1
+
+        with patch("model_evidence.rank_qualified", side_effect=reorder):
+            changed = tier_resolve.resolve_roles_from_list(fleet)
+    assert changed["code-gen"] != baseline["code-gen"]
