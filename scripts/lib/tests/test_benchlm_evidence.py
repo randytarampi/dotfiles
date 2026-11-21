@@ -248,6 +248,7 @@ def test_duplicate_identity_rejected_even_if_unscored():
     with pytest.raises(BenchlmError, match="duplicate"):
         _parse_row(item, seen)
 
+
 def test_partial_or_mixed_batch_is_ineligible_for_resolution(tmp_path):
     from model_evidence import load_catalogues
 
@@ -264,6 +265,7 @@ def test_partial_or_mixed_batch_is_ineligible_for_resolution(tmp_path):
     assert load_catalogues(tmp_path, aa_evidence={}) == []
 
 
+
 def test_invalid_pagination_type_is_bounded_error():
     data = {
         "surface": "coding",
@@ -274,6 +276,7 @@ def test_invalid_pagination_type_is_bounded_error():
     }
     with pytest.raises(BenchlmError, match="pagination"):
         _parse_page(data, surface="coding", offset=0)
+
 
 def test_real_tier_consumer_uses_benchlm_only_with_opt_in_and_complete_cache(
     monkeypatch, tmp_path
@@ -330,6 +333,7 @@ def test_real_tier_consumer_uses_benchlm_only_with_opt_in_and_complete_cache(
     assert baseline["code-gen"] == "ollama/coder-beta:8b"
     assert preferred["code-gen"] == "ollama/coder-alpha:7b"
     assert recovered["code-gen"] == baseline["code-gen"]
+
 
 def test_no_network_when_cache_read(monkeypatch, tmp_path):
     store_snapshots(fetch_snapshots("placeholder", opener=StubOpener()), tmp_path)

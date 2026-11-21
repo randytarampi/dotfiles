@@ -232,7 +232,10 @@ def store_snapshots(snapshots, directory=None):
         raise BenchlmError("BenchLM missing batch metadata")
     if any(value != batches[0] for value in batches):
         raise BenchlmError("BenchLM mixed snapshot batches")
-    if set(batches[0].get("members", [])) != expected:
+    members = batches[0].get("members")
+    if not isinstance(members, list) or any(not isinstance(m, str) for m in members):
+        raise BenchlmError("BenchLM invalid batch member list")
+    if set(members) != expected:
         raise BenchlmError("BenchLM batch member mismatch")
     now = datetime.now(timezone.utc)
     for row in snapshots:
