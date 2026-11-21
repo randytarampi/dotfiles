@@ -106,65 +106,111 @@ CONTEXT_MODE_DEFAULTS = {
 def resolve_repo_context_mode(
     which=shutil.which, exists=os.path.isfile, realpath=os.path.realpath, home=None
 ):
-    """Return the repo-managed context-mode CLI, never the plugin's bundled copy.
-
-    The Paseo plugin ships its own runtime under its install directory; pointing
-    the plugin at the npm global the dotfiles manage keeps one version in play
-    and honours the feature gate that owns that install.
-    """
+    """Return only a present npm-managed cli.mjs, never a bundled copy or shim."""
     candidate = which("context-mode")
     if not candidate or not os.path.isabs(candidate):
         return "unresolved", None
     home = Path.home() if home is None else Path(home)
-    bundled_root = home / ".paseo" / "plugins"
-    resolved = realpath(candidate)
-    for path in (candidate, resolved):
-        try:
-            if bundled_root in Path(realpath(path)).parents:
-                return "bundled", None
-        except OSError:
-            continue
-    for path in (candidate, resolved):
-        if path.endswith((".mjs", ".js", ".cjs")):
-            return "resolved", path
-    for relative in (
-        "../lib/node_modules/context-mode/cli.mjs",
-        "../node_modules/context-mode/cli.mjs",
+    bundled_root = Path(realpath(str(home / ".paseo/plugins")))
+    resolved = Path(realpath(candidate))
+    if resolved == bundled_root or bundled_root in resolved.parents:
+        return "bundled", None
+    # npm's global executable may be a symlink or a Windows .cmd shim. In
+    # either case the plugin needs the real Node entrypoint, not a shell shim.
+    paths = (
+        resolved,
+        Path(realpath(str(Path(candidate).parent / "../lib/node_modules/context-mode/cli.mjs"))),
+        Path(realpath(str(Path(candidate).parent / "node_modules/context-mode/cli.mjs"))),
+    )
+    for path in paths:
+        if path == bundled_root or bundled_root in path.parents:
+            return "bundled", None
+        if (
+            path.name == "cli.mjs"
+            and path.parent.name == "context-mode"
+            and path.parent.parent.name == "node_modules"
+            and exists(str(path))
+        ):
+            return "resolved", str(path)
+    return "unresolved", None
+
+
+def configure_context_mode_binary(settings_dir, binary, *, backup=True, dry_run=False):
+    """Update only binaryPath; reject unknown user state and unsafe file paths."""
+    if not isinstance(binary, str) or not os.path.isabs(binary) or any(
+        char in binary for char in ("\n", "\r", "\x00")
     ):
-        module_path = (Path(candidate).parent / relative).resolve()
-        if exists(str(module_path)):
-            return "resolved", str(module_path)
-    return ("resolved", candidate) if exists(candidate) else ("unresolved", None)
-
-
-def configure_context_mode_binary(settings_dir, binary, *, backup=True):
-    """Point the Paseo context-mode plugin at the repo-managed executable.
-
-    Paseo stores plugin settings at ``<paseo home>/plugin-settings/<plugin id>/
-    <settings id>.json`` as ``{"version": N, "values": {...}}``. Only the
-    ``binaryPath`` value is owned here; other user settings are preserved.
-    """
+        raise ValueError("unsafe context-mode binaryPath")
     directory = Path(settings_dir)
     target = directory / f"{CONTEXT_MODE_SETTINGS_ID}.json"
-    values = dict(CONTEXT_MODE_DEFAULTS)
-    if target.is_file():
+    for path in (directory.parent.parent, directory.parent, directory, target):
+        if path.is_symlink():
+            raise ValueError("context-mode settings path contains a symlink")
+    if directory.exists() and not directory.is_dir():
+        raise ValueError("context-mode settings directory is not a directory")
+    if target.exists() and not target.is_file():
+        raise ValueError("context-mode settings path is not a regular file")
+
+    existing = {"version": 2, "values": dict(CONTEXT_MODE_DEFAULTS)}
+    previous = None
+    previous_stat = None
+    if target.exists():
+        previous_stat = target.stat()
+        if (
+            previous_stat.st_uid != os.getuid()
+            or stat.S_IMODE(previous_stat.st_mode) != 0o600
+        ):
+            raise ValueError("context-mode settings are not owner-only")
         try:
-            existing = json.loads(target.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            existing = None
-        if isinstance(existing, dict) and isinstance(existing.get("values"), dict):
-            values.update(existing["values"])
-    values["binaryPath"] = binary
-    serialized = json.dumps({"version": 2, "values": values}, indent=2)
-    if target.is_file():
+            previous = target.read_bytes()
+            stored = json.loads(previous.decode("utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise ValueError("context-mode settings unreadable; refusing overwrite") from error
+        if (
+            not isinstance(stored, dict)
+            or stored.get("version") != 2
+            or not isinstance(stored.get("values"), dict)
+        ):
+            raise ValueError("context-mode settings schema unknown; refusing overwrite")
+        existing.update(stored)
+        existing["values"] = {**CONTEXT_MODE_DEFAULTS, **stored["values"]}
+
+    existing["values"]["binaryPath"] = binary
+    serialized = json.dumps(existing, indent=2)
+    if previous is not None and previous.decode("utf-8").strip() == serialized:
+        return "unchanged"
+    backup_path = Path(str(target) + ".bak")
+    if backup and (
+        backup_path.is_symlink()
+        or (backup_path.exists() and not backup_path.is_file())
+    ):
+        raise ValueError("context-mode settings backup is unsafe")
+    if backup and previous is not None and backup_path.exists():
+        if backup_path.read_bytes() != previous:
+            raise ValueError("context-mode settings backup conflict; refusing overwrite")
+    if dry_run:
+        return "would-write"
+
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # Best-effort detection of competing native settings writers; users must
+    # still quiesce Paseo Desktop before applying user-owned changes.
+    if previous is not None:
+        current_stat = target.stat()
+        if (
+            (current_stat.st_dev, current_stat.st_ino, current_stat.st_mtime_ns)
+            != (previous_stat.st_dev, previous_stat.st_ino, previous_stat.st_mtime_ns)
+            or target.read_bytes() != previous
+        ):
+            raise ValueError("context-mode settings changed concurrently")
+    elif target.exists() or target.is_symlink():
+        raise ValueError("context-mode settings appeared concurrently")
+    if backup and previous is not None and not backup_path.exists():
         try:
-            if target.read_text(encoding="utf-8").strip() == serialized:
-                return "unchanged"
-        except OSError:
-            pass
-        if backup:
-            shutil.copy2(target, str(target) + ".bak")
-    directory.mkdir(parents=True, exist_ok=True)
+            with backup_path.open("xb") as file:
+                os.fchmod(file.fileno(), 0o600)
+                file.write(previous)
+        except FileExistsError as error:
+            raise ValueError("context-mode settings backup raced with another writer") from error
     fd, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=directory)
     try:
         os.fchmod(fd, 0o600)
@@ -175,7 +221,6 @@ def configure_context_mode_binary(settings_dir, binary, *, backup=True):
         if os.path.exists(temporary):
             os.unlink(temporary)
     return "written"
-
 
 def managed_wrapper(path, chromium, *, backup=True):
     """Modify only a recognizable owner wrapper; preserve backups and file mode."""
@@ -266,6 +311,10 @@ def plan(
         gate = PLUGIN_GATES.get(name)
         if gate is not None and env.get(gate, "0") != "1":
             reason = f"{gate} != 1"
+        elif name == CONTEXT_MODE_PLUGIN and (
+            node_version is None or node_version < (24, 15, 0)
+        ):
+            reason = "Context Mode requires Node >=24.15"
         elif name == "stevecastaneda/progress" and (
             node_version is None or node_version < (22, 18, 0)
         ):
@@ -469,21 +518,25 @@ def main(argv=None):
             == CONTEXT_MODE_PLUGIN
             for entry in current
         )
-        context_gate_on = os.environ.get(PLUGIN_GATES[CONTEXT_MODE_PLUGIN], "0") == "1"
-        context_binary_status, context_binary = "not-needed", None
-        if context_gate_on and (context_installed or CONTEXT_MODE_PLUGIN in installs):
-            context_binary_status, context_binary = resolve_repo_context_mode()
-            if context_binary and any(
-                char in context_binary for char in ("\n", "\r", "\x00")
-            ):
-                raise ValueError("unsafe context-mode executable path")
-            if context_binary_status == "resolved":
+        context_needed = CONTEXT_MODE_PLUGIN in eligible and (
+            context_installed or CONTEXT_MODE_PLUGIN in installs
+        )
+        context_binary = None
+        context_settings_dir = Path.home() / ".paseo/plugin-settings/context-mode"
+        if context_needed:
+            status, context_binary = resolve_repo_context_mode()
+            if status != "resolved" or context_binary is None:
+                print(f"context-mode binary: {status}")
+                if args.apply and not args.dry_run:
+                    raise ValueError("managed context-mode CLI unavailable; refusing bundled fallback")
+            else:
+                outcome = configure_context_mode_binary(
+                    context_settings_dir, context_binary, dry_run=True
+                )
                 print(
                     f"{'Would set' if args.dry_run else 'Setting'} "
-                    f"context-mode binaryPath={context_binary}"
+                    f"context-mode binaryPath={context_binary} ({outcome})"
                 )
-            else:
-                print(f"context-mode binary: {context_binary_status}")
         if args.dry_run:
             return 0
         if os.environ.get(GATE) != "1":
@@ -492,6 +545,14 @@ def main(argv=None):
         if chromium and "omercnet/shared-browser" in eligible:
             env["PASEO_SHARED_BROWSER_CHROMIUM_EXECUTABLE"] = chromium
         failures = []
+        context_settings_outcome = None
+        if context_binary:
+            # Install/enable must never start the bundled runtime before the
+            # repo-managed binary setting has been safely written.
+            context_settings_outcome = configure_context_mode_binary(
+                context_settings_dir, context_binary
+            )
+            print(f"context-mode settings: {context_settings_outcome}")
         for name in installs:
             try:
                 run_plugin(paseo, ["add", name], env=env)
@@ -511,17 +572,17 @@ def main(argv=None):
                 except ValueError as exc:
                     failures.append(registry)
                     print(f"Failed to remove {registry}: {exc}", file=sys.stderr)
-        if context_binary:
-            outcome = configure_context_mode_binary(
-                Path.home() / ".paseo/plugin-settings/context-mode", context_binary
-            )
-            if outcome == "written":
-                try:
-                    run_plugin(paseo, ["reload", CONTEXT_MODE_SETTINGS_ID])
-                except ValueError as exc:
-                    failures.append("context-mode settings reload")
-                    print(f"Failed to reload context-mode: {exc}", file=sys.stderr)
-            print(f"context-mode settings: {outcome}")
+        if (
+            context_binary
+            and context_settings_outcome == "written"
+            and (context_installed or CONTEXT_MODE_PLUGIN in installs)
+            and CONTEXT_MODE_PLUGIN not in failures
+        ):
+            try:
+                run_plugin(paseo, ["reload", CONTEXT_MODE_SETTINGS_ID])
+            except ValueError as exc:
+                failures.append("context-mode settings reload")
+                print(f"Failed to reload context-mode: {exc}", file=sys.stderr)
         if chromium and "omercnet/shared-browser" in eligible:
             system = platform_module.system()
             home = Path.home()

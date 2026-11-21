@@ -27,10 +27,8 @@ def test_codexbar_requires_executable_and_machine_status_unsupported_on_015():
     ) in omitted
     without_cli, skipped = module.plan(lambda name: None, (0, 15, 0))
     assert "uiyzzi/codexbar-usage" not in without_cli
-    # Node-missing and pre-0.16 daemons leave progress, codexbar, machine-status,
-    # devices, cheapskate and shared-browser out; skills/mermaid/doc-viewer/
-    # context-mode/better-paseo remain.
-    assert len(skipped) == 6
+    # Context Mode additionally requires its own opt-in gate.
+    assert len(skipped) == 7
 
 
 def test_preview_and_gate_refuse_all_mutations(monkeypatch):
@@ -100,7 +98,6 @@ def test_apply_skips_unsupported_plugin_and_installs_exact_registry_ids(monkeypa
         "gpambrozio/skills",
         "dutchakdev/mermaid",
         "nkwib/doc-viewer",
-        "omercnet/context-mode",
     ]
     assert "dutchakdev/machine-status" not in added
     assert "asherlc/devices" not in added
@@ -254,7 +251,7 @@ def test_one_failed_install_does_not_abort_the_rest(monkeypatch):
     )
     monkeypatch.setenv(module.GATE, "1")
     attempted = []
-    failed = {"omercnet/context-mode"}
+    failed = {"gpambrozio/skills"}
 
     def fake_run(argv, **kwargs):
         if argv[1:] == ["--version"]:
@@ -276,7 +273,7 @@ def test_one_failed_install_does_not_abort_the_rest(monkeypatch):
     monkeypatch.setattr(module.subprocess, "run", fake_run)
     monkeypatch.setattr(module, "run_plugin", fake_plugin)
     assert module.main(["--apply", "--codexbar-daemon-verified"]) == 1
-    assert "omercnet/context-mode" in attempted
+    assert "gpambrozio/skills" in attempted
     assert attempted[-1] == "gpambrozio/skills" or "gpambrozio/skills" in attempted
 
 
@@ -304,7 +301,7 @@ def test_daemon_version_not_cli_version_gates_plugin_floors(monkeypatch):
     assert "asherlc/devices" not in selected
     assert reasons["asherlc/devices"] == "Paseo >=0.16.2 required"
     assert reasons["asherlc/cheapskate"] == "Paseo >=0.16.1 required"
-    assert "omercnet/context-mode" in selected
+    assert "omercnet/context-mode" not in selected
 
 
 def test_apply_refuses_unknown_daemon_version_without_plugin_writes(monkeypatch):
@@ -482,6 +479,7 @@ def test_context_mode_settings_preserve_values_and_are_idempotent(tmp_path):
     target.write_text(
         json.dumps({"version": 2, "values": {"autoInject": False, "binaryPath": None}})
     )
+    target.chmod(0o600)
     binary = "/opt/homebrew/lib/node_modules/context-mode/cli.mjs"
 
     assert module.configure_context_mode_binary(settings, binary) == "written"
@@ -495,3 +493,164 @@ def test_context_mode_settings_preserve_values_and_are_idempotent(tmp_path):
     before = target.stat().st_mtime_ns
     assert module.configure_context_mode_binary(settings, binary) == "unchanged"
     assert target.stat().st_mtime_ns == before
+
+
+def test_context_mode_requires_node_24_15_even_when_gate_on():
+    selected, omitted = module.plan(
+        lambda _: "/bin/tool",
+        (0, 16, 2),
+        node_version=(24, 14, 99),
+        environ={"DOTFILES_RUN_CONTEXT_MODE_SETUP": "1"},
+    )
+    assert module.CONTEXT_MODE_PLUGIN not in selected
+    assert dict(omitted)[module.CONTEXT_MODE_PLUGIN] == (
+        "Context Mode requires Node >=24.15"
+    )
+
+
+def test_context_mode_resolver_refuses_nonexistent_modules_and_unrelated_shims(tmp_path):
+    home = tmp_path / "home"
+    shim = tmp_path / "prefix/bin/context-mode.cmd"
+    shim.parent.mkdir(parents=True)
+    shim.write_text("echo shim")
+    assert module.resolve_repo_context_mode(
+        which=lambda _: str(shim), home=home
+    ) == ("unresolved", None)
+    unrelated = tmp_path / "evil/cli.mjs"
+    unrelated.parent.mkdir()
+    unrelated.write_text("console.log('no')")
+    assert module.resolve_repo_context_mode(
+        which=lambda _: str(unrelated), home=home
+    ) == ("unresolved", None)
+    cli = tmp_path / "prefix/node_modules/context-mode/cli.mjs"
+    cli.parent.mkdir(parents=True)
+    cli.write_text("console.log('yes')")
+    assert module.resolve_repo_context_mode(
+        which=lambda _: str(shim), home=home
+    ) == ("resolved", str(cli.resolve()))
+
+
+def test_context_mode_settings_refuse_corruption_and_unknown_schema(tmp_path):
+    import pytest
+
+    settings = tmp_path / "plugin-settings/context-mode"
+    settings.mkdir(parents=True)
+    target = settings / "context-mode.json"
+    for bad in (
+        "{invalid",
+        '{"version":3,"values":{"autoInject":false}}',
+        '{"version":2,"values":null}',
+    ):
+        target.write_text(bad)
+        target.chmod(0o600)
+        with pytest.raises(ValueError, match="settings"):
+            module.configure_context_mode_binary(settings, "/usr/local/cli.mjs")
+        assert target.read_text() == bad
+        assert not (settings / "context-mode.json.bak").exists()
+
+
+def test_context_mode_settings_refuse_symlinks_and_conflicting_backup(tmp_path):
+    import pytest
+
+    settings = tmp_path / "plugin-settings/context-mode"
+    settings.mkdir(parents=True)
+    target = settings / "context-mode.json"
+    protected = tmp_path / "user-owned.json"
+    protected.write_text('{"owner":"different"}')
+    target.symlink_to(protected)
+    with pytest.raises(ValueError, match="symlink"):
+        module.configure_context_mode_binary(settings, "/usr/local/cli.mjs")
+    assert protected.read_text() == '{"owner":"different"}'
+    target.unlink()
+    target.write_text('{"version":2,"values":{"autoInject":false}}')
+    target.chmod(0o600)
+    backup = settings / "context-mode.json.bak"
+    backup.write_text("previous owner backup")
+    with pytest.raises(ValueError, match="backup conflict"):
+        module.configure_context_mode_binary(settings, "/usr/local/cli.mjs")
+    assert target.read_text() == '{"version":2,"values":{"autoInject":false}}'
+    assert backup.read_text() == "previous owner backup"
+    target.unlink()
+    settings_link = tmp_path / "other-context-mode"
+    settings.rename(settings_link)
+    settings.symlink_to(settings_link, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlink"):
+        module.configure_context_mode_binary(settings, "/usr/local/cli.mjs")
+
+
+def test_context_mode_settings_keep_extra_fields_and_preflight_has_no_writes(tmp_path):
+    settings = tmp_path / "plugin-settings/context-mode"
+    settings.mkdir(parents=True)
+    target = settings / "context-mode.json"
+    target.write_text(
+        json.dumps({"version":2,"custom":"preserve","values":{"autoInject":False}})
+    )
+    target.chmod(0o600)
+    before = target.read_bytes()
+    assert module.configure_context_mode_binary(
+        settings, "/usr/local/cli.mjs", dry_run=True
+    ) == "would-write"
+    assert target.read_bytes() == before
+    assert module.configure_context_mode_binary(
+        settings, "/usr/local/cli.mjs"
+    ) == "written"
+    assert json.loads(target.read_text())["custom"] == "preserve"
+
+
+def test_context_mode_apply_refuses_missing_binary_before_plugin_installs(monkeypatch):
+    monkeypatch.setenv(module.GATE, "1")
+    monkeypatch.setenv("DOTFILES_RUN_CONTEXT_MODE_SETUP", "1")
+    monkeypatch.setattr(module.shutil, "which", lambda name: "/bin/" + name)
+    monkeypatch.setattr(module, "resolve_repo_context_mode", lambda: ("unresolved", None))
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(list(argv))
+        if argv[1:] == ["--version"]:
+            return Mock(stdout="v24.15.0" if argv[0] == "/bin/node" else "0.16.2")
+        if argv[1:] == ["status", "--json"]:
+            return Mock(stdout='{"daemonVersion":"0.16.2"}', returncode=0)
+        if argv[1:] == ["plugin", "ls", "--json"]:
+            return Mock(stdout="[]", returncode=0)
+        raise AssertionError("unexpected mutation before failed preflight")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    assert module.main(["--apply"]) == 1
+    assert not any(call[1:3] == ["plugin", "add"] for call in calls)
+
+
+def test_context_mode_settings_are_written_before_native_add(monkeypatch, tmp_path):
+    monkeypatch.setenv(module.GATE, "1")
+    monkeypatch.setenv("DOTFILES_RUN_CONTEXT_MODE_SETUP", "1")
+    monkeypatch.setattr(module.shutil, "which", lambda name: "/bin/" + name)
+    monkeypatch.setattr(module, "resolve_repo_context_mode",
+                        lambda: ("resolved", "/usr/local/cli.mjs"))
+    monkeypatch.setattr(module.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(module, "resolve_chromium", lambda: ("unresolved", None))
+    events = []
+
+    def configure(_path, _binary, *, dry_run=False, **kwargs):
+        events.append("preview" if dry_run else "write")
+        return "would-write" if dry_run else "written"
+
+    def fake_run(argv, **kwargs):
+        if argv[1:] == ["--version"]:
+            return Mock(stdout="v24.15.0" if argv[0] == "/bin/node" else "0.16.2")
+        if argv[1:] == ["status", "--json"]:
+            return Mock(stdout='{"daemonVersion":"0.16.2"}')
+        if argv[1:] == ["plugin", "ls", "--json"]:
+            return Mock(stdout="[]")
+        raise AssertionError("Unexpected direct subprocess")
+
+    def plugin(_paseo, args, **kwargs):
+        if args[0] == "add" and args[1] == module.CONTEXT_MODE_PLUGIN:
+            events.append("add")
+        if args[0] == "reload" and args[1] == module.CONTEXT_MODE_SETTINGS_ID:
+            events.append("reload")
+
+    monkeypatch.setattr(module, "configure_context_mode_binary", configure)
+    monkeypatch.setattr(module, "run_plugin", plugin)
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    assert module.main(["--apply"]) == 0
+    assert events.index("preview") < events.index("write") < events.index("add")
+    assert events.index("add") < events.index("reload")
