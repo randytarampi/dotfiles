@@ -84,7 +84,31 @@ def test_acceptance_requires_installed_exact_source_identity_and_preview(tmp_pat
     assert json.loads(path.read_text()) == written
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert merge_approved(approved, path=path, apply=True) == result
-    assert (tmp_path / "model-evidence-map.json.bak").exists()
+    assert not (tmp_path / "model-evidence-map.json.bak").exists()
+    before = path.read_bytes()
+    extra = {
+        "omlx/Ornith-1.5-35B-A3B-MLX-4bit": {
+            "benchlm-overall": {
+                "model_id": "ornith-1.5-35b-a3b",
+                "creator_id": "maker",
+                "scale": "benchalign-v5-method6-overall",
+            }
+        }
+    }
+    merge_approved(extra, path=path, apply=True)
+    assert (tmp_path / "model-evidence-map.json.bak").read_bytes() == before
+    with pytest.raises(MappingSuggestionError, match="backup"):
+        merge_approved(
+            {"omlx/Ornith-1.5-35B-A3B-MLX-4bit": {
+                "benchlm-reasoning": {
+                    "model_id": "ornith-1.5-35b-a3b",
+                    "creator_id": "maker",
+                    "scale": "benchalign-v5-method6-reasoning",
+                }
+            }},
+            path=path,
+            apply=True,
+        )
 
 
 def test_owner_map_conflict_and_symlink_cannot_be_replaced(tmp_path):
