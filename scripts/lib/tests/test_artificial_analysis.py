@@ -187,19 +187,20 @@ def test_aa_single_page_probe_and_max_page_guard_use_only_one_read():
     assert calls == [1, 1]
 
 
-
 def test_legacy_v2_intelligence_only_snapshot_remains_readable(tmp_path):
     from artificial_analysis import V2_COLUMNS
 
     now = datetime(2026, 11, 21, tzinfo=timezone.utc)
     fresh, version, count = normalize_pages([page()])
     manifest = write_snapshot(tmp_path, fresh, version, count, now=now)
-    old = (
-        ",".join(V2_COLUMNS) + "\n" + "synthetic-a,synthetic-vendor,10\n"
-    ).encode("utf-8")
+    old = (",".join(V2_COLUMNS) + "\n" + "synthetic-a,synthetic-vendor,10\n").encode(
+        "utf-8"
+    )
     digest = hashlib.sha256(old).hexdigest()
     (tmp_path / "snapshots" / (digest + ".csv")).write_bytes(old)
-    manifest.update({"schema_version": 2, "snapshot": digest + ".csv", "sha256": digest})
+    manifest.update(
+        {"schema_version": 2, "snapshot": digest + ".csv", "sha256": digest}
+    )
     (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     found = load_snapshot(tmp_path, now=now)
     assert found["models"][0]["intelligence"] == "10"

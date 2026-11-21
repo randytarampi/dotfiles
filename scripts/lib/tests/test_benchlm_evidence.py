@@ -443,7 +443,6 @@ def test_request_budget_prevents_unbounded_pagination():
     assert len(upstream.calls) == 4
 
 
-
 def test_live_evidence_status_is_not_an_alias_for_maturity():
     seen = set()
     supported = _parse_row(
@@ -458,16 +457,19 @@ def test_live_evidence_status_is_not_an_alias_for_maturity():
     )
     assert supported["evidence_status"] == "Supported"
     assert supported["benchlm_maturity"] == "developing"
-    assert _parse_row(
-        {
-            "modelKey": "maker:preliminary",
-            "creator": "maker",
-            "score": 81.0,
-            "evidenceStatus": "estimated",
-            "maturity": "preliminary",
-        },
-        seen,
-    ) is None
+    assert (
+        _parse_row(
+            {
+                "modelKey": "maker:preliminary",
+                "creator": "maker",
+                "score": 81.0,
+                "evidenceStatus": "estimated",
+                "maturity": "preliminary",
+            },
+            seen,
+        )
+        is None
+    )
 
 
 def test_live_ranking_mode_and_available_surfaces_do_not_conflate_methods():
@@ -548,7 +550,8 @@ def test_free_first_100_requires_explicit_coverage_and_unique_scale(tmp_path):
     )
     assert len(upstream.calls) == 16
     assert all(
-        source["coverage"] == {
+        source["coverage"]
+        == {
             "mode": "first-100",
             "retrieved": 100,
             "total": 214,

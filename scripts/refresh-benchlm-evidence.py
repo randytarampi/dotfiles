@@ -66,11 +66,16 @@ def main():
             print(
                 "BenchLM Free: first-page schema valid for "
                 + result["surface"]
-                + "; Supported=" + str(result["supported"])
-                + "; total=" + str(result["total"])
-                + "; mode=" + result["ranking_mode"]
-                + "; plan-notice=" + str(result["plan_notice_present"])
-                + "; surfaces=" + str(result["available_surfaces"])
+                + "; Supported="
+                + str(result["supported"])
+                + "; total="
+                + str(result["total"])
+                + "; mode="
+                + result["ranking_mode"]
+                + "; plan-notice="
+                + str(result["plan_notice_present"])
+                + "; surfaces="
+                + str(result["available_surfaces"])
                 + "; no cache written"
             )
             return 0
@@ -78,7 +83,7 @@ def main():
             snapshots = fetch_snapshots(
                 max_requests=args.max_requests,
                 max_pages=args.max_pages,
-                coverage_mode=args.coverage
+                coverage_mode=args.coverage,
             )
             store_snapshots(snapshots, args.cache_dir)
         offline_sources(args.cache_dir)

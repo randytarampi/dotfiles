@@ -148,18 +148,12 @@ def _pagination(rows, page, offset, *, coverage_mode="complete"):
     if next_offset is None:
         if reached < total and not truncated_at_cap:
             raise BenchlmError("BenchLM truncated final page")
-    elif (
-        type(next_offset) is not int
-        or next_offset != reached
-        or next_offset > total
-    ):
+    elif type(next_offset) is not int or next_offset != reached or next_offset > total:
         raise BenchlmError("BenchLM pagination cursor invalid")
     return total, next_offset
 
 
-def _parse_page(
-    payload, *, surface, offset, reference=None, coverage_mode="complete"
-):
+def _parse_page(payload, *, surface, offset, reference=None, coverage_mode="complete"):
     if not isinstance(payload, dict):
         raise BenchlmError("BenchLM response is not an object")
     if payload.get("surface") != surface:
@@ -266,9 +260,7 @@ def _collect_surface_rows(surface, request_page, max_pages, coverage_mode):
     return collected, reference, cursor + len(raw)
 
 
-def _snapshot_for_surface(
-    surface, bundle, request_page, max_pages, coverage_mode
-):
+def _snapshot_for_surface(surface, bundle, request_page, max_pages, coverage_mode):
     rows, reference, retrieved = _collect_surface_rows(
         surface, request_page, max_pages, coverage_mode
     )
@@ -280,8 +272,11 @@ def _snapshot_for_surface(
         "source": source,
         "metric": surface,
         "scale": (
-            "benchalign-" + version + ("-" + mode if mode else "")
-            + "-" + surface
+            "benchalign-"
+            + version
+            + ("-" + mode if mode else "")
+            + "-"
+            + surface
             + ("-top100" if coverage_mode == "first-100" else "")
         ),
         "ranking_mode": mode or "unreported",
@@ -345,7 +340,9 @@ def fetch_snapshots(
     if coverage_mode not in ("complete", "first-100"):
         raise BenchlmError("invalid BenchLM coverage mode")
     if coverage_mode == "first-100" and max_requests < 16:
-        raise BenchlmError("first-100 requires a deliberate budget of at least 16 reads")
+        raise BenchlmError(
+            "first-100 requires a deliberate budget of at least 16 reads"
+        )
     if type(max_pages) is not int or not 1 <= max_pages <= MAX_PAGES:
         raise BenchlmError("invalid BenchLM max-pages cap")
     if type(max_requests) is not int or not len(SURFACES) <= max_requests <= 80:

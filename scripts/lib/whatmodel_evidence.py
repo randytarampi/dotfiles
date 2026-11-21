@@ -124,7 +124,11 @@ def normalize_response(payload, *, now=None):
         "licence_url": "https://creativecommons.org/licenses/by-sa/4.0/",
         "source_url": "https://whatmodel.sh/",
         "retrieved_rows": len(incoming),
-        "coverage": payload.get("coverage") if isinstance(payload.get("coverage"), str) else "unknown; incomplete",
+        "coverage": (
+            payload.get("coverage")
+            if isinstance(payload.get("coverage"), str)
+            else "unknown; incomplete"
+        ),
         "models": sorted(rows, key=lambda row: row["id"]),
     }
 
