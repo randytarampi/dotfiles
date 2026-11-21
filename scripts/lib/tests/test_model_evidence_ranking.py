@@ -36,9 +36,7 @@ def test_only_comparable_slots_swap():
     source, refs = fixture()
     unknown = candidate("unknown")
     entries = [candidate("slow"), unknown, candidate("fast")]
-    count = rank_qualified(
-        {"code-gen": entries}, catalogues=[source], mappings=refs
-    )
+    count = rank_qualified({"code-gen": entries}, catalogues=[source], mappings=refs)
     assert count == 1
     assert [item["name"] for item in entries] == ["fast", "unknown", "slow"]
     assert entries[1] is unknown
@@ -47,10 +45,14 @@ def test_only_comparable_slots_swap():
 def test_invalid_identity_and_unknown_capabilities_do_not_promote():
     source, refs = fixture()
     entries = [candidate("slow"), candidate("fast", caps=())]
-    assert rank_qualified({"code-gen": entries}, catalogues=[source], mappings=refs) == 0
+    assert (
+        rank_qualified({"code-gen": entries}, catalogues=[source], mappings=refs) == 0
+    )
     entries[1]["capabilities"] = ["completion", "tools"]
     refs["omlx/fast"]["whatmodel"]["scale"] = "not-this-score"
-    assert rank_qualified({"code-gen": entries}, catalogues=[source], mappings=refs) == 0
+    assert (
+        rank_qualified({"code-gen": entries}, catalogues=[source], mappings=refs) == 0
+    )
 
 
 def test_aa_intelligence_never_becomes_coding_score(tmp_path):
@@ -100,10 +102,15 @@ def test_private_map_rejects_glob_and_symlink(tmp_path):
     _, refs = fixture()
     p = tmp_path / "map.json"
     p.write_text(
-        json.dumps({
-            "schema_version": 1,
-            "mappings": {"omlx/slow": refs["omlx/slow"], "omlx/*": refs["omlx/fast"]},
-        }),
+        json.dumps(
+            {
+                "schema_version": 1,
+                "mappings": {
+                    "omlx/slow": refs["omlx/slow"],
+                    "omlx/*": refs["omlx/fast"],
+                },
+            }
+        ),
         encoding="utf-8",
     )
     assert list(load_private_mappings(p)) == ["omlx/slow"]
@@ -121,10 +128,20 @@ def test_stale_and_self_reported_rows_are_excluded(tmp_path):
         "scale": "local-coding-v1",
         "observed_at": now.isoformat(),
         "models": [
-            {"id": "lab", "creator_id": "maker", "score": 99, "n": 5,
-             "evidence": "lab"},
-            {"id": "independent", "creator_id": "maker", "score": 77, "n": 6,
-             "evidence": "independent"},
+            {
+                "id": "lab",
+                "creator_id": "maker",
+                "score": 99,
+                "n": 5,
+                "evidence": "lab",
+            },
+            {
+                "id": "independent",
+                "creator_id": "maker",
+                "score": 77,
+                "n": 6,
+                "evidence": "independent",
+            },
         ],
     }
     p = tmp_path / "local-eval.json"
