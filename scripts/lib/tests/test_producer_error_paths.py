@@ -208,12 +208,12 @@ def test_benchlm_store_refuses_invalid_sets(tmp_path):
 def test_manifest_sources_refusals(tmp_path):
     assert _manifest_sources(tmp_path) is None
     (tmp_path / "manifest.json").write_text("[]", encoding="utf-8")
-    assert _manifest_sources(tmp_path) == []
+    assert _manifest_sources(tmp_path) == ([], None)
     (tmp_path / "manifest.json").write_text(
         json.dumps({"schema_version": 1, "generation": "g", "sources": ["../x.json"]}),
         encoding="utf-8",
     )
-    assert _manifest_sources(tmp_path) == []
+    assert _manifest_sources(tmp_path) == ([], None)
 
 
 class StubOpener:
