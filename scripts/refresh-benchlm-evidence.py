@@ -47,6 +47,12 @@ def main():
         default=20,
         help="Hard per-surface page cap for full refresh (default 20)",
     )
+    parser.add_argument(
+        "--coverage",
+        choices=("complete", "first-100"),
+        default="complete",
+        help="Require full Free source or accept explicit incomplete first-100 subset",
+    )
     parser.add_argument("--cache-dir", type=Path, default=sources_dir())
     args = parser.parse_args()
     if args.surface and not args.probe:
@@ -65,20 +71,27 @@ def main():
             return 0
         if args.refresh:
             snapshots = fetch_snapshots(
-                max_requests=args.max_requests, max_pages=args.max_pages
+                max_requests=args.max_requests,
+                max_pages=args.max_pages,
+                coverage_mode=args.coverage,
             )
             store_snapshots(snapshots, args.cache_dir)
         offline_sources(args.cache_dir)
     except BenchlmError as error:
         print(
-            "BenchLM Free: " + str(error) + "; old evidence preserved",
+            "BenchLM Free: " + str(error) + "; old evidence left unchanged when fetch failed",
             file=sys.stderr,
         )
         return 1
     except OSError:
-        print("BenchLM Free: unavailable; old evidence preserved", file=sys.stderr)
+        print("BenchLM Free: unavailable; old evidence may require inspection", file=sys.stderr)
         return 1
-    print("BenchLM Free: four private current rankings validated")
+    print(
+        "BenchLM Free: four private current rankings validated "
+        + "(first-100 subset; incomplete coverage)"
+        if args.coverage == "first-100"
+        else "BenchLM Free: four private complete rankings validated"
+    )
     return 0
 
 
