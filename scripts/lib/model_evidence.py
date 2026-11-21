@@ -153,41 +153,70 @@ def _batch_complete(item, catalogues):
     )
 
 
-def _manifest_sources(directory):
-    """Resolve a producer manifest to its immutable generation files.
+def _benchlm_bundle_valid(rows, *, manifest_bundle=None):
+    """One coherent four-surface generation for every consumer."""
+    if len(rows) != len(BENCHLM_SOURCES):
+        return False
+    if {row["source"] for row in rows} != BENCHLM_SOURCES:
+        return False
+    bundle = rows[0].get("bundle")
+    if not isinstance(bundle, dict) or set(bundle["members"]) != BENCHLM_SOURCES:
+        return False
+    if manifest_bundle is not None and bundle != manifest_bundle:
+        return False
+    coverage = rows[0].get("coverage")
+    if coverage not in ("complete", "first-100-subset"):
+        return False
+    return all(
+        row.get("bundle") == bundle
+        and row.get("coverage") == coverage
+        and row["metric"] == row["source"].removeprefix("benchlm-")
+        and row["scale"].endswith("-top100") == (coverage == "first-100-subset")
+        and len(row["models"]) <= row["retrieved_rows"]
+        for row in rows
+    )
 
-    Returns None when no manifest exists (legacy flat layout), [] when the
-    manifest is present but unusable, and the file list otherwise.
-    """
+
+def _manifest_sources(directory):
+    """Return None for absent manifest, otherwise (paths, bundle) or ([], None)."""
     manifest_path = directory / "manifest.json"
-    if manifest_path.is_symlink() or not manifest_path.is_file():
+    invalid = ([], None)
+    if manifest_path.is_symlink():
+        return invalid
+    if not manifest_path.exists():
         return None
+    if not manifest_path.is_file():
+        return invalid
     try:
         if manifest_path.stat().st_size > 1024 * 1024:
-            return []
+            return invalid
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return []
+        return invalid
     if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
-        return []
+        return invalid
     generation = manifest.get("generation")
     sources = manifest.get("sources")
-    if not _identity(generation) or not isinstance(sources, list) or not sources:
-        return []
-    root = directory / "generations" / generation
-    if root.is_symlink() or not root.is_dir():
-        return []
-    paths = []
-    for filename in sources:
-        if not isinstance(filename, str) or not SOURCE_ID.fullmatch(
-            Path(filename).stem
-        ):
-            return []
-        path = root / filename
-        if path.is_symlink() or not path.is_file():
-            return []
-        paths.append(path)
-    return paths
+    bundle = manifest.get("bundle")
+    expected = {name + ".json" for name in BENCHLM_SOURCES}
+    if (
+        not isinstance(generation, str)
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,119}", generation)
+        or not isinstance(sources, list)
+        or len(sources) != len(expected)
+        or not all(isinstance(name, str) for name in sources)
+        or set(sources) != expected
+        or not isinstance(bundle, dict)
+    ):
+        return invalid
+    generations = directory / "generations"
+    root = generations / generation
+    if generations.is_symlink() or root.is_symlink() or not root.is_dir():
+        return invalid
+    paths = [root / name for name in sources]
+    if any(path.is_symlink() or not path.is_file() for path in paths):
+        return invalid
+    return paths, bundle
 
 
 def load_catalogues(directory=None, *, aa_evidence=None, now=None):
@@ -222,11 +251,16 @@ def load_catalogues(directory=None, *, aa_evidence=None, now=None):
     directory = Path(directory or sources_dir())
     if directory.is_symlink():
         return catalogues
-    paths = _manifest_sources(directory)
-    if paths is None:
-        paths = sorted(directory.glob("*.json"))
+    manifest = _manifest_sources(directory)
+    paths = sorted(directory.glob("*.json"))
+    manifest_bundle = None
+    if manifest is not None:
+        # A present (even corrupt) manifest supersedes flat BenchLM only.
+        paths = [path for path in paths if not path.stem.startswith("benchlm-")]
+        generation_paths, manifest_bundle = manifest
+        paths.extend(generation_paths)
     for path in paths:
-        if path.is_symlink():
+        if path.is_symlink() or not path.is_file():
             continue
         try:
             if path.stat().st_size > 8 * 1024 * 1024:
@@ -244,9 +278,10 @@ def load_catalogues(directory=None, *, aa_evidence=None, now=None):
         normalized = _normalize_source(payload, name, now=now)
         if not normalized:
             continue
-        if name.startswith("benchlm-"):
-            bundle = normalized.get("bundle")
-            if bundle is None or set(bundle["members"]) != BENCHLM_SOURCES:
-                continue
         catalogues.append(normalized)
+    benchlm = [row for row in catalogues if row["source"].startswith("benchlm-")]
+    if not _benchlm_bundle_valid(benchlm, manifest_bundle=manifest_bundle):
+        catalogues = [
+            row for row in catalogues if not row["source"].startswith("benchlm-")
+        ]
     return [row for row in catalogues if _batch_complete(row, catalogues)]

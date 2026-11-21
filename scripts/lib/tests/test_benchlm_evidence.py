@@ -556,15 +556,25 @@ def test_offline_rejects_mixed_coverage(tmp_path):
     payload["coverage"] = "first-100-subset"
     payload["retrieved_rows"] = len(payload["models"])
     path.write_text(json.dumps(payload), encoding="utf-8")
-    with pytest.raises(BenchlmError, match="coverage"):
+    with pytest.raises(BenchlmError, match="incomplete or stale|coverage"):
         offline_sources(tmp_path)
 
 
-def test_store_does_not_chmod_a_preexisting_directory(tmp_path):
-    existing = tmp_path / "cache"
-    existing.mkdir()
-    existing.chmod(0o755)
+def test_store_requires_a_private_preexisting_directory(tmp_path):
+    private = tmp_path / "private"
+    private.mkdir()
+    private.chmod(0o700)
     snapshots = fetch_snapshots("placeholder", opener=StubOpener(), request_interval=0)
-    store_snapshots(snapshots, existing)
-    assert stat.S_IMODE(existing.stat().st_mode) == 0o755
-    assert (existing / "manifest.json").exists()
+    store_snapshots(snapshots, private)
+    assert stat.S_IMODE(private.stat().st_mode) == 0o700
+    assert (private / "manifest.json").exists()
+
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    shared.chmod(0o755)
+    with pytest.raises(BenchlmError, match="private"):
+        store_snapshots(
+            fetch_snapshots("placeholder", opener=StubOpener(), request_interval=0),
+            shared,
+        )
+    assert stat.S_IMODE(shared.stat().st_mode) == 0o755

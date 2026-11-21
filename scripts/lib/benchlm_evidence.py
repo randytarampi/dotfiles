@@ -9,6 +9,7 @@ import json
 import math
 import os
 import re
+import stat
 import tempfile
 import time
 import urllib.error
@@ -18,7 +19,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from artificial_analysis import SameOriginRedirectHandler
-from model_evidence import _normalize_source, sources_dir
+from model_evidence import _benchlm_bundle_valid, _normalize_source, sources_dir
 
 API_URL = "https://data.benchlm.ai/v1/rankings/current"
 SURFACES = ("reasoning", "coding", "agentic", "overall")
@@ -467,22 +468,31 @@ def store_snapshots(snapshots, directory=None):
     if set(members) != expected:
         raise BenchlmError("BenchLM batch member mismatch")
     now = datetime.now(timezone.utc)
+    normalized = []
     for row in snapshots:
-        if _normalize_source(row, row["source"], now=now) is None:
+        item = _normalize_source(row, row["source"], now=now)
+        if item is None:
             raise BenchlmError("BenchLM snapshot invalid or stale")
+        normalized.append(item)
+    if not _benchlm_bundle_valid(normalized, manifest_bundle=batches[0]):
+        raise BenchlmError("BenchLM snapshot bundle inconsistent before publish")
     if directory.exists() and not directory.is_dir():
         raise BenchlmError("refusing non-directory evidence cache")
     created = not directory.exists()
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-    # Never chmod a pre-existing caller-selected directory.
+    # Never chmod a pre-existing caller-selected directory; refuse it instead.
     if created:
         os.chmod(directory, 0o700)
+    if stat.S_IMODE(directory.stat().st_mode) & 0o077:
+        raise BenchlmError("evidence cache directory must be private (0700)")
     generation = re.sub(r"[^A-Za-z0-9._-]", "-", str(batches[0].get("id", "")))
     generation = generation[:120].strip(".-") or "generation"
     generations = directory / "generations"
     if generations.is_symlink():
         raise BenchlmError("refusing symlink generation root")
     generations.mkdir(mode=0o700, exist_ok=True)
+    if stat.S_IMODE(generations.stat().st_mode) & 0o077:
+        raise BenchlmError("generation root must be private (0700)")
     root = generations / generation
     if root.exists() or root.is_symlink():
         raise BenchlmError("refusing existing BenchLM generation directory")

@@ -74,11 +74,12 @@ def normalize_pages(pages):
     rows, seen = [], set()
     total, version = None, None
     for number, envelope in enumerate(pages, 1):
-        if not isinstance(envelope, dict) or envelope.get("tier") not in {
-            "free",
-            "pro",
-            "commercial",
-        }:
+        tier = envelope.get("tier") if isinstance(envelope, dict) else None
+        if (
+            not isinstance(envelope, dict)
+            or not isinstance(tier, str)
+            or tier not in {"free", "pro", "commercial"}
+        ):
             raise EvidenceError("malformed Free API envelope")
         pagination = envelope.get("pagination")
         if not isinstance(pagination, dict):
@@ -233,8 +234,16 @@ def probe_free(api_key, *, get_page=None):
 def _private_directory(path):
     if path.is_symlink():
         raise EvidenceError("refusing symlink cache directory")
+    created = not path.exists()
+    if not created and not path.is_dir():
+        raise EvidenceError("refusing non-directory cache path")
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
-    os.chmod(path, 0o700)
+    # Never chmod an unrelated, pre-existing caller directory. Enforce the
+    # private requirement and fail closed instead.
+    if created:
+        os.chmod(path, 0o700)
+    if stat.S_IMODE(path.stat().st_mode) & 0o077:
+        raise EvidenceError("cache directory must be private (0700)")
 
 
 def _atomic_private(path, payload):

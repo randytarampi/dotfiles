@@ -6,7 +6,12 @@ from datetime import datetime, timezone
 import pytest
 
 from artificial_analysis import load_snapshot
-from model_evidence import _normalize_source, load_catalogues
+from model_evidence import (
+    BENCHLM_SOURCES,
+    _benchlm_bundle_valid,
+    _normalize_source,
+    load_catalogues,
+)
 
 NOW = datetime(2026, 11, 21, tzinfo=timezone.utc)
 SURFACES = ("reasoning", "coding", "agentic", "overall")
@@ -196,3 +201,40 @@ def test_unreviewed_or_sparse_rows_are_skipped_not_fatal():
         normalized = _normalize_source(payload, "benchlm-coding", now=NOW)
         assert normalized is not None
         assert set(normalized["models"]) == {"b"}
+
+
+def _bundle_rows():
+    members = sorted(BENCHLM_SOURCES)
+    rows = []
+    for surface in ("reasoning", "coding", "agentic", "overall"):
+        rows.append(
+            source(
+                source="benchlm-" + surface,
+                metric=surface,
+                scale="benchalign-v5-" + surface,
+                bundle={"id": "gen-1", "members": members},
+            )
+        )
+    return rows
+
+
+def test_benchlm_bundle_valid_requires_one_coherent_generation():
+    rows = _bundle_rows()
+    assert _benchlm_bundle_valid(rows) is True
+    assert _benchlm_bundle_valid(rows[:3]) is False
+
+    for mutate in (
+        lambda r: r[0].update(coverage="first-100-subset"),
+        lambda r: r[0].update(coverage=None),
+        lambda r: r[0].update(metric="coding"),
+        lambda r: r[0].update(scale="benchalign-v5-reasoning-top100"),
+        lambda r: r[0]["bundle"].update(id="other"),
+        lambda r: r[1].update(source="benchlm-reasoning"),
+        lambda r: r[0]["models"].append(dict(r[0]["models"][0])),
+    ):
+        rows = _bundle_rows()
+        mutate(rows)
+        assert _benchlm_bundle_valid(rows) is False
+
+    rows = _bundle_rows()
+    assert _benchlm_bundle_valid(rows, manifest_bundle={"id": "other"}) is False
