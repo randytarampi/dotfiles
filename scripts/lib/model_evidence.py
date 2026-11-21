@@ -266,8 +266,7 @@ def _audit_source_coverage(classified, catalogues, mappings, audit):
                 if "tools" in (model.get("capabilities") or [])
             }
             mapped = sum(
-                source["source"] in mappings.get(route, {})
-                for route in eligible
+                source["source"] in mappings.get(route, {}) for route in eligible
             )
             scored = sum(
                 _candidate_score(model, source, mappings) is not None

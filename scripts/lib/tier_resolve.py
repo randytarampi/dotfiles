@@ -695,7 +695,9 @@ def resolve_roles_from_list(
             changed,
         )
         if audit.get("by_source"):
-            logger.warning("Model evidence coverage per source/category: %s", audit["by_source"])
+            logger.warning(
+                "Model evidence coverage per source/category: %s", audit["by_source"]
+            )
         if audit.get("selected"):
             logger.warning(
                 "Model evidence selected comparable sets: %s", audit["selected"]

@@ -251,7 +251,6 @@ def test_audit_names_exact_source_when_two_candidates_are_comparable():
     }
 
 
-
 def test_duplicate_route_cannot_displace_a_distinct_fallback():
     source, refs = fixture()
     entries = [candidate("slow"), candidate("fast"), candidate("fast")]
