@@ -217,6 +217,8 @@ def merge_approved(approved, *, path=None, apply=False):
             if source in target and target[source] != item:
                 raise MappingSuggestionError("existing mapping conflict; review it manually")
             target[source] = item
+    if result == original:
+        return result
     if apply:
         if path.parent.exists() and not path.parent.is_dir():
             raise MappingSuggestionError("private map directory is not a directory")
