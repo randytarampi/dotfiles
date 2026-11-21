@@ -12,6 +12,7 @@ from benchlm_evidence import (
     _parse_page,
     _parse_row,
     fetch_snapshots,
+    probe_surface,
     offline_sources,
     store_snapshots,
 )
@@ -83,7 +84,7 @@ class StubOpener:
 
 def test_supported_current_surfaces_are_private_and_scale_is_per_surface(tmp_path):
     upstream = StubOpener()
-    snapshots = fetch_snapshots("placeholder", opener=upstream)
+    snapshots = fetch_snapshots("placeholder", opener=upstream, request_interval=0)
     assert len(upstream.calls) == 4
     assert len(snapshots) == 4
     assert {s["metric"] for s in snapshots} == {
@@ -109,7 +110,7 @@ def test_supported_current_surfaces_are_private_and_scale_is_per_surface(tmp_pat
 def test_coding_evidence_can_reorder_exact_local_candidate_without_cross_scale(
     tmp_path,
 ):
-    snapshots = fetch_snapshots("placeholder", opener=StubOpener())
+    snapshots = fetch_snapshots("placeholder", opener=StubOpener(), request_interval=0)
     store_snapshots(snapshots, tmp_path)
     loaded = offline_sources(tmp_path)
     coding = next(source for source in loaded if source["metric"] == "coding")
@@ -141,13 +142,13 @@ def test_coding_evidence_can_reorder_exact_local_candidate_without_cross_scale(
 
 
 def test_rate_limit_and_wrong_key_preserve_last_good(tmp_path):
-    snapshots = fetch_snapshots("placeholder", opener=StubOpener())
+    snapshots = fetch_snapshots("placeholder", opener=StubOpener(), request_interval=0)
     store_snapshots(snapshots, tmp_path)
     original = {
         name.name: name.read_bytes() for name in tmp_path.glob("benchlm-*.json")
     }
     with pytest.raises(BenchlmError):
-        fetch_snapshots("placeholder", opener=StubOpener(invalid="agentic"))
+        fetch_snapshots("placeholder", opener=StubOpener(invalid="agentic"), request_interval=0)
     assert original == {
         name.name: name.read_bytes() for name in tmp_path.glob("benchlm-*.json")
     }
@@ -197,7 +198,7 @@ def test_estimated_and_missing_creator_never_promote():
 
 
 def test_rejects_duplicate_identity_and_wrong_source_set(tmp_path):
-    snapshots = fetch_snapshots("placeholder", opener=StubOpener())
+    snapshots = fetch_snapshots("placeholder", opener=StubOpener(), request_interval=0)
     with pytest.raises(BenchlmError, match="partial"):
         store_snapshots(snapshots[:2], tmp_path)
     assert list(tmp_path.iterdir()) == []
@@ -252,7 +253,7 @@ def test_duplicate_identity_rejected_even_if_unscored():
 def test_partial_or_mixed_batch_is_ineligible_for_resolution(tmp_path):
     from model_evidence import load_catalogues
 
-    snapshots = fetch_snapshots("placeholder", opener=StubOpener())
+    snapshots = fetch_snapshots("placeholder", opener=StubOpener(), request_interval=0)
     store_snapshots(snapshots, tmp_path)
     assert len(load_catalogues(tmp_path, aa_evidence={})) == 4
     missing = tmp_path / "benchlm-agentic.json"
@@ -297,7 +298,7 @@ def test_real_tier_consumer_uses_benchlm_only_with_opt_in_and_complete_cache(
             "is_moe": False,
         }
 
-    store_snapshots(fetch_snapshots("placeholder", opener=StubOpener()), tmp_path)
+    store_snapshots(fetch_snapshots("placeholder", opener=StubOpener(), request_interval=0), tmp_path)
     mapping = {
         "schema_version": 1,
         "mappings": {
@@ -336,9 +337,70 @@ def test_real_tier_consumer_uses_benchlm_only_with_opt_in_and_complete_cache(
 
 
 def test_no_network_when_cache_read(monkeypatch, tmp_path):
-    store_snapshots(fetch_snapshots("placeholder", opener=StubOpener()), tmp_path)
+    store_snapshots(fetch_snapshots("placeholder", opener=StubOpener(), request_interval=0), tmp_path)
     monkeypatch.setattr(
         "urllib.request.build_opener",
         lambda *a: (_ for _ in ()).throw(AssertionError("network prohibited")),
     )
     assert len(offline_sources(tmp_path)) == 4
+
+
+def test_one_request_probe_never_writes_scores_or_follows_pagination(tmp_path):
+    upstream = StubOpener()
+    result = probe_surface("placeholder", surface="coding", opener=upstream)
+    assert result["supported"] == 2
+    assert len(upstream.calls) == 1
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_rate_limit_is_visible_without_response_or_credentials():
+    class LimitedOpener:
+        def open(self, request, timeout):
+            raise HTTPError(
+                request.full_url, 429, "rate limited",
+                {"Retry-After": "45"}, None,
+            )
+
+    with pytest.raises(BenchlmError, match="HTTP 429.*45 seconds") as error:
+        probe_surface("private-value", opener=LimitedOpener())
+    assert "private-value" not in str(error.value)
+
+
+def test_refresh_request_budget_stops_before_reading_next_surface():
+    upstream = StubOpener()
+    with pytest.raises(BenchlmError, match="budget exceeded"):
+        fetch_snapshots(
+            "placeholder", opener=upstream, max_requests=4,
+            request_interval=0,
+        ) if False else fetch_snapshots(
+            "placeholder", opener=upstream, max_requests=3,
+            request_interval=0,
+        )
+    assert len(upstream.calls) == 0
+
+
+def test_pacing_is_enforced_between_requests_without_real_sleep():
+    upstream = StubOpener()
+    now = [0.0]
+    delays = []
+
+    def sleep(seconds):
+        delays.append(seconds)
+        now[0] += seconds
+
+    fetch_snapshots(
+        "placeholder", opener=upstream, request_interval=2.1,
+        clock=lambda: now[0], sleeper=sleep,
+    )
+    assert len(upstream.calls) == 4
+    assert len(delays) == 3
+    assert delays == [2.1] * 3
+
+
+def test_request_budget_prevents_unbounded_pagination():
+    upstream = StubOpener()
+    fetch_snapshots(
+        "placeholder", opener=upstream, max_requests=4,
+        request_interval=0,
+    )
+    assert len(upstream.calls) == 4

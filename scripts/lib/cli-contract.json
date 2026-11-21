@@ -1661,7 +1661,11 @@
         "--dry-run",
         "--refresh",
         "--offline",
-        "--cache-dir"
+        "--cache-dir",
+        "--probe",
+        "--surface",
+        "--max-pages",
+        "--max-requests"
       ],
       "positional_operand": null,
       "child_scripts": []
