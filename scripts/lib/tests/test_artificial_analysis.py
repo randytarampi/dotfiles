@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import hashlib
 import json
+import stat
 
 import urllib.error
 import urllib.request
@@ -16,6 +17,7 @@ from artificial_analysis import (
     probe_free,
     load_snapshot,
     normalize_pages,
+    preflight_cache,
     write_snapshot,
 )
 
@@ -212,3 +214,27 @@ def test_invalid_page_cap_does_not_call_transport():
         fetch_free("key", get_page=lambda page: calls.append(page) or {}, max_pages=0)
 
     assert calls == []
+
+
+def test_preflight_refuses_a_shared_existing_directory(tmp_path):
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    shared.chmod(0o755)
+    with pytest.raises(EvidenceError, match="private"):
+        preflight_cache(shared)
+    assert stat.S_IMODE(shared.stat().st_mode) == 0o755
+
+
+def test_preflight_accepts_missing_and_private_layouts(tmp_path):
+    preflight_cache(tmp_path / "missing")
+    private = tmp_path / "private"
+    private.mkdir()
+    private.chmod(0o700)
+    preflight_cache(private)
+    snapshots = private / "snapshots"
+    snapshots.mkdir()
+    snapshots.chmod(0o700)
+    preflight_cache(private)
+    snapshots.chmod(0o755)
+    with pytest.raises(EvidenceError, match="private"):
+        preflight_cache(private)
