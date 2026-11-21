@@ -734,9 +734,11 @@ def resolve_roles_from_list(
         "solo_2": pick("solo", "code-gen", index=1),
     }
 
+    # Solo candidates survive profile truncation of other categories. Include
+    # them without allowing excluded raw inventory records to relabel a route.
     model_providers = {
         model["name"]: model.get("provider", "ollama")
-        for cat in ["reasoning", "code-gen", "lightweight", "vision", "audio"]
+        for cat in ("reasoning", "code-gen", "lightweight", "vision", "audio", "solo")
         for model in classified[cat]
     }
     resolved = {}
