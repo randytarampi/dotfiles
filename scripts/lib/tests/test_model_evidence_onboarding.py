@@ -44,6 +44,8 @@ def test_aa_uuid_source_can_be_suggested_by_restored_private_display_keys(tmp_pa
     assert suggestion["owner_verified"] is False
     assert suggestion["already_mapped"] is False
     assert suggestion["source"] == "artificial-analysis"
+    assert "aa-intelligence-5" in suggestion["provenance_note"]
+    assert "NOT an observed local" in suggestion["provenance_note"]
     assert "score" not in json.dumps(out)
     assert list(tmp_path.iterdir()) == []
 
