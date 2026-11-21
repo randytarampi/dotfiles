@@ -196,10 +196,10 @@ def fetch_snapshots(api_key=None, *, opener=None):
             "usage_terms": "https://benchlm.ai/terms#data-access",
             "models": sorted(collected, key=lambda row: row["id"]),
         }
-        if _normalize_source(
-            snapshot, source, now=datetime.now(timezone.utc)
-        ) is None:
-            raise BenchlmError("BenchLM source fails freshness or provenance validation")
+        if _normalize_source(snapshot, source, now=datetime.now(timezone.utc)) is None:
+            raise BenchlmError(
+                "BenchLM source fails freshness or provenance validation"
+            )
         snapshots.append(snapshot)
     return snapshots
 

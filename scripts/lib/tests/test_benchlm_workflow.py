@@ -23,4 +23,7 @@ def test_benchlm_owner_only_probe_does_not_enter_publisher():
     artifact = refresh.split("      - name: Upload the catalogue artifact", 1)[1]
     artifact = artifact.split("      - name: Probe Artificial Analysis", 1)[0]
     assert artifact.count("artifacts/model-catalogues/free-model-candidates.json") == 1
-    assert 'allowed_path="artifacts/model-catalogues/free-model-candidates.json"' in publisher
+    assert (
+        'allowed_path="artifacts/model-catalogues/free-model-candidates.json"'
+        in publisher
+    )
