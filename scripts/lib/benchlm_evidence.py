@@ -278,7 +278,9 @@ def _snapshot_for_surface(surface, bundle, request_page, max_pages, coverage_mod
         "attribution": ATTRIBUTION,
         "source_url": "https://benchlm.ai/data/access",
         "usage_terms": "https://benchlm.ai/terms#data-access",
-        "coverage": ("complete" if observed_rows == total else "first-100-subset"),
+        # Partial mode is a coverage *policy*, not an inference of completeness
+        # from a total field that the Free API may itself cap at 100.
+        "coverage": "first-100-subset" if coverage_mode == "first-100" else "complete",
         "retrieved_rows": observed_rows,
         "population_total": total,
         "models": sorted(rows, key=lambda row: row["id"]),
