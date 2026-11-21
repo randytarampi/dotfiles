@@ -274,7 +274,8 @@ def test_one_failed_install_does_not_abort_the_rest(monkeypatch):
     monkeypatch.setattr(module, "run_plugin", fake_plugin)
     assert module.main(["--apply", "--codexbar-daemon-verified"]) == 1
     assert "gpambrozio/skills" in attempted
-    assert attempted[-1] == "gpambrozio/skills" or "gpambrozio/skills" in attempted
+    assert "dutchakdev/mermaid" in attempted
+    assert attempted.index("gpambrozio/skills") < attempted.index("dutchakdev/mermaid")
 
 
 def test_daemon_version_not_cli_version_gates_plugin_floors(monkeypatch):
@@ -508,26 +509,30 @@ def test_context_mode_requires_node_24_15_even_when_gate_on():
     )
 
 
-def test_context_mode_resolver_refuses_nonexistent_modules_and_unrelated_shims(tmp_path):
+def test_context_mode_resolver_refuses_nonexistent_modules_and_unrelated_shims(
+    tmp_path,
+):
     home = tmp_path / "home"
     shim = tmp_path / "prefix/bin/context-mode.cmd"
     shim.parent.mkdir(parents=True)
     shim.write_text("echo shim")
-    assert module.resolve_repo_context_mode(
-        which=lambda _: str(shim), home=home
-    ) == ("unresolved", None)
+    assert module.resolve_repo_context_mode(which=lambda _: str(shim), home=home) == (
+        "unresolved",
+        None,
+    )
     unrelated = tmp_path / "evil/cli.mjs"
     unrelated.parent.mkdir()
     unrelated.write_text("console.log('no')")
     assert module.resolve_repo_context_mode(
         which=lambda _: str(unrelated), home=home
     ) == ("unresolved", None)
-    cli = tmp_path / "prefix/node_modules/context-mode/cli.mjs"
+    cli = tmp_path / "prefix/bin/node_modules/context-mode/cli.mjs"
     cli.parent.mkdir(parents=True)
     cli.write_text("console.log('yes')")
-    assert module.resolve_repo_context_mode(
-        which=lambda _: str(shim), home=home
-    ) == ("resolved", str(cli.resolve()))
+    assert module.resolve_repo_context_mode(which=lambda _: str(shim), home=home) == (
+        "resolved",
+        str(cli.resolve()),
+    )
 
 
 def test_context_mode_settings_refuse_corruption_and_unknown_schema(tmp_path):
@@ -583,17 +588,23 @@ def test_context_mode_settings_keep_extra_fields_and_preflight_has_no_writes(tmp
     settings.mkdir(parents=True)
     target = settings / "context-mode.json"
     target.write_text(
-        json.dumps({"version":2,"custom":"preserve","values":{"autoInject":False}})
+        json.dumps(
+            {"version": 2, "custom": "preserve", "values": {"autoInject": False}}
+        )
     )
     target.chmod(0o600)
     before = target.read_bytes()
-    assert module.configure_context_mode_binary(
-        settings, "/usr/local/cli.mjs", dry_run=True
-    ) == "would-write"
+    assert (
+        module.configure_context_mode_binary(
+            settings, "/usr/local/cli.mjs", dry_run=True
+        )
+        == "would-write"
+    )
     assert target.read_bytes() == before
-    assert module.configure_context_mode_binary(
-        settings, "/usr/local/cli.mjs"
-    ) == "written"
+    assert (
+        module.configure_context_mode_binary(settings, "/usr/local/cli.mjs")
+        == "written"
+    )
     assert json.loads(target.read_text())["custom"] == "preserve"
 
 
@@ -601,13 +612,18 @@ def test_context_mode_apply_refuses_missing_binary_before_plugin_installs(monkey
     monkeypatch.setenv(module.GATE, "1")
     monkeypatch.setenv("DOTFILES_RUN_CONTEXT_MODE_SETUP", "1")
     monkeypatch.setattr(module.shutil, "which", lambda name: "/bin/" + name)
-    monkeypatch.setattr(module, "resolve_repo_context_mode", lambda: ("unresolved", None))
+    monkeypatch.setattr(
+        module, "resolve_repo_context_mode", lambda: ("unresolved", None)
+    )
     calls = []
 
     def fake_run(argv, **kwargs):
         calls.append(list(argv))
         if argv[1:] == ["--version"]:
-            return Mock(stdout="v24.15.0" if argv[0] == "/bin/node" else "0.16.2")
+            return Mock(
+                stdout="v24.15.0" if argv[0] == "/bin/node" else "0.16.2",
+                returncode=0,
+            )
         if argv[1:] == ["status", "--json"]:
             return Mock(stdout='{"daemonVersion":"0.16.2"}', returncode=0)
         if argv[1:] == ["plugin", "ls", "--json"]:
@@ -623,8 +639,9 @@ def test_context_mode_settings_are_written_before_native_add(monkeypatch, tmp_pa
     monkeypatch.setenv(module.GATE, "1")
     monkeypatch.setenv("DOTFILES_RUN_CONTEXT_MODE_SETUP", "1")
     monkeypatch.setattr(module.shutil, "which", lambda name: "/bin/" + name)
-    monkeypatch.setattr(module, "resolve_repo_context_mode",
-                        lambda: ("resolved", "/usr/local/cli.mjs"))
+    monkeypatch.setattr(
+        module, "resolve_repo_context_mode", lambda: ("resolved", "/usr/local/cli.mjs")
+    )
     monkeypatch.setattr(module.Path, "home", lambda: tmp_path)
     monkeypatch.setattr(module, "resolve_chromium", lambda: ("unresolved", None))
     events = []
@@ -635,11 +652,14 @@ def test_context_mode_settings_are_written_before_native_add(monkeypatch, tmp_pa
 
     def fake_run(argv, **kwargs):
         if argv[1:] == ["--version"]:
-            return Mock(stdout="v24.15.0" if argv[0] == "/bin/node" else "0.16.2")
+            return Mock(
+                stdout="v24.15.0" if argv[0] == "/bin/node" else "0.16.2",
+                returncode=0,
+            )
         if argv[1:] == ["status", "--json"]:
-            return Mock(stdout='{"daemonVersion":"0.16.2"}')
+            return Mock(stdout='{"daemonVersion":"0.16.2"}', returncode=0)
         if argv[1:] == ["plugin", "ls", "--json"]:
-            return Mock(stdout="[]")
+            return Mock(stdout="[]", returncode=0)
         raise AssertionError("Unexpected direct subprocess")
 
     def plugin(_paseo, args, **kwargs):
