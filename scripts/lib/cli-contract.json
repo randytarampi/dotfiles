@@ -1669,7 +1669,8 @@
         "--probe",
         "--surface",
         "--max-pages",
-        "--max-requests"
+        "--max-requests",
+        "--coverage"
       ],
       "positional_operand": null,
       "child_scripts": []

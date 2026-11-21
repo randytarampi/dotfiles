@@ -230,14 +230,18 @@ def _read_page(surface, offset, key, *, opener):
         raise BenchlmError("BenchLM Free ranking request or decoding failed") from None
 
 
-def _collect_surface_rows(surface, request_page, max_pages):
+def _collect_surface_rows(surface, request_page, max_pages, coverage_mode):
     """Read one complete consistent surface within the caller's request cap."""
     collected, seen = [], set()
     cursor, reference = 0, None
     for page_index in range(max_pages):
         payload = request_page(surface, cursor)
         raw, next_cursor, reference = _parse_page(
-            payload, surface=surface, offset=cursor, reference=reference
+            payload,
+            surface=surface,
+            offset=cursor,
+            reference=reference,
+            coverage_mode=coverage_mode,
         )
         if page_index == 0 and math.ceil(reference[2] / PAGE_LIMIT) > max_pages:
             raise BenchlmError("BenchLM surface exceeds max-pages; no cache written")
@@ -245,26 +249,47 @@ def _collect_surface_rows(surface, request_page, max_pages):
             parsed = _parse_row(item, seen)
             if parsed is not None:
                 collected.append(parsed)
+        reached = cursor + len(raw)
+        if coverage_mode == "first-100" and reached >= min(
+            reference[2], FIRST_PAGE_COVERAGE
+        ):
+            if reached != min(reference[2], FIRST_PAGE_COVERAGE):
+                raise BenchlmError("BenchLM first-100 boundary misaligned")
+            break
         if next_cursor is None:
             break
         cursor = next_cursor
     else:
         raise BenchlmError("BenchLM surface exceeded max-pages; no cache written")
-    if len(collected) < 2:
-        raise BenchlmError("BenchLM ranking lacks two supported exact identities")
-    return collected, reference
+    if not collected:
+        raise BenchlmError("BenchLM ranking has no Supported exact identities")
+    return collected, reference, cursor + len(raw)
 
 
-def _snapshot_for_surface(surface, bundle, request_page, max_pages):
-    rows, reference = _collect_surface_rows(surface, request_page, max_pages)
-    date, version, _ = reference
+def _snapshot_for_surface(
+    surface, bundle, request_page, max_pages, coverage_mode
+):
+    rows, reference, retrieved = _collect_surface_rows(
+        surface, request_page, max_pages, coverage_mode
+    )
+    date, version, total, mode = reference
     source = SOURCE_PREFIX + "-" + surface
     snapshot = {
         "schema_version": 1,
         "bundle": bundle,
         "source": source,
         "metric": surface,
-        "scale": "benchalign-" + version + "-" + surface,
+        "scale": (
+            "benchalign-" + version + ("-" + mode if mode else "")
+            + "-" + surface
+            + ("-top100" if coverage_mode == "first-100" else "")
+        ),
+        "ranking_mode": mode or "unreported",
+        "coverage": {
+            "mode": coverage_mode,
+            "retrieved": retrieved,
+            "total": total,
+        },
         "observed_at": date,
         "attribution": ATTRIBUTION,
         "source_url": "https://benchlm.ai/data/access",
@@ -293,9 +318,15 @@ def probe_surface(api_key=None, *, surface="coding", opener=None):
     rows, cursor, _ = _parse_page(payload, surface=surface, offset=0)
     seen = set()
     usable = [x for item in rows if (x := _parse_row(item, seen)) is not None]
-    if len(usable) < 2:
-        raise BenchlmError("BenchLM first page has insufficient Supported rows")
-    return {"surface": surface, "supported": len(usable), "more": cursor is not None}
+    return {
+        "surface": surface,
+        "supported": len(usable),
+        "more": cursor is not None,
+        "total": payload["pagination"]["total"],
+        "ranking_mode": _ranking_mode(payload) or "unreported",
+        "plan_notice_present": bool(payload.get("planNotice")),
+        "available_surfaces": len(payload.get("availableSurfaces") or SURFACES),
+    }
 
 
 def fetch_snapshots(
@@ -307,9 +338,14 @@ def fetch_snapshots(
     request_interval=MIN_REQUEST_INTERVAL,
     clock=None,
     sleeper=None,
+    coverage_mode="complete",
 ):
     """Paced, capped, current-only refresh; fail without writing partial data."""
     key = _validated_key(api_key)
+    if coverage_mode not in ("complete", "first-100"):
+        raise BenchlmError("invalid BenchLM coverage mode")
+    if coverage_mode == "first-100" and max_requests < 16:
+        raise BenchlmError("first-100 requires a deliberate budget of at least 16 reads")
     if type(max_pages) is not int or not 1 <= max_pages <= MAX_PAGES:
         raise BenchlmError("invalid BenchLM max-pages cap")
     if type(max_requests) is not int or not len(SURFACES) <= max_requests <= 80:
@@ -340,7 +376,7 @@ def fetch_snapshots(
         "members": sorted(SOURCE_PREFIX + "-" + s for s in SURFACES),
     }
     return [
-        _snapshot_for_surface(surface, bundle, request_page, max_pages)
+        _snapshot_for_surface(surface, bundle, request_page, max_pages, coverage_mode)
         for surface in SURFACES
     ]
 

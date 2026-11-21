@@ -47,6 +47,12 @@ def main():
         default=20,
         help="Hard per-surface page cap for full refresh (default 20)",
     )
+    parser.add_argument(
+        "--coverage",
+        choices=("complete", "first-100"),
+        default="complete",
+        help="Explicitly permit a labelled partial first-100 Free list",
+    )
     parser.add_argument("--cache-dir", type=Path, default=sources_dir())
     args = parser.parse_args()
     if args.surface and not args.probe:
@@ -60,12 +66,19 @@ def main():
             print(
                 "BenchLM Free: first-page schema valid for "
                 + result["surface"]
+                + "; Supported=" + str(result["supported"])
+                + "; total=" + str(result["total"])
+                + "; mode=" + result["ranking_mode"]
+                + "; plan-notice=" + str(result["plan_notice_present"])
+                + "; surfaces=" + str(result["available_surfaces"])
                 + "; no cache written"
             )
             return 0
         if args.refresh:
             snapshots = fetch_snapshots(
-                max_requests=args.max_requests, max_pages=args.max_pages
+                max_requests=args.max_requests,
+                max_pages=args.max_pages,
+                coverage_mode=args.coverage
             )
             store_snapshots(snapshots, args.cache_dir)
         offline_sources(args.cache_dir)
