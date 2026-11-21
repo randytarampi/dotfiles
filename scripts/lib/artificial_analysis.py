@@ -180,6 +180,10 @@ def _request_page(page, api_key):
             if exc.code == 429
             else "Artificial Analysis request failed"
         ) from None
+    except EvidenceError:
+        # EvidenceError is a ValueError; without this clause the generic
+        # handler below would rewrite its specific, non-leaking message.
+        raise
     except (TimeoutError, ValueError, OSError):
         raise EvidenceError("Artificial Analysis network or JSON failure") from None
 
