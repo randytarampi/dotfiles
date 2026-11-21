@@ -110,15 +110,17 @@ def test_no_data_licence_no_cross_source_identity():
         normalize_response(d)
 
 
-def test_json_default_40_row_truncation_is_rejected_not_cached(tmp_path):
+def test_reviewed_40_row_subset_is_accepted_with_explicit_coverage(tmp_path):
     payload = envelope()
     payload["models"] = payload["models"][:40]
-    with pytest.raises(WhatmodelError, match="coverage"):
-        normalize_response(payload)
-    assert list(tmp_path.iterdir()) == []
+    snapshot = normalize_response(payload)
+    assert snapshot["retrieved_rows"] == 40
+    assert snapshot["coverage"] == "reviewed subset; incomplete coverage"
+    store_snapshot(snapshot, tmp_path)
+    assert len(list(tmp_path.glob("whatmodel.json"))) == 1
 
 
-def test_exact_requested_cap_is_ambiguous_and_rejected():
+def test_exact_source_cap_is_not_claimed_complete():
     payload = envelope()
     seed = payload["models"][-1]
     payload["models"].extend(
@@ -127,5 +129,34 @@ def test_exact_requested_cap_is_ambiguous_and_rejected():
             for i in range(2000 - len(payload["models"]))
         ]
     )
-    with pytest.raises(WhatmodelError, match="request cap"):
-        normalize_response(payload)
+    assert normalize_response(payload)["retrieved_rows"] == 2000
+    assert (
+        normalize_response(payload)["coverage"]
+        == "reviewed subset; incomplete coverage"
+    )
+
+
+def test_live_non_json_response_has_clear_client_negotiation_error():
+    from io import BytesIO
+    from whatmodel_evidence import SOURCE_URL, fetch_response
+
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, n):
+            return BytesIO(b"<html>app shell</html>").read(n)
+
+    class Opener:
+        def open(self, request, timeout):
+            assert request.full_url == SOURCE_URL
+            assert request.get_header("User-agent") == "dotfiles-model-evidence/1"
+            return Response()
+
+    with pytest.raises(WhatmodelError, match="non-JSON"):
+        fetch_response(opener=Opener())

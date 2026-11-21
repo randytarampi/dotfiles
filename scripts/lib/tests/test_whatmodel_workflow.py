@@ -12,8 +12,8 @@ def test_whatmodel_is_only_an_optional_private_quality_probe():
     assert "Probe public whatmodel evidence (advisory)" in refresh
     assert "continue-on-error: true" in refresh
     assert "steps.whatmodel_probe.outcome" in refresh
-    assert "scripts/refresh-model-evidence.py --refresh" in refresh
-    assert "scripts/refresh-model-evidence.py --offline" in refresh
+    assert "scripts/refresh-model-evidence.py --probe" in refresh
+    assert "scripts/refresh-model-evidence.py --refresh" not in refresh
     assert "secrets.ARTIFICIAL_ANALYSIS_API_KEY" not in publisher
     assert "whatmodel" not in publisher
     assert "actions/upload-artifact@v7" in refresh

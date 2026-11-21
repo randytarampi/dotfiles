@@ -21,10 +21,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ENDPOINT = "https://artificialanalysis.ai/api/v2/language/models/free"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 MAX_PAGES = 20
 MAX_RESPONSE_BYTES = 10 * 1024 * 1024
-COLUMNS = ("id", "creator_id", "intelligence")
+COLUMNS = ("id", "slug", "name", "creator_id", "creator_name", "intelligence")
+V2_COLUMNS = ("id", "creator_id", "intelligence")
 # Reader-only compatibility: never make pre-migration private caches unusable.
 LEGACY_COLUMNS = (
     "id",
@@ -125,7 +126,10 @@ def normalize_pages(pages):
             rows.append(
                 {
                     "id": model_id,
+                    "slug": _string(record.get("slug")),
+                    "name": _string(record.get("name")),
                     "creator_id": _string(creator.get("id")),
+                    "creator_name": _string(creator.get("name")),
                     "intelligence": _numeric(
                         metrics.get("artificial_analysis_intelligence_index")
                     ),
@@ -286,7 +290,7 @@ def load_snapshot(directory=None, *, max_age_days=30, now=None):
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         schema = manifest.get("schema_version")
-        if schema not in (1, SCHEMA_VERSION):
+        if schema not in (1, 2, SCHEMA_VERSION):
             return None
         if manifest.get("source") != ENDPOINT:
             return None
@@ -310,7 +314,7 @@ def load_snapshot(directory=None, *, max_age_days=30, now=None):
         if hashlib.sha256(payload).hexdigest() != digest:
             return None
         reader = csv.DictReader(io.StringIO(payload.decode("utf-8"), newline=""))
-        columns = LEGACY_COLUMNS if schema == 1 else COLUMNS
+        columns = {1: LEGACY_COLUMNS, 2: V2_COLUMNS, 3: COLUMNS}[schema]
         if reader.fieldnames != list(columns):
             return None
         rows = list(reader)
@@ -321,6 +325,9 @@ def load_snapshot(directory=None, *, max_age_days=30, now=None):
             if not row["id"] or row["id"] in ids:
                 return None
             ids.add(row["id"])
+            if schema == 3:
+                for field in ("slug", "name", "creator_id", "creator_name"):
+                    _string(row[field])
             for metric in (
                 ("intelligence", "coding", "agentic")
                 if schema == 1
