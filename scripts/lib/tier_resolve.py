@@ -13,6 +13,7 @@ Provides:
     a {role: "ollama/model_name"} mapping.
 """
 
+import os
 import re
 import subprocess
 
@@ -667,6 +668,16 @@ def resolve_roles_from_list(
     _apply_profile_policy(
         classified, models, profile, min_reasoning_embedding=min_reasoning_embedding
     )
+
+    # Optional *offline* evidence ranking. Hard category qualification and all
+    # existing fallback policies execute first; unmatched records keep their
+    # original positions. There is no network call or API key at resolution.
+    if os.environ.get("DOTFILES_USE_MODEL_EVIDENCE_RANKING") == "1":
+        from model_evidence import rank_qualified
+
+        changed = rank_qualified(classified, profile=profile)
+        if changed:
+            logger.info("Quality evidence reordered %d local category(s)", changed)
 
     if not classified["solo"]:
         logger.warning(
