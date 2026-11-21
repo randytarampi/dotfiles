@@ -125,18 +125,15 @@ jobs:
         continue-on-error: true
         env:
           ARTIFICIAL_ANALYSIS_API_KEY: ${{ secrets.ARTIFICIAL_ANALYSIS_API_KEY }}
-          AA_PRIVATE_CACHE: ${{ runner.temp }}/artificial-analysis-private
         run: |
           set -euo pipefail
           if [[ -z "${ARTIFICIAL_ANALYSIS_API_KEY}" ]]; then
             echo "status=skipped_no_key" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
-          # Runner-local cache only; no scores, model IDs, or snapshots are
-          # emitted to logs, commits, public artifacts or PR descriptions.
-          python3 scripts/refresh-artificial-analysis.py --refresh --cache-dir "${AA_PRIVATE_CACHE}"
-          python3 scripts/refresh-artificial-analysis.py --offline --cache-dir "${AA_PRIVATE_CACHE}"
-          echo "status=validated_private" >> "${GITHUB_OUTPUT}"
+          # One-read weekly schema canary: no private benchmark data persisted.
+          python3 scripts/refresh-artificial-analysis.py --probe
+          echo "status=schema_validated" >> "${GITHUB_OUTPUT}"
 
       - name: Summarize optional Artificial Analysis probe
         if: always()
@@ -145,8 +142,8 @@ jobs:
           PROBE_STATUS: ${{ steps.aa_probe.outputs.status }}
         run: |
           set -euo pipefail
-          if [[ "${PROBE_STATUS}" == "validated_private" && "${PROBE_OUTCOME}" == "success" ]]; then
-            echo "Artificial Analysis Free: private snapshot validated (advisory)." >> "${GITHUB_STEP_SUMMARY}"
+          if [[ "${PROBE_STATUS}" == "schema_validated" && "${PROBE_OUTCOME}" == "success" ]]; then
+            echo "Artificial Analysis Free: first-page schema validated (advisory)." >> "${GITHUB_STEP_SUMMARY}"
           elif [[ "${PROBE_STATUS}" == "skipped_no_key" ]]; then
             echo "Artificial Analysis Free: skipped (secret not configured)." >> "${GITHUB_STEP_SUMMARY}"
           else
@@ -185,16 +182,15 @@ jobs:
         continue-on-error: true
         env:
           BENCHLM_DATA_KEY: ${{ secrets.BENCHLM_DATA_KEY }}
-          BENCHLM_PRIVATE_CACHE: ${{ runner.temp }}/benchlm-private
         run: |
           set -euo pipefail
           if [[ -z "${BENCHLM_DATA_KEY}" ]]; then
             echo "status=skipped_no_key" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
-          python3 scripts/refresh-benchlm-evidence.py --refresh --cache-dir "${BENCHLM_PRIVATE_CACHE}"
-          python3 scripts/refresh-benchlm-evidence.py --offline --cache-dir "${BENCHLM_PRIVATE_CACHE}"
-          echo "status=validated_private" >> "${GITHUB_OUTPUT}"
+          # One request by the owner, not four potentially long paid-quota surfaces.
+          python3 scripts/refresh-benchlm-evidence.py --probe --surface coding
+          echo "status=schema_validated" >> "${GITHUB_OUTPUT}"
 
       - name: Summarize BenchLM Free probe
         if: always() && github.event_name == 'workflow_dispatch'
@@ -203,8 +199,8 @@ jobs:
           BENCHLM_OUTCOME: ${{ steps.benchlm_probe.outcome }}
         run: |
           set -euo pipefail
-          if [[ "${BENCHLM_STATUS}" == "validated_private" && "${BENCHLM_OUTCOME}" == "success" ]]; then
-            echo "BenchLM Free: supported current rankings validated privately." >> "${GITHUB_STEP_SUMMARY}"
+          if [[ "${BENCHLM_STATUS}" == "schema_validated" && "${BENCHLM_OUTCOME}" == "success" ]]; then
+            echo "BenchLM Free: Coding first-page schema validated privately." >> "${GITHUB_STEP_SUMMARY}"
           elif [[ "${BENCHLM_STATUS}" == "skipped_no_key" ]]; then
             echo "BenchLM Free: skipped (optional BENCHLM_DATA_KEY not configured)." >> "${GITHUB_STEP_SUMMARY}"
           else

@@ -21,10 +21,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ENDPOINT = "https://artificialanalysis.ai/api/v2/language/models/free"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MAX_PAGES = 20
 MAX_RESPONSE_BYTES = 10 * 1024 * 1024
-COLUMNS = (
+COLUMNS = ("id", "creator_id", "intelligence")
+# Reader-only compatibility: never make pre-migration private caches unusable.
+LEGACY_COLUMNS = (
     "id",
     "slug",
     "name",
@@ -123,16 +125,9 @@ def normalize_pages(pages):
             rows.append(
                 {
                     "id": model_id,
-                    "slug": _string(record.get("slug")),
-                    "name": _string(record.get("name")),
                     "creator_id": _string(creator.get("id")),
-                    "creator_name": _string(creator.get("name")),
                     "intelligence": _numeric(
                         metrics.get("artificial_analysis_intelligence_index")
-                    ),
-                    "coding": _numeric(metrics.get("artificial_analysis_coding_index")),
-                    "agentic": _numeric(
-                        metrics.get("artificial_analysis_agentic_index")
                     ),
                 }
             )
@@ -185,18 +180,45 @@ def _request_page(page, api_key):
         raise EvidenceError("Artificial Analysis network or JSON failure") from None
 
 
-def fetch_free(api_key, *, get_page=None):
+def fetch_free(api_key, *, get_page=None, max_pages=MAX_PAGES):
     if not api_key:
         raise EvidenceError("ARTIFICIAL_ANALYSIS_API_KEY is missing")
     fetch = get_page or (lambda page: _request_page(page, api_key))
     pages = [fetch(1)]
     pagination = pages[0].get("pagination") if isinstance(pages[0], dict) else {}
     total = pagination.get("total_pages") if isinstance(pagination, dict) else None
+    if type(max_pages) is not int or not 1 <= max_pages <= MAX_PAGES:
+        raise EvidenceError("invalid AA max-pages cap")
     if type(total) is not int or not 1 <= total <= MAX_PAGES:
         raise EvidenceError("invalid Free API page count")
+    if total > max_pages:
+        raise EvidenceError("AA page count exceeds max-pages; no cache written")
     for page in range(2, total + 1):
         pages.append(fetch(page))
     return normalize_pages(pages)
+
+
+def probe_free(api_key, *, get_page=None):
+    """One request to validate the Free envelope and first-page model schema."""
+    if not api_key:
+        raise EvidenceError("ARTIFICIAL_ANALYSIS_API_KEY is missing")
+    fetch = get_page or (lambda page: _request_page(page, api_key))
+    page = fetch(1)
+    metadata = page.get("pagination") if isinstance(page, dict) else None
+    if not isinstance(metadata, dict):
+        raise EvidenceError("AA probe missing pagination")
+    total = metadata.get("total_pages")
+    if (
+        type(total) is not int
+        or not 1 <= total <= MAX_PAGES
+        or metadata.get("page") != 1
+        or metadata.get("has_more") is not (total > 1)
+    ):
+        raise EvidenceError("AA probe pagination invalid")
+    first = dict(page)
+    first["pagination"] = {**metadata, "total_pages": 1, "has_more": False}
+    _, _, count = normalize_pages([first])
+    return {"pages": total, "first_page_models": count}
 
 
 def _private_directory(path):
@@ -263,7 +285,8 @@ def load_snapshot(directory=None, *, max_age_days=30, now=None):
         return None
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if manifest.get("schema_version") != SCHEMA_VERSION:
+        schema = manifest.get("schema_version")
+        if schema not in (1, SCHEMA_VERSION):
             return None
         if manifest.get("source") != ENDPOINT:
             return None
@@ -287,7 +310,8 @@ def load_snapshot(directory=None, *, max_age_days=30, now=None):
         if hashlib.sha256(payload).hexdigest() != digest:
             return None
         reader = csv.DictReader(io.StringIO(payload.decode("utf-8"), newline=""))
-        if reader.fieldnames != list(COLUMNS):
+        columns = LEGACY_COLUMNS if schema == 1 else COLUMNS
+        if reader.fieldnames != list(columns):
             return None
         rows = list(reader)
         if not rows or len(rows) != manifest.get("model_count"):
@@ -297,7 +321,11 @@ def load_snapshot(directory=None, *, max_age_days=30, now=None):
             if not row["id"] or row["id"] in ids:
                 return None
             ids.add(row["id"])
-            for metric in ("intelligence", "coding", "agentic"):
+            for metric in (
+                ("intelligence", "coding", "agentic")
+                if schema == 1
+                else ("intelligence",)
+            ):
                 if row[metric]:
                     _numeric(float(row[metric]))
         return {"manifest": manifest, "models": rows, "source": "aa_cache"}

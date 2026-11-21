@@ -16,8 +16,10 @@ def test_benchlm_owner_only_probe_does_not_enter_publisher():
     assert "BENCHLM_DATA_KEY: ${{ secrets.BENCHLM_DATA_KEY }}" in probe
     assert "continue-on-error: true" in probe
     assert "status=skipped_no_key" in probe
-    assert "scripts/refresh-benchlm-evidence.py --refresh" in probe
-    assert "scripts/refresh-benchlm-evidence.py --offline" in probe
+    assert "scripts/refresh-benchlm-evidence.py --probe --surface coding" in probe
+    assert "scripts/refresh-benchlm-evidence.py --refresh" not in probe
+    assert "BENCHLM_PRIVATE_CACHE" not in probe
+    assert "status=schema_validated" in probe
     assert "BENCHLM_DATA_KEY" not in publisher
     assert "benchlm" not in publisher.lower()
     artifact = refresh.split("      - name: Upload the catalogue artifact", 1)[1]

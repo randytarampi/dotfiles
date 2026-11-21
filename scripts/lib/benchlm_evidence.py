@@ -9,6 +9,7 @@ import json
 import math
 import os
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -23,6 +24,8 @@ SURFACES = ("reasoning", "coding", "agentic", "overall")
 PAGE_LIMIT = 100
 MAX_PAGES = 20
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+DEFAULT_REQUEST_BUDGET = 12
+MIN_REQUEST_INTERVAL = 2.1  # Conservative spacing below 30 requests/minute.
 SOURCE_PREFIX = "benchlm"
 ATTRIBUTION = "BenchLM.ai, BenchAlign current rankings; internal analysis only"
 
@@ -158,19 +161,39 @@ def _read_page(surface, offset, key, *, opener):
             if len(data) > MAX_RESPONSE_BYTES:
                 raise BenchlmError("BenchLM Free page exceeds bounded size")
             return json.loads(data)
+    except BenchlmError:
+        raise
+    except urllib.error.HTTPError as error:
+        if error.code == 429:
+            retry = error.headers.get("Retry-After") if error.headers else None
+            retry_text = (
+                " Retry after " + retry + " seconds."
+                if isinstance(retry, str) and retry.isdecimal() and len(retry) <= 5
+                else " Check the account's Retry-After response."
+            )
+            raise BenchlmError(
+                "BenchLM Free rate limited (HTTP 429)." + retry_text
+            ) from None
+        if error.code in (401, 403):
+            raise BenchlmError(
+                "BenchLM credential or plan rejected (HTTP " + str(error.code) + ")"
+            ) from None
+        raise BenchlmError("BenchLM HTTP error " + str(error.code)) from None
     except (OSError, ValueError):
         raise BenchlmError("BenchLM Free ranking request or decoding failed") from None
 
 
-def _collect_surface_rows(surface, key, opener):
-    """Read one complete consistent surface, fail if any page is ambiguous."""
+def _collect_surface_rows(surface, request_page, max_pages):
+    """Read one complete consistent surface within the caller's request cap."""
     collected, seen = [], set()
     cursor, reference = 0, None
-    for _ in range(MAX_PAGES):
-        payload = _read_page(surface, cursor, key, opener=opener)
+    for page_index in range(max_pages):
+        payload = request_page(surface, cursor)
         raw, next_cursor, reference = _parse_page(
             payload, surface=surface, offset=cursor, reference=reference
         )
+        if page_index == 0 and math.ceil(reference[2] / PAGE_LIMIT) > max_pages:
+            raise BenchlmError("BenchLM surface exceeds max-pages; no cache written")
         for item in raw:
             parsed = _parse_row(item, seen)
             if parsed is not None:
@@ -179,14 +202,14 @@ def _collect_surface_rows(surface, key, opener):
             break
         cursor = next_cursor
     else:
-        raise BenchlmError("BenchLM ranking exceeded page limit")
+        raise BenchlmError("BenchLM surface exceeded max-pages; no cache written")
     if len(collected) < 2:
         raise BenchlmError("BenchLM ranking lacks two supported exact identities")
     return collected, reference
 
 
-def _snapshot_for_surface(surface, key, opener, bundle):
-    rows, reference = _collect_surface_rows(surface, key, opener)
+def _snapshot_for_surface(surface, bundle, request_page, max_pages):
+    rows, reference = _collect_surface_rows(surface, request_page, max_pages)
     date, version, _ = reference
     source = SOURCE_PREFIX + "-" + surface
     snapshot = {
@@ -206,17 +229,73 @@ def _snapshot_for_surface(surface, key, opener, bundle):
     return snapshot
 
 
-def fetch_snapshots(api_key=None, *, opener=None):
-    """Refresh all four Free current surfaces, never consume historical APIs."""
+def _validated_key(api_key):
     key = api_key if api_key is not None else os.environ.get("BENCHLM_DATA_KEY", "")
     if not isinstance(key, str) or not key.strip() or "\n" in key or "\r" in key:
         raise BenchlmError("BENCHLM_DATA_KEY missing or malformed")
+    return key
+
+
+def probe_surface(api_key=None, *, surface="coding", opener=None):
+    """One request, no writes, no score output: contract smoke test only."""
+    if surface not in SURFACES:
+        raise BenchlmError("invalid BenchLM surface")
+    key = _validated_key(api_key)
     opener = opener or urllib.request.build_opener(SameOriginRedirectHandler())
+    payload = _read_page(surface, 0, key, opener=opener)
+    rows, cursor, _ = _parse_page(payload, surface=surface, offset=0)
+    seen = set()
+    usable = [x for item in rows if (x := _parse_row(item, seen)) is not None]
+    if len(usable) < 2:
+        raise BenchlmError("BenchLM first page has insufficient Supported rows")
+    return {"surface": surface, "supported": len(usable), "more": cursor is not None}
+
+
+def fetch_snapshots(
+    api_key=None,
+    *,
+    opener=None,
+    max_requests=DEFAULT_REQUEST_BUDGET,
+    max_pages=MAX_PAGES,
+    request_interval=MIN_REQUEST_INTERVAL,
+    clock=None,
+    sleeper=None,
+):
+    """Paced, capped, current-only refresh; fail without writing partial data."""
+    key = _validated_key(api_key)
+    if type(max_pages) is not int or not 1 <= max_pages <= MAX_PAGES:
+        raise BenchlmError("invalid BenchLM max-pages cap")
+    if type(max_requests) is not int or not len(SURFACES) <= max_requests <= 80:
+        raise BenchlmError("invalid BenchLM request budget")
+    if not isinstance(request_interval, (int, float)) or request_interval < 0:
+        raise BenchlmError("invalid BenchLM request pacing")
+    if opener is None and request_interval < MIN_REQUEST_INTERVAL:
+        raise BenchlmError("BenchLM real HTTP pacing cannot be disabled")
+    opener = opener or urllib.request.build_opener(SameOriginRedirectHandler())
+    clock = clock or time.monotonic
+    sleeper = sleeper or time.sleep
+    state = {"used": 0, "last": None}
+
+    def request_page(surface, offset):
+        if state["used"] >= max_requests:
+            raise BenchlmError("BenchLM request budget exceeded; no cache written")
+        current = clock()
+        if state["last"] is not None:
+            delay = request_interval - (current - state["last"])
+            if delay > 0:
+                sleeper(delay)
+        state["last"] = clock()
+        state["used"] += 1
+        return _read_page(surface, offset, key, opener=opener)
+
     bundle = {
         "id": datetime.now(timezone.utc).isoformat(),
         "members": sorted(SOURCE_PREFIX + "-" + s for s in SURFACES),
     }
-    return [_snapshot_for_surface(s, key, opener, bundle) for s in SURFACES]
+    return [
+        _snapshot_for_surface(surface, bundle, request_page, max_pages)
+        for surface in SURFACES
+    ]
 
 
 def store_snapshots(snapshots, directory=None):

@@ -16,14 +16,8 @@ def test_aa_probe_is_private_advisory_only():
     assert "ARTIFICIAL_ANALYSIS_API_KEY" not in publish
     assert "Probe Artificial Analysis Free API evidence (advisory)" in refresh
     assert "continue-on-error: true" in refresh
-    assert (
-        "python3 scripts/refresh-artificial-analysis.py --refresh "
-        '--cache-dir "${AA_PRIVATE_CACHE}"'
-    ) in refresh
-    assert (
-        "python3 scripts/refresh-artificial-analysis.py --offline "
-        '--cache-dir "${AA_PRIVATE_CACHE}"'
-    ) in refresh
+    assert "python3 scripts/refresh-artificial-analysis.py --probe" in refresh
+    assert "status=schema_validated" in refresh
     artifact_step = refresh.split("      - name: Upload the catalogue artifact\n", 1)[1]
     artifact_step = artifact_step.split(
         "      - name: Probe Artificial Analysis Free API evidence", 1

@@ -2,6 +2,9 @@
 
 from datetime import datetime, timedelta, timezone
 
+import hashlib
+import json
+
 import urllib.error
 import urllib.request
 
@@ -10,13 +13,22 @@ import pytest
 from artificial_analysis import (
     EvidenceError,
     fetch_free,
+    probe_free,
     load_snapshot,
     normalize_pages,
     write_snapshot,
 )
 
 
-def page(number=1, total=1, *, model_id="synthetic-a", coding=25, version=4.1):
+def page(
+    number=1,
+    total=1,
+    *,
+    model_id="synthetic-a",
+    coding=25,
+    intelligence=10,
+    version=4.1,
+):
     return {
         "tier": "free",
         "intelligence_index_version": version,
@@ -33,7 +45,7 @@ def page(number=1, total=1, *, model_id="synthetic-a", coding=25, version=4.1):
                 "name": "Synthetic " + model_id,
                 "model_creator": {"id": "synthetic-vendor", "name": "Synthetic"},
                 "evaluations": {
-                    "artificial_analysis_intelligence_index": 10,
+                    "artificial_analysis_intelligence_index": intelligence,
                     "artificial_analysis_coding_index": coding,
                     "artificial_analysis_agentic_index": None,
                 },
@@ -54,7 +66,9 @@ def test_free_api_two_pages_and_missing_scores():
     assert (version, count) == ("4.1", 2)
     assert b"synthetic-1" in payload
     assert b"synthetic-2" in payload
-    assert b"agentic" in payload
+    assert b"intelligence" in payload
+    assert b"agentic" not in payload
+    assert b"coding" not in payload
 
 
 @pytest.mark.parametrize(
@@ -64,8 +78,8 @@ def test_free_api_two_pages_and_missing_scores():
         [page(2, 2)],
         [page(1, 2), page(2, 2, model_id="synthetic-a")],
         [page(1, 2), page(2, 2, version=5.0, model_id="synthetic-b")],
-        [page(1, 1, coding=float("nan"))],
-        [page(1, 1, coding=True)],
+        [page(1, 1, intelligence=float("nan"))],
+        [page(1, 1, intelligence=True)],
     ],
 )
 def test_invalid_evidence_is_rejected(pages):
@@ -79,7 +93,8 @@ def test_snapshot_round_trip_and_corruption(tmp_path):
     manifest = write_snapshot(tmp_path, payload, version, count, now=now)
     found = load_snapshot(tmp_path, now=now)
     assert found["manifest"] == manifest
-    assert found["models"][0]["coding"] == "25"
+    assert found["models"][0]["intelligence"] == "10"
+    assert "coding" not in found["models"][0]
     csv_file = tmp_path / "snapshots" / manifest["snapshot"]
     csv_file.write_text("tampered", encoding="utf-8")
     assert load_snapshot(tmp_path, now=now) is None
@@ -130,3 +145,37 @@ def test_credential_header_is_not_forwarded_to_another_origin():
             {},
             "https://attacker.example/record-key",
         )
+
+
+def test_legacy_v1_snapshot_stays_readable_without_requiring_refresh(tmp_path):
+    from artificial_analysis import LEGACY_COLUMNS
+
+    now = datetime(2026, 11, 21, tzinfo=timezone.utc)
+    fresh, version, count = normalize_pages([page()])
+    manifest = write_snapshot(tmp_path, fresh, version, count, now=now)
+    older = (
+        ",".join(LEGACY_COLUMNS)
+        + "\n"
+        + "synthetic-a,synthetic-a,Synthetic,synthetic-vendor,Synthetic,10,25,\n"
+    ).encode("utf-8")
+    digest = hashlib.sha256(older).hexdigest()
+    (tmp_path / "snapshots" / (digest + ".csv")).write_bytes(older)
+    manifest.update(
+        {"schema_version": 1, "snapshot": digest + ".csv", "sha256": digest}
+    )
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    assert load_snapshot(tmp_path, now=now)["models"][0]["coding"] == "25"
+
+
+def test_aa_single_page_probe_and_max_page_guard_use_only_one_read():
+    calls = []
+
+    def getter(page_number):
+        calls.append(page_number)
+        return page(page_number, 3)
+
+    assert probe_free("dummy", get_page=getter)["pages"] == 3
+    assert calls == [1]
+    with pytest.raises(EvidenceError, match="max-pages"):
+        fetch_free("dummy", get_page=getter, max_pages=1)
+    assert calls == [1, 1]
