@@ -673,10 +673,10 @@ def main():
     )
     parser.add_argument(
         "--model-evidence",
-        choices=("off", "shadow", "apply"),
+        choices=("off", "shadow"),
         default=None,
-        help="Offline benchmark ranking mode (off, read-only shadow, or apply). "
-        "Overrides ~/.env; default off unless the legacy opt-in is set.",
+        help="Offline evidence mode (off, or read-only shadow); apply is "
+        "disabled pending owner-host acceptance. Overrides ~/.env.",
     )
     args = parser.parse_args()
     load_env()
@@ -684,7 +684,7 @@ def main():
         evidence_mode = args.model_evidence
     else:
         evidence_mode = (
-            "apply"
+            "shadow"
             if os.environ.get("DOTFILES_USE_MODEL_EVIDENCE_RANKING") == "1"
             else "off"
         )
