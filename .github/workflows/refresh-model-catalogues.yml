@@ -154,7 +154,6 @@ jobs:
       - name: Probe public whatmodel evidence (advisory)
         id: whatmodel_probe
         continue-on-error: true
-        env:
         run: |
           set -euo pipefail
           # One read, no private snapshot; a non-JSON response is degraded, not success.
