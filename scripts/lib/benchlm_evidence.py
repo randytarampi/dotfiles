@@ -149,12 +149,21 @@ def _parse_page(payload, *, surface, offset, reference=None, coverage_mode="comp
     if payload.get("surface") != surface:
         raise BenchlmError("BenchLM ranking surface mismatch")
     available = payload.get("availableSurfaces")
-    if available is not None and (
-        not isinstance(available, list)
-        or any(not isinstance(name, str) for name in available)
-        or surface not in available
-    ):
-        raise BenchlmError("BenchLM surface absent from advertised availability")
+    if available is not None:
+        if not isinstance(available, list):
+            raise BenchlmError("BenchLM availability malformed")
+        advertised = []
+        for entry in available:
+            # Live Free responses list objects with a `surface` key; tolerate
+            # the documented string form as well.
+            if isinstance(entry, str):
+                advertised.append(entry)
+            elif isinstance(entry, dict) and isinstance(entry.get("surface"), str):
+                advertised.append(entry["surface"])
+            else:
+                raise BenchlmError("BenchLM availability malformed")
+        if surface not in advertised:
+            raise BenchlmError("BenchLM surface absent from advertised availability")
     notice = payload.get("planNotice")
     if notice is not None and (not isinstance(notice, str) or len(notice) > 2048):
         raise BenchlmError("BenchLM plan notice malformed")

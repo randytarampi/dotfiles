@@ -557,3 +557,32 @@ def test_incomplete_first_100_window_is_rejected():
     }
     with pytest.raises(BenchlmError, match="truncated"):
         _parse_page(example, surface="coding", offset=0, coverage_mode="first-100")
+
+
+def test_live_availability_objects_are_accepted():
+    """Free responses advertise surfaces as objects with a `surface` key."""
+    payload = {
+        "surface": "coding",
+        "dataAsOf": DATE,
+        "methodologyVersion": "6.0",
+        "rankingMode": "bench-align-v5",
+        "availableSurfaces": [
+            {"surface": "overall", "count": 214},
+            {"surface": "coding", "count": 179},
+        ],
+        "items": [
+            {"modelKey": "a", "creator": "maker", "score": 10},
+            {"modelKey": "b", "creator": "maker", "score": 20},
+        ],
+        "pagination": {"offset": 0, "total": 2, "nextOffset": None},
+    }
+    rows, cursor, _ = _parse_page(payload, surface="coding", offset=0)
+    assert len(rows) == 2 and cursor is None
+
+    payload["availableSurfaces"] = ["overall", "coding"]
+    rows, _, _ = _parse_page(payload, surface="coding", offset=0)
+    assert len(rows) == 2
+
+    payload["availableSurfaces"] = [{"surface": "overall"}]
+    with pytest.raises(BenchlmError, match="absent from advertised availability"):
+        _parse_page(payload, surface="coding", offset=0)
