@@ -1633,24 +1633,6 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/refresh-model-evidence.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "failure_policy": "fail_fast",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--refresh",
-        "--offline",
-        "--cache-dir"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
       "path": "scripts/refresh-benchlm-evidence.py",
       "capabilities": [
         "public",
