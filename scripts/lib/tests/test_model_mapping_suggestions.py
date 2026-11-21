@@ -99,13 +99,15 @@ def test_acceptance_requires_installed_exact_source_identity_and_preview(tmp_pat
     assert (tmp_path / "model-evidence-map.json.bak").read_bytes() == before
     with pytest.raises(MappingSuggestionError, match="backup"):
         merge_approved(
-            {"omlx/Ornith-1.5-35B-A3B-MLX-4bit": {
-                "benchlm-reasoning": {
-                    "model_id": "ornith-1.5-35b-a3b",
-                    "creator_id": "maker",
-                    "scale": "benchalign-v5-method6-reasoning",
+            {
+                "omlx/Ornith-1.5-35B-A3B-MLX-4bit": {
+                    "benchlm-reasoning": {
+                        "model_id": "ornith-1.5-35b-a3b",
+                        "creator_id": "maker",
+                        "scale": "benchalign-v5-method6-reasoning",
+                    }
                 }
-            }},
+            },
             path=path,
             apply=True,
         )

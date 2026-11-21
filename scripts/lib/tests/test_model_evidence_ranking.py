@@ -305,13 +305,14 @@ def test_shadow_coverage_counts_unmapped_unique_models_per_source():
 def test_first_100_benchlm_coverage_is_explicit_in_shadow_audit(tmp_path):
     source, mappings = fixture()
     source.update(
-        {"coverage": "first-100-subset", "retrieved_rows": 100,
-         "population_total": 214}
+        {"coverage": "first-100-subset", "retrieved_rows": 100, "population_total": 214}
     )
     audit = {}
     rank_qualified(
         {"code-gen": [candidate("slow"), candidate("fast")]},
-        catalogues=[source], mappings=mappings, audit=audit,
+        catalogues=[source],
+        mappings=mappings,
+        audit=audit,
     )
     assert audit["selected"]["code-gen"]["coverage"] == "first-100-subset"
     assert audit["selected"]["code-gen"]["population_total"] == 214
