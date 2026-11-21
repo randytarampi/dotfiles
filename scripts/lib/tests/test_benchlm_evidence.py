@@ -218,7 +218,8 @@ def test_supported_does_not_claim_every_underlying_result_was_independent():
         seen,
     )
     assert result["evidence"] == "mixed"
-    assert result["benchlm_maturity"] == "Supported"
+    assert result["evidence_status"] == "Supported"
+    assert result["benchlm_maturity"] == "unknown"
 
 
 def test_version_and_total_must_agree_across_paged_response():
@@ -440,3 +441,135 @@ def test_request_budget_prevents_unbounded_pagination():
         request_interval=0,
     )
     assert len(upstream.calls) == 4
+
+
+def test_live_evidence_status_is_not_an_alias_for_maturity():
+    seen = set()
+    supported = _parse_row(
+        {
+            "modelKey": "maker:released",
+            "creator": "maker",
+            "score": 72.0,
+            "evidenceStatus": "supported",
+            "maturity": "developing",
+        },
+        seen,
+    )
+    assert supported["evidence_status"] == "Supported"
+    assert supported["benchlm_maturity"] == "developing"
+    assert (
+        _parse_row(
+            {
+                "modelKey": "maker:preliminary",
+                "creator": "maker",
+                "score": 81.0,
+                "evidenceStatus": "estimated",
+                "maturity": "preliminary",
+            },
+            seen,
+        )
+        is None
+    )
+
+
+def test_live_ranking_mode_and_available_surfaces_do_not_conflate_methods():
+    payload = {
+        "surface": "coding",
+        "dataAsOf": DATE,
+        "methodologyVersion": "bench-align-v6.0-2026-11-19",
+        "rankingMode": "bench-align-v5",
+        "availableSurfaces": ["coding", "overall", "knowledge"],
+        "planNotice": "Free limited to the first 100 rows after 2026-12-05",
+        "items": [{"modelKey": "m", "creator": "vendor"}],
+        "pagination": {"offset": 0, "total": 1, "nextOffset": None},
+    }
+    _, _, revision = _parse_page(payload, surface="coding", offset=0)
+    assert revision[1] == "bench-align-v6.0-2026-11-19"
+    assert revision[3] == "bench-align-v5"
+    payload["availableSurfaces"] = ["reasoning"]
+    with pytest.raises(BenchlmError, match="available surfaces"):
+        _parse_page(payload, surface="coding", offset=0)
+
+
+def test_free_first_100_requires_explicit_coverage_and_unique_scale(tmp_path):
+    from urllib.parse import parse_qs, urlsplit
+
+    from benchlm_evidence import SURFACES
+
+    class FreePlanOpener:
+        def __init__(self):
+            self.calls = []
+
+        def open(self, request, timeout):
+            params = parse_qs(urlsplit(request.full_url).query)
+            offset = int(params["offset"][0])
+            surface = params["surface"][0]
+            self.calls.append((surface, offset))
+            return Response(
+                {
+                    "surface": surface,
+                    "dataAsOf": DATE,
+                    "methodologyVersion": "v6.0",
+                    "rankingMode": "bench-align-v5",
+                    "availableSurfaces": list(SURFACES),
+                    "planNotice": "Free capped to the first 100 rows",
+                    "items": [
+                        {
+                            "modelKey": f"vendor:{surface}:{i}",
+                            "creator": "vendor",
+                            "evidenceStatus": "supported",
+                            "maturity": "developing",
+                            "score": 65.0,
+                        }
+                        for i in range(offset, offset + 25)
+                    ],
+                    "pagination": {
+                        "offset": offset,
+                        "total": 214,
+                        "nextOffset": offset + 25 if offset + 25 < 100 else None,
+                    },
+                }
+            )
+
+    upstream = FreePlanOpener()
+    with pytest.raises(BenchlmError, match="truncated"):
+        fetch_snapshots(
+            "placeholder",
+            opener=upstream,
+            max_requests=20,
+            coverage_mode="complete",
+            request_interval=0,
+        )
+    upstream = FreePlanOpener()
+    snapshots = fetch_snapshots(
+        "placeholder",
+        opener=upstream,
+        max_requests=20,
+        coverage_mode="first-100",
+        request_interval=0,
+    )
+    assert len(upstream.calls) == 16
+    assert all(
+        source["coverage"]
+        == {
+            "mode": "first-100",
+            "retrieved": 100,
+            "total": 214,
+        }
+        for source in snapshots
+    )
+    assert all(source["scale"].endswith("-top100") for source in snapshots)
+    store_snapshots(snapshots, tmp_path)
+    assert len(offline_sources(tmp_path)) == 4
+
+
+def test_first_100_budget_fails_before_network():
+    upstream = StubOpener()
+    with pytest.raises(BenchlmError, match="at least 16 reads"):
+        fetch_snapshots(
+            "placeholder",
+            opener=upstream,
+            coverage_mode="first-100",
+            request_interval=0,
+        )
+    assert upstream.calls == []
