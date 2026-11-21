@@ -61,6 +61,8 @@ def _private_metadata(source, directory):
             if not isinstance(item, dict):
                 continue
             ident = item.get("id")
+            if not isinstance(ident, str):
+                continue
             canonical = source["models"].get(ident)
             if not canonical or item.get("creator_id") != canonical["creator_id"]:
                 continue
@@ -195,7 +197,7 @@ def build_suggestions(classified, catalogues, aa_snapshot=None, directory=None, 
             counts[suggestion["source"]] += 1
     return {
         "mode": "read-only-suggestions",
-        "network_requests": 0,
+        "benchmark_api_requests": 0,
         "writes": 0,
         "automatic_approvals": 0,
         "qualified_unique_routes": len(proposals),
