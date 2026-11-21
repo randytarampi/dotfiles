@@ -268,7 +268,9 @@ def _preferred_comparables(entries, preferences, catalogues, mappings, audit):
                 (index, _candidate_score(model, source, mappings))
                 for index, model in enumerate(entries)
             ]
-            comparable = [(index, score) for index, score in scored if score is not None]
+            comparable = [
+                (index, score) for index, score in scored if score is not None
+            ]
             if audit is not None:
                 audit["comparable"] += len(comparable)
             if len(comparable) >= 2:
