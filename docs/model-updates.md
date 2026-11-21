@@ -16,6 +16,12 @@ The existing [catalogue refresher](../.github/workflows/refresh-model-catalogues
 
 **Candidate sources:** [whatmodel](https://whatmodel.sh) offers CC BY-SA 4.0 published model scores, hardware and benchmark data (score coverage and exact model identity still need verification); [BenchLM](https://benchlm.ai/data/access) offers richer source-run data with access and redistribution restrictions, which may require a separate licence; [APIpulse](https://www.getapipulse.com/api-docs.html) provides published token prices, not independent model quality evidence. For strict-free route admission, retain existing authenticated provider/catalogue and billing evidence. Do not publish restricted AA/BenchLM snapshots or unlicensed derivative rankings in this repository.
 
+### Public whatmodel adapter (optional, follow-up)
+
+`scripts/refresh-model-evidence.py --refresh` retrieves public whatmodel.sh JSON from `https://whatmodel.sh/?format=json&n=2000&thin=1&retired=0` without a credential. It validates the overall LLM score scale, published CC BY-SA 4.0 attribution and independently reviewed model coverage. Missing, thin or vendor-only scores are excluded. The last-good private snapshot is stored atomically at `~/.cache/dotfiles/model-evidence/sources/whatmodel.json`; use `--offline` to confirm that it remains usable. The existing scheduled catalogue workflow probes the adapter in an ephemeral runner directory and publishes only a status sentence.
+
+**Source-specific rights:** The whatmodel numerical compilation is [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), with original source licences and attribution still applicable. This PR does not commit or republish the data. The whatmodel overall score is not a coding benchmark or a verified quantized-local score. Source: [whatmodel data export and API](https://github.com/jakemanger/whatmodel/blob/main/scripts/export-data.ts).
+
 ## 13 November 2026: Inkling 2 Small — Ollama Cloud candidate
 
 The curated Ollama Cloud catalogue now includes `inkling-2-small` ([Ollama model page](https://ollama.com/library/inkling-2-small)); the optional Junie `ollama-cloud-inkling` group selects the exact direct `https://ollama.com/v1` model ID. A local daemon's `inkling-2-small:cloud` stub is **not** the direct cloud wire ID. Junie can derive a `litellm-ollama-cloud-inkling` twin, but the generator must omit it unless the exact `ollama-cloud/inkling-2-small` alias appears in the authenticated LiteLLM catalogue. The group does not invent a `fasterModel`.

@@ -153,6 +153,31 @@ jobs:
             echo "Artificial Analysis Free: unavailable/degraded; catalogue publication is independent." >> "${GITHUB_STEP_SUMMARY}"
           fi
 
+      # Public, no-token quality source; isolated from the WOOFBOT artifact.
+      - name: Probe public whatmodel evidence (advisory)
+        id: whatmodel_probe
+        continue-on-error: true
+        env:
+          PRIVATE_MODEL_EVIDENCE: ${{ runner.temp }}/whatmodel-private
+        run: |
+          set -euo pipefail
+          python3 scripts/refresh-model-evidence.py --refresh --cache-dir "${PRIVATE_MODEL_EVIDENCE}"
+          python3 scripts/refresh-model-evidence.py --offline --cache-dir "${PRIVATE_MODEL_EVIDENCE}"
+          echo "status=validated_private" >> "${GITHUB_OUTPUT}"
+
+      - name: Summarize whatmodel quality probe
+        if: always()
+        env:
+          PROBE_STATUS: ${{ steps.whatmodel_probe.outputs.status }}
+          PROBE_OUTCOME: ${{ steps.whatmodel_probe.outcome }}
+        run: |
+          set -euo pipefail
+          if [[ "${PROBE_STATUS}" == "validated_private" && "${PROBE_OUTCOME}" == "success" ]]; then
+            echo "whatmodel: reviewed public quality evidence validated in private cache." >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "whatmodel: unavailable or incompatible; catalogue refresh remains independent." >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
   publish:
     needs: refresh
     if: needs.refresh.result == 'success' && needs.refresh.outputs.status == 'available'
