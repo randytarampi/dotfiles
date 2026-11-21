@@ -8,7 +8,6 @@ import json
 import math
 import os
 import tempfile
-import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,19 +28,62 @@ class WhatmodelError(ValueError):
     """Upstream input failed validation; preserve the prior snapshot."""
 
 
-def normalize_response(payload, *, now=None):
-    """Strictly verify published JSON shape before extracting comparable rows."""
+def _valid_envelope(payload):
     if not isinstance(payload, dict):
-        raise WhatmodelError("invalid leaderboard response")
-    if (
-        payload.get("category") != "llm"
-        or payload.get("score_mode") != "overall"
-        or payload.get("comparison_set") is not None
-        or payload.get("task") is not None
-        or not isinstance(payload.get("data_license"), dict)
-        or payload["data_license"].get("name") != LICENCE
-        or not isinstance(payload.get("models"), list)
-    ):
+        return False
+    if payload.get("category") != "llm":
+        return False
+    if payload.get("score_mode") != "overall":
+        return False
+    if payload.get("comparison_set") is not None:
+        return False
+    if payload.get("task") is not None:
+        return False
+    licence = payload.get("data_license")
+    if not isinstance(licence, dict):
+        return False
+    if licence.get("name") != LICENCE:
+        return False
+    return isinstance(payload.get("models"), list)
+
+
+def _validated_row(item, seen):
+    """Reject ambiguous identities, skip unreviewed and sparse scores."""
+    if not isinstance(item, dict):
+        raise WhatmodelError("non-object model row")
+    ident = item.get("id")
+    maker = item.get("provider")
+    if not isinstance(ident, str) or not ident.strip():
+        raise WhatmodelError("invalid model identity")
+    if not isinstance(maker, str) or not maker.strip():
+        raise WhatmodelError("invalid creator identity")
+    if ident in seen:
+        raise WhatmodelError("duplicate upstream model identity")
+    seen.add(ident)
+    count = item.get("n")
+    score = item.get("score_full")
+    if type(count) is not int or count < 3:
+        return None
+    if type(score) not in (float, int):
+        return None
+    if not math.isfinite(score):
+        return None
+    if not 0 <= score <= 100:
+        return None
+    if item.get("maker_only") is not False:
+        return None
+    return {
+        "id": ident,
+        "creator_id": maker,
+        "score": score,
+        "n": count,
+        "evidence": "mixed",
+    }
+
+
+def normalize_response(payload, *, now=None):
+    """Verify public overall-quality schema before extracting comparable rows."""
+    if not _valid_envelope(payload):
         raise WhatmodelError("unexpected category, score scale or licence")
     source_updated = payload.get("updated")
     if not isinstance(source_updated, str):
@@ -60,42 +102,12 @@ def normalize_response(payload, *, now=None):
         raise WhatmodelError("empty or oversized leaderboard")
     if payload.get("coverage") == "no reviewed rankings available":
         raise WhatmodelError("no reviewed scores")
-    rows, seen = [], set()
+    seen = set()
+    rows = []
     for item in incoming:
-        if not isinstance(item, dict):
-            raise WhatmodelError("non-object model row")
-        ident = item.get("id")
-        maker = item.get("provider")
-        if (
-            not isinstance(ident, str)
-            or not ident.strip()
-            or not isinstance(maker, str)
-            or not maker.strip()
-            or ident in seen
-        ):
-            raise WhatmodelError("invalid or duplicate upstream identity")
-        seen.add(ident)
-        count = item.get("n")
-        score = item.get("score_full")
-        if (
-            type(count) is not int
-            or count < 3
-            or type(score) not in (float, int)
-            or not math.isfinite(score)
-            or item.get("maker_only") is not False
-            or score < 0
-            or score > 100
-        ):
-            continue
-        rows.append(
-            {
-                "id": ident,
-                "creator_id": maker,
-                "score": score,
-                "n": count,
-                "evidence": "mixed",
-            }
-        )
+        row = _validated_row(item, seen)
+        if row is not None:
+            rows.append(row)
     if len(rows) < 2:
         raise WhatmodelError("insufficient independently reviewed model evidence")
     return {
@@ -129,7 +141,7 @@ def fetch_response(*, opener=None):
             if len(payload) > MAX_BYTES:
                 raise WhatmodelError("whatmodel response too large")
             return json.loads(payload)
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+    except (OSError, ValueError):
         raise WhatmodelError("whatmodel unavailable or response invalid") from None
 
 
