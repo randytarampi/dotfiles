@@ -136,13 +136,39 @@ def _normalize_source(payload, name, *, now):
         records[model_id] = {"creator_id": creator, "score": score}
     if not records:
         return None
+    bundle = payload.get("bundle")
+    if bundle is not None:
+        if not isinstance(bundle, dict):
+            return None
+        batch_id, members = bundle.get("id"), bundle.get("members")
+        if (
+            not _identity(batch_id)
+            or not isinstance(members, list)
+            or not 1 <= len(members) <= 16
+            or len(set(map(str, members))) != len(members)
+            or not all(isinstance(item, str) and SOURCE_ID.fullmatch(item) for item in members)
+            or name not in members
+        ):
+            return None
     return {
+        **({"bundle": bundle} if bundle is not None else {}),
         "source": name,
         "metric": payload["metric"],
         "scale": payload["scale"],
         "models": records,
     }
 
+
+def _batch_complete(item, catalogues):
+    """Reject interrupted multi-file updates without coupling to any provider."""
+    bundle = item.get("bundle")
+    if bundle is None:
+        return True
+    by_source = {entry["source"]: entry for entry in catalogues}
+    return all(
+        by_source.get(name, {}).get("bundle") == bundle
+        for name in bundle["members"]
+    )
 
 def load_catalogues(directory=None, *, aa_evidence=None, now=None):
     """Read AA Intelligence and private v1 datasets without network access."""
@@ -190,7 +216,7 @@ def load_catalogues(directory=None, *, aa_evidence=None, now=None):
         normalized = _normalize_source(payload, name, now=now)
         if normalized:
             catalogues.append(normalized)
-    return catalogues
+    return [row for row in catalogues if _batch_complete(row, catalogues)]
 
 
 def _candidate_score(model, catalogue, mappings):

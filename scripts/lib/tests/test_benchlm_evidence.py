@@ -248,6 +248,33 @@ def test_duplicate_identity_rejected_even_if_unscored():
     with pytest.raises(BenchlmError, match="duplicate"):
         _parse_row(item, seen)
 
+def test_partial_or_mixed_batch_is_ineligible_for_resolution(tmp_path):
+    from model_evidence import load_catalogues
+
+    snapshots = fetch_snapshots("placeholder", opener=StubOpener())
+    store_snapshots(snapshots, tmp_path)
+    assert len(load_catalogues(tmp_path, aa_evidence={})) == 4
+    missing = tmp_path / "benchlm-agentic.json"
+    missing.unlink()
+    assert load_catalogues(tmp_path, aa_evidence={}) == []
+    store_snapshots(snapshots, tmp_path)
+    stale = json.loads(missing.read_text(encoding="utf-8"))
+    stale["bundle"]["id"] = "older-generation"
+    missing.write_text(json.dumps(stale), encoding="utf-8")
+    assert load_catalogues(tmp_path, aa_evidence={}) == []
+
+
+def test_invalid_pagination_type_is_bounded_error():
+    data = {
+        "surface": "coding",
+        "dataAsOf": DATE,
+        "methodologyVersion": "6.0",
+        "items": [{"modelKey": "first"}],
+        "pagination": "not-an-object",
+    }
+    with pytest.raises(BenchlmError, match="pagination"):
+        _parse_page(data, surface="coding", offset=0)
+
 def test_no_network_when_cache_read(monkeypatch, tmp_path):
     store_snapshots(fetch_snapshots("placeholder", opener=StubOpener()), tmp_path)
     monkeypatch.setattr(

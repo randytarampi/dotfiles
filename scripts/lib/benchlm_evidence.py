@@ -109,12 +109,14 @@ def _parse_page(payload, *, surface, offset, reference=None):
     date = _timestamp(payload.get("dataAsOf"))
     version = _version(payload)
     # Total must also be stable or an updated ranking may silently skip rows.
-    declared_total = (payload.get("pagination") or {}).get("total")
+    page = payload.get("pagination")
+    if not isinstance(page, dict):
+        raise BenchlmError("BenchLM pagination missing or malformed")
+    declared_total = page.get("total")
     if reference is not None and (date, version, declared_total) != reference:
         raise BenchlmError("BenchLM pagination mixed scoring revisions")
     rows = payload.get("items")
-    page = payload.get("pagination")
-    if not isinstance(rows, list) or not isinstance(page, dict):
+    if not isinstance(rows, list):
         raise BenchlmError("BenchLM ranking or pagination missing")
     if len(rows) > PAGE_LIMIT or not rows:
         raise BenchlmError("BenchLM empty or oversized page")
@@ -166,6 +168,11 @@ def fetch_snapshots(api_key=None, *, opener=None):
     if not isinstance(key, str) or not key.strip() or "\n" in key or "\r" in key:
         raise BenchlmError("BENCHLM_DATA_KEY missing or malformed")
     opener = opener or urllib.request.build_opener(SameOriginRedirectHandler())
+    # All four surfaces belong to one acquisition; partial writes must not rank.
+    bundle = {
+        "id": datetime.now(timezone.utc).isoformat(),
+        "members": sorted(SOURCE_PREFIX + "-" + s for s in SURFACES),
+    }
     snapshots = []
     for surface in SURFACES:
         collected, seen = [], set()
@@ -190,6 +197,7 @@ def fetch_snapshots(api_key=None, *, opener=None):
         source = SOURCE_PREFIX + "-" + surface
         snapshot = {
             "schema_version": 1,
+            "bundle": bundle,
             "source": source,
             "metric": surface,
             "scale": "benchalign-" + version + "-" + surface,
@@ -219,6 +227,13 @@ def store_snapshots(snapshots, directory=None):
         raise BenchlmError("BenchLM snapshot is not an object")
     if {row.get("source") for row in snapshots} != expected:
         raise BenchlmError("BenchLM snapshot source set mismatch")
+    batches = [row.get("bundle") for row in snapshots]
+    if any(not isinstance(value, dict) for value in batches):
+        raise BenchlmError("BenchLM missing batch metadata")
+    if any(value != batches[0] for value in batches):
+        raise BenchlmError("BenchLM mixed snapshot batches")
+    if set(batches[0].get("members", [])) != expected:
+        raise BenchlmError("BenchLM batch member mismatch")
     now = datetime.now(timezone.utc)
     for row in snapshots:
         if _normalize_source(row, row["source"], now=now) is None:
