@@ -200,7 +200,7 @@ def build_suggestions(
                             + source["metric"]
                             + " / "
                             + source["scale"]
-                            + " — upstream score is NOT an observed local "
+                            + " — upstream benchmark is NOT an observed local "
                             "quantised model result"
                         ),
                     }
