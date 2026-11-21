@@ -1654,6 +1654,29 @@
       ],
       "positional_operand": null,
       "child_scripts": []
+    },
+    {
+      "path": "scripts/suggest-model-evidence-mappings.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "failure_policy": "fail_fast",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--models-file",
+        "--cache-dir",
+        "--aa-cache-dir",
+        "--map",
+        "--max-candidates",
+        "--json",
+        "--accept",
+        "--apply"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
     }
   ]
 }
