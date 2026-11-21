@@ -2,7 +2,9 @@
 
 import json
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
+import tier_resolve
 from model_evidence import load_catalogues, load_private_mappings, rank_qualified
 
 
@@ -300,19 +302,64 @@ def test_shadow_coverage_counts_unmapped_unique_models_per_source():
     }
     assert audit["eligible_unique"] == 3
     assert audit["unmapped_candidates"] == 1
+    # The denominator that decides whether a comparison is possible is per
+    # category, not per source.
+    assert audit["coverage_by_category"]["whatmodel"]["code-gen"] == {
+        "qualified": 3,
+        "tool_capable": 3,
+        "matched": 2,
+        "unmapped": 1,
+        "scale_mismatches": 0,
+        "missing_identifiers": 0,
+        "duplicates": 1,
+    }
+    assert audit["coverage_by_category"]["whatmodel"]["reasoning"]["qualified"] == 0
 
 
-def test_first_100_benchlm_coverage_is_explicit_in_shadow_audit(tmp_path):
+def test_first_100_benchlm_coverage_never_orders_candidates():
     source, mappings = fixture()
     source.update(
         {"coverage": "first-100-subset", "retrieved_rows": 100, "population_total": 214}
     )
+    models = [candidate("slow"), candidate("fast")]
     audit = {}
-    rank_qualified(
-        {"code-gen": [candidate("slow"), candidate("fast")]},
+    changed = rank_qualified(
+        {"code-gen": models},
         catalogues=[source],
         mappings=mappings,
         audit=audit,
     )
-    assert audit["selected"]["code-gen"]["coverage"] == "first-100-subset"
-    assert audit["selected"]["code-gen"]["population_total"] == 214
+    assert changed == 0
+    assert [m["name"] for m in models] == ["slow", "fast"]
+    assert "code-gen" not in audit["selected"]
+    assert audit["partial_sources_excluded"] >= 1
+    assert audit["coverage_by_source"]["whatmodel"]["matched"] == 2
+
+
+def test_category_observer_sees_real_categories_without_mutating_roles():
+    fleet = [
+        {"name": "coder-a:7b", "provider": "ollama"},
+        {"name": "coder-b:8b", "provider": "ollama"},
+    ]
+
+    def details(name, provider="ollama"):
+        return {
+            "capabilities": ["completion", "thinking", "tools"],
+            "param_count": 7 if name.startswith("coder-a") else 8,
+            "is_moe": False,
+        }
+
+    captured = {}
+
+    def collect(categories):
+        captured.update(categories)
+        categories["code-gen"].clear()
+
+    with patch.object(tier_resolve, "get_model_details", side_effect=details):
+        original = tier_resolve.resolve_roles_from_list(fleet, evidence_mode="off")
+        observed = tier_resolve.resolve_roles_from_list(
+            fleet, evidence_mode="off", category_observer=collect
+        )
+    assert observed == original
+    assert captured["code-gen"] == []
+    assert observed["code-gen"]

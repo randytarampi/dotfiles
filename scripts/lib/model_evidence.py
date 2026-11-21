@@ -276,7 +276,7 @@ def _audit_candidate_identity(model, source, mappings):
 
 
 def _audit_source_coverage(classified, catalogues, mappings, audit):
-    """Count unique qualified identities, not slots duplicated across roles."""
+    """Count unique qualified identities, per source and per real category."""
     qualified = {
         _route(model): model
         for cat in ROLE_METRICS
@@ -299,6 +299,31 @@ def _audit_source_coverage(classified, catalogues, mappings, audit):
         audit["unmapped_candidates"] += stats["unmapped"]
         audit["scale_mismatches"] += stats["scale_mismatches"]
         audit["missing_identifiers"] += stats["missing_identifiers"]
+        # Per-source totals collapse categories, but the denominator that
+        # decides whether a comparison is possible is per category: ranking
+        # needs two comparable candidates in one category.
+        per_category = {}
+        for category in ROLE_METRICS:
+            entries = classified.get(category, [])
+            unique = {_route(model): model for model in entries}
+            tool_capable = {
+                route: model
+                for route, model in unique.items()
+                if "tools" in (model.get("capabilities") or [])
+            }
+            category_stats = {
+                "qualified": len(unique),
+                "tool_capable": len(tool_capable),
+                "matched": 0,
+                "unmapped": 0,
+                "scale_mismatches": 0,
+                "missing_identifiers": 0,
+                "duplicates": len(entries) - len(unique),
+            }
+            for model in tool_capable.values():
+                category_stats[_audit_candidate_identity(model, source, mappings)] += 1
+            per_category[category] = category_stats
+        audit["coverage_by_category"][source["source"]] = per_category
 
 
 def _preferred_comparables(entries, preferences, catalogues, mappings, audit):
@@ -307,6 +332,12 @@ def _preferred_comparables(entries, preferences, catalogues, mappings, audit):
         possibilities = []
         for source in catalogues:
             if source["metric"] != metric:
+                continue
+            # A first-N subset cannot establish that an absent model is worse,
+            # so it stays observable but never orders candidates.
+            if source.get("coverage") == "first-100-subset":
+                if audit is not None:
+                    audit["partial_sources_excluded"] += 1
                 continue
             scored = []
             seen_routes = set()
@@ -360,6 +391,8 @@ def rank_qualified(
                 "eligible_unique": 0,
                 "duplicate_slots_skipped": 0,
                 "coverage_by_source": {},
+                "coverage_by_category": {},
+                "partial_sources_excluded": 0,
                 "selected": {},
             }
         )

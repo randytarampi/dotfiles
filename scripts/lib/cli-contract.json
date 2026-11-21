@@ -1671,6 +1671,7 @@
         "--aa-cache-dir",
         "--map",
         "--max-candidates",
+        "--profile",
         "--json",
         "--accept",
         "--apply"

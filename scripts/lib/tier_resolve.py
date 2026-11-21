@@ -274,6 +274,7 @@ def resolve_roles_from_list(
     moe_codegen_reuse: bool = False,
     profile=None,
     evidence_mode="off",
+    category_observer=None,
 ) -> dict:
     """Classify local Ollama models into role categories and return {role: "ollama/model_name"}.
 
@@ -671,6 +672,21 @@ def resolve_roles_from_list(
         classified, models, profile, min_reasoning_embedding=min_reasoning_embedding
     )
 
+    # Read-only integration seam for mapping onboarding. The callback sees the
+    # exact post-qualification, post-profile candidate categories but cannot
+    # change the model list or any role assignment.
+    if category_observer is not None:
+        if not callable(category_observer):
+            raise ValueError("invalid category observer")
+        category_observer(
+            copy.deepcopy(
+                {
+                    name: classified.get(name, [])
+                    for name in ("reasoning", "code-gen", "lightweight", "solo")
+                }
+            )
+        )
+
     # Explicit caller control: voice, local-engine resolution and other
     # shared consumers must never inherit a process-global evidence toggle.
     if evidence_mode not in {"off", "shadow"}:
@@ -694,11 +710,17 @@ def resolve_roles_from_list(
         )
         logger.info(
             "Model evidence unique eligibility=%d source_coverage=%s "
-            "duplicates_excluded=%d",
+            "duplicates_excluded=%d partial_sources_excluded=%d",
             audit.get("eligible_unique", 0),
             audit.get("coverage_by_source", {}),
             audit.get("duplicate_slots_skipped", 0),
+            audit.get("partial_sources_excluded", 0),
         )
+        if audit.get("coverage_by_category"):
+            logger.info(
+                "Model evidence coverage per source/category: %s",
+                audit["coverage_by_category"],
+            )
         if audit.get("selected"):
             logger.warning(
                 "Model evidence selected comparable sets: %s", audit["selected"]

@@ -11,7 +11,11 @@ sys.path.insert(0, str(SCRIPTS / "lib"))
 
 from artificial_analysis import cache_dir, load_snapshot  # noqa: E402
 from cli_helpers import add_common_args  # noqa: E402
-from local_engines import engine_gate_active, iter_engine_discovery  # noqa: E402
+from local_engines import (  # noqa: E402
+    engine_gate_active,
+    iter_engine_discovery,
+    merged_local_pool,
+)
 from model_evidence import load_catalogues, mapping_path, sources_dir  # noqa: E402
 from model_mapping_suggestions import (  # noqa: E402
     MappingSuggestionError,
@@ -20,7 +24,7 @@ from model_mapping_suggestions import (  # noqa: E402
     qualified_local_models,
     suggestions_for,
 )
-from tier_resolve import get_model_details  # noqa: E402
+from tier_resolve import get_model_details, resolve_roles_from_list  # noqa: E402
 
 
 def _records(path):
@@ -48,6 +52,27 @@ def _installed():
     return records
 
 
+def _observed_categories(profile=None):
+    """Ask the real resolver which categories each installed route reaches.
+
+    Read-only: the resolver deep-copies its candidate categories for the
+    observer, so qualification and any profile policy are the ones the tier
+    generator would actually apply.
+    """
+    observed = {}
+
+    def collect(categories):
+        for category, models in categories.items():
+            for model in models:
+                route = model.get("provider", "ollama") + "/" + model["name"]
+                observed.setdefault(route, set()).add(category)
+
+    resolve_roles_from_list(
+        merged_local_pool(), profile=profile, category_observer=collect
+    )
+    return {route: sorted(categories) for route, categories in observed.items()}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     add_common_args(parser)
@@ -58,6 +83,12 @@ def main():
     parser.add_argument("--aa-cache-dir", type=Path, default=cache_dir())
     parser.add_argument("--map", type=Path, default=mapping_path())
     parser.add_argument("--max-candidates", type=int, default=3)
+    parser.add_argument(
+        "--profile",
+        choices=("quiet", "balanced", "loud"),
+        default=None,
+        help="Ask the resolver for categories under this local profile policy",
+    )
     parser.add_argument(
         "--json", action="store_true", help="Print a machine-readable private report"
     )
@@ -84,6 +115,11 @@ def main():
         local = qualified_local_models(
             records, details=None if args.models_file else get_model_details
         )
+        # A fixture may not probe services; only live discovery gets the real
+        # post-qualification category observation.
+        observed = {} if args.models_file else _observed_categories(args.profile)
+        if observed:
+            local = [model for model in local if model["route"] in observed]
         aa = load_snapshot(args.aa_cache_dir)
         sources = load_catalogues(args.cache_dir, aa_evidence=aa or {})
         if args.accept:
@@ -99,6 +135,8 @@ def main():
         report = suggestions_for(
             local, sources, aa_snapshot=aa, maximum=args.max_candidates
         )
+        for row in report:
+            row["categories"] = observed.get(row["route"], [])
         if args.json:
             print(json.dumps(report, sort_keys=True, indent=2))
         else:
@@ -107,6 +145,10 @@ def main():
             print("Validated offline sources:", len(sources))
             for row in report:
                 print(row["route"], "quantization=", row["quantization"] or "UNKNOWN")
+                print(
+                    "  categories:",
+                    ",".join(row["categories"]) or "UNOBSERVED",
+                )
                 if not row["candidates"]:
                     print(
                         "  No plausible exact upstream identity in available snapshots"

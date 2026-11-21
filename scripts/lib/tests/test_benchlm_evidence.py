@@ -542,6 +542,8 @@ def test_explicit_partial_window_preserves_true_population_and_scale():
     assert all(row["coverage"] == "first-100-subset" for row in snapshots)
     assert all(row["population_total"] == 214 for row in snapshots)
     assert all("bench-align-v5" in row["scale"] for row in snapshots)
+    # A bounded prefix must not share a scale with a complete dataset.
+    assert all(row["scale"].endswith("-top100") for row in snapshots)
 
 
 def test_incomplete_first_100_window_is_rejected():

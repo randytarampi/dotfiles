@@ -271,7 +271,17 @@ def _snapshot_for_surface(surface, bundle, request_page, max_pages, coverage_mod
         "bundle": bundle,
         "source": source,
         "metric": surface,
-        "scale": "benchalign-" + mode + "-" + version + "-" + surface,
+        "scale": (
+            "benchalign-"
+            + mode
+            + "-"
+            + version
+            + "-"
+            + surface
+            # A bounded prefix must never share a scale with a complete set,
+            # or a map authored against complete data would silently match it.
+            + ("-top100" if coverage_mode == "first-100" else "")
+        ),
         "ranking_mode": mode,
         "methodology_version": version,
         "observed_at": date,
