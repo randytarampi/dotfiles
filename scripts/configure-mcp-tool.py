@@ -478,9 +478,7 @@ def _known_managed_server_names():
                     continue
                 # The canonical emitted name may differ from the filename:
                 # mongodb.json declares "MongoDB"; notion.json says "Notion".
-                if isinstance(template, dict) and isinstance(
-                    template.get("name"), str
-                ):
+                if isinstance(template, dict) and isinstance(template.get("name"), str):
                     names.add(template["name"])
     registry_file = os.path.join(root, "configs", "mcp", "global-mcps.json")
     try:
