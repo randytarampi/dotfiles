@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Always-on reconciliation. Its inputs are mutable runtime state — the OAuth
+# verification report, the effective upstream binding, and whether the running
+# proxy actually serves it — none of which any chezmoi hash can observe. This is
+# the deliberate exception to the run_onchange_* default: run_ scripts execute on
+# every apply, and chezmoi orders scripts by target name, so 15b sits after
+# 15-litellm and before 16-configure-opencode. See #361.
+#
+# scripts/reconcile-litellm-routes.py: {{ include "scripts/reconcile-litellm-routes.py" | sha256sum }}
+# scripts/lib/litellm_route_guard.py: {{ include "scripts/lib/litellm_route_guard.py" | sha256sum }}
+# scripts/lib/litellm_config.py: {{ include "scripts/lib/litellm_config.py" | sha256sum }}
+# scripts/lib/constants.py: {{ include "scripts/lib/constants.py" | sha256sum }}
+# env fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_USE_LITELLM_PROXY" | default "0" }}
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/env.sh"
+source "$LIB_DIR/litellm_service.sh"
+
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+if [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" != "1" || "${DOTFILES_USE_LITELLM_PROXY:-0}" != "1" ]]; then
+  info "LiteLLM gateway not enabled — skipping route reconciliation"
+  exit 0
+fi
+
+CHECK="{{ .chezmoi.sourceDir }}/scripts/reconcile-litellm-routes.py"
+CONFIGURE="{{ .chezmoi.sourceDir }}/scripts/configure-litellm.py"
+PORT="${LITELLM_PORT:-4000}"
+
+set +e
+reason="$("$CHECK" 2>&1)"
+status=$?
+set -e
+
+if [[ $status -eq 0 ]]; then
+  exit 0
+fi
+
+if [[ $status -eq 1 ]]; then
+  die "Gateway route state is UNKNOWN ($reason); refusing to leave gateway-only clients unverified"
+fi
+
+info "Gateway routes need repair ($reason); regenerating and reloading LiteLLM"
+python3 "$CONFIGURE" || die "LiteLLM regeneration failed"
+litellm_service_restart || die "LiteLLM restart failed"
+
+for _ in $(seq 1 40); do
+  if curl -fsS --max-time 3 "http://127.0.0.1:${PORT}/health/readiness" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+
+set +e
+reason="$("$CHECK" 2>&1)"
+status=$?
+set -e
+
+if [[ $status -ne 0 ]]; then
+  die "Gateway routes still unqualified after repair ($reason); refusing to write gateway-only client configuration"
+fi
+
+ok "Gateway routes reconciled"

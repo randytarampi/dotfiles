@@ -3574,3 +3574,34 @@ def test_openwebui_speech_locator_consumes_pinned_candidate_order(monkeypatch):
         openwebui._audio_locator(
             Operation.STT, candidates, ("http://127.0.0.1:8765/v1", "OMLX_API_KEY")
         )
+
+
+def test_configure_opencode_refuses_when_route_qualification_fails(tmp_path):
+    """A direct script invocation must not bypass the served-route prerequisite."""
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    key_file = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key_file.parent.mkdir(parents=True)
+    key_file.write_text("dummy-key", encoding="utf-8")
+    config = {
+        "model": "openai/gpt-x",
+        "providers": {"openai": {"models": {"gpt-x": {"name": "GPT X"}}}},
+    }
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "DOTFILES_USE_LITELLM_PROXY": "1",
+                "DOTFILES_RUN_LITELLM_SETUP": "1",
+                "HOME": str(tmp_path),
+            },
+            clear=False,
+        ),
+        patch.object(configure_opencode, "get_models", return_value={"openai/gpt-x"}),
+        patch.object(
+            configure_opencode,
+            "assert_gateway_routes",
+            return_value=(False, "refused-alias-not-served:openai/gpt-x"),
+        ),
+        pytest.raises(RuntimeError, match="subscription route qualification failed"),
+    ):
+        configure_opencode.apply_litellm_client_gate(config)

@@ -961,22 +961,49 @@ def oauth_cache_expiry(provider, environ=None):
         return None
 
 
-def chatgpt_verified_openai_models(environ=None):
-    """Read the mode-600 IDs verified through a supervised ChatGPT session."""
+CHATGPT_REPORT_OK = "ok"
+CHATGPT_REPORT_MISSING = "missing"
+CHATGPT_REPORT_UNSAFE = "unsafe"
+CHATGPT_REPORT_MALFORMED = "malformed"
+
+
+def chatgpt_verified_openai_models_report(environ=None):
+    """Return ``(state, ids)`` for the ChatGPT verified-ID report.
+
+    ``chatgpt_verified_openai_models`` deliberately collapses every failure to
+    an empty set. Consumers that must distinguish "there is no usable report"
+    from "the report proves nothing is verified" need the reason, because the
+    two are opposite operational facts: the first denies a subscription route,
+    the second merely proves no subscription ID is qualified. See #361.
+    """
     environ = os.environ if environ is None else environ
     home = Path(environ.get("HOME", str(Path.home()))).expanduser()
     path = home / ".local/share/litellm/chatgpt_verified_models.json"
     try:
-        if path.is_symlink() or stat.S_IMODE(path.stat().st_mode) != 0o600:
-            return set()
+        if path.is_symlink():
+            return CHATGPT_REPORT_UNSAFE, frozenset()
+        mode = stat.S_IMODE(path.stat().st_mode)
+    except FileNotFoundError:
+        return CHATGPT_REPORT_MISSING, frozenset()
+    except OSError:
+        return CHATGPT_REPORT_UNSAFE, frozenset()
+    if mode != 0o600:
+        return CHATGPT_REPORT_UNSAFE, frozenset()
+    try:
         values = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, json.JSONDecodeError):
-        return set()
+        return CHATGPT_REPORT_MALFORMED, frozenset()
     if not isinstance(values, list) or any(
         not isinstance(value, str) or not value or "/" in value for value in values
     ):
-        return set()
-    return set(values)
+        return CHATGPT_REPORT_MALFORMED, frozenset()
+    return CHATGPT_REPORT_OK, frozenset(values)
+
+
+def chatgpt_verified_openai_models(environ=None):
+    """Read the mode-600 IDs verified through a supervised ChatGPT session."""
+    state, ids = chatgpt_verified_openai_models_report(environ)
+    return set(ids) if state == CHATGPT_REPORT_OK else set()
 
 
 def _google_catalogue_rows(payload):
