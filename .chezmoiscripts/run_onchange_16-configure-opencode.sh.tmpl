@@ -83,37 +83,19 @@ if [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" != "1" ]]; then
   exit 0
 fi
 
-# Reconcile the OAuth verification report with the routes the proxy actually
-# serves, before any gateway-only client config is written. The report is
-# mutable runtime state that no chezmoi hash can observe, so the guard sits at
-# the point of consumption: when this script is skipped, no client config is
-# regenerated and nothing can be exposed to a stale route. See #361.
+# Subscription-route preflight, before any gateway-only client config is
+# written. The OAuth report is mutable runtime state that no chezmoi hash can
+# observe, so the guard sits at the point of consumption. It is strictly
+# read-only: a check never regenerates and never restarts the gateway. LiteLLM
+# generation, reload and readiness are owned by configure-all.sh, which runs
+# after chezmoi and is the repair path. This declines to write unqualified
+# client state rather than mutating a shared service. See #361.
 if [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" == "1" && "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
-  source "${LIB_DIR}/litellm_service.sh"
   ROUTE_CHECK="{{ .chezmoi.sourceDir }}/scripts/reconcile-litellm-routes.py"
-  set +e
-  route_reason="$("$ROUTE_CHECK" 2>&1)"
-  route_status=$?
-  set -e
-  if [[ $route_status -eq 3 ]]; then
-    info "Gateway routes need repair ($route_reason); regenerating and reloading LiteLLM"
-    python3 "{{ .chezmoi.sourceDir }}/scripts/configure-litellm.py" || die "LiteLLM regeneration failed"
-    litellm_service_restart || die "LiteLLM restart failed"
-    waited=0
-    while [[ $waited -lt 40 ]]; do
-      if curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then
-        break
-      fi
-      sleep 1
-      waited=$((waited + 1))
-    done
-    set +e
-    route_reason="$("$ROUTE_CHECK" 2>&1)"
-    route_status=$?
-    set -e
-  fi
-  if [[ $route_status -ne 0 ]]; then
-    die "Gateway route state is not qualified ($route_reason); refusing to write gateway-only client configuration"
+  if ! route_reason="$(python3 "$ROUTE_CHECK" 2>&1)"; then
+    warn "Gateway routes are not qualified: $route_reason"
+    warn "Skipping gateway-only client generation. Repair with 'make deploy' (regenerates, reloads and waits for readiness) or 'make litellm-restart', then re-apply."
+    exit 0
   fi
 fi
 
