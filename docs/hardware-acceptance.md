@@ -8,9 +8,15 @@ owner's Raspberry Pi and Pine64 boards — register them as GitHub Actions
 self-hosted runners — is also a way to hand arbitrary code execution to anything
 that can get a workflow onto a public repository.
 
+## Approved change in support scope — 22 November 2026
+
+Physical Raspberry Pi/Pine/Armbian validation is **optional**, tracked separately by [#384](https://github.com/randytarampi/dotfiles/issues/384). [#275](https://github.com/randytarampi/dotfiles/issues/275) now owns bounded ARM64/headless and unsupported/experimental architecture classification, not live board qualification. GitHub-hosted Ubuntu ARM64 is a useful native Ubuntu VM surrogate but cannot verify Armbian kernel, device boot, storage or peripherals. [#385](https://github.com/randytarampi/dotfiles/issues/385) tracks an optional delegated SSH validation path; neither optional issue blocks mainstream [#270](https://github.com/randytarampi/dotfiles/issues/270). No self-hosted runner has been registered or authorized by this decision.
+
+This document's public-repository runner threat model and GO/NO-GO criteria remain authoritative. An isolated private pull-only verifier is preferred to a public-repository runner; temporary JIT execution requires a disposable/reimaged execution image and network isolation, not merely an ephemeral registration.
+
 ## The problem being solved
 
-`#275` wants native hardware evidence. Today the only producer of that evidence
+`#384` tracks optional native hardware evidence; `#275` now tracks conservative architecture classification. Today the only producer of that evidence
 is a person typing results, which is why the issue has never closed. Automating
 it needs *something* that runs on the board and publishes a receipt.
 
