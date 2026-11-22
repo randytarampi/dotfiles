@@ -44,15 +44,15 @@ Each tool in `global-mcps.json` declares a `format` that `configure-mcp-tool.py`
 | Format | Output shape | Merge behavior | Used by |
 |---|---|---|---|
 | `json-mcpServers` | `{"mcpServers": {name: {command, args, env, [headers], [enabled]}}}` | Overwrite entire file | ai, air, cursor, junie (dedicated MCP-only files) |
-| `json-mcpServers-merge` | Same as `json-mcpServers` | Top-level JSON merge (preserves other keys) | claude_desktop (shared app config file) |
-| `json-servers` | `{"servers": {name: {type: stdio\|http, command, args, env, url, headers}}}` | Top-level JSON merge | vscode (VS Code `servers` schema) |
+| `json-mcpServers-merge` | Same as `json-mcpServers` | Per-server merge; preserves other keys and unselected registrations | claude, claude_desktop |
+| `json-servers` | `{"servers": {name: {type: stdio\|http, command, args, env, url, headers}}}` | Per-server merge in `servers` | vscode (VS Code `servers` schema) |
 | `toml-mcpServers` | `[mcp_servers.NAME]` blocks | Regex strip + append | codex |
 | `opencode-internal` | `{"mcp": {name: {type, command, environment, headers, enabled}}}` | Deep-merge `mcp` key | opencode |
 | `json-settings-merge` | `{"mcpServers": {...}}` | Top-level JSON merge | gemini |
-| `json-mcpServers-http` | `{"mcpServers": {...}}` | Top-level JSON merge | copilot |
-| `json-mcpServers-antigravity` | `{"mcpServers": {...}}` | Top-level JSON merge | agy |
+| `json-mcpServers-http` | `{"mcpServers": {...}}` | Per-server merge in `mcpServers` | copilot |
+| `json-mcpServers-antigravity` | `{"mcpServers": {...}}` | Per-server merge in `mcpServers` | agy |
 
-Use `json-mcpServers-merge` (not `json-mcpServers`) when the target file is a shared app config that contains other top-level keys (e.g. `claude_desktop_config.json` has `coworkUserFilesPath`, `preferences`). The plain `json-mcpServers` format overwrites the entire file and would clobber those keys. The top-level merge formats currently replace the named MCP namespace rather than preserving unrelated server entries inside it. Do not describe them as safe per-server reconciliation; [#359](https://github.com/randytarampi/dotfiles/issues/359) tracks that ownership defect. Review existing user-owned registrations before any real deployment.
+Use `json-mcpServers-merge` (not `json-mcpServers`) when the target file is a shared app config that contains other top-level keys (e.g. `claude_desktop_config.json` has `coworkUserFilesPath`, `preferences`). The plain `json-mcpServers` format overwrites the entire file and would clobber those keys. The four shared-namespace formats now retain unselected registrations, even when their names happen to match a repository template: name matching is **not** proof of earlier ownership. Potentially stale name matches are warned about but require explicit manual retirement. A currently generated name still replaces the same-name entry; only `basic-memory` has a separate fail-closed customization guard. Customized `github` or `sentry` entries may still be overwritten (a pre-existing limitation, not repaired by this change). `json-settings-merge` (Gemini) remains a top-level replacement. Non-atomic writes, backup/symlink handling and TOML retirement are separate [#359](https://github.com/randytarampi/dotfiles/issues/359) work. Review existing user-owned registrations before any real deployment.
 
 ### Per-tool constraints
 

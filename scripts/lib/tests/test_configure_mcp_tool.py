@@ -546,6 +546,92 @@ def test_merge_preserves_unrelated_user_servers_in_shared_namespace(
     assert merged["theme"] == "dark"
 
 
+
+@pytest.mark.parametrize(
+    "fmt,namespace",
+    [
+        ("json-mcpServers-merge", "mcpServers"),
+        ("json-servers", "servers"),
+        ("json-mcpServers-http", "mcpServers"),
+        ("json-mcpServers-antigravity", "mcpServers"),
+    ],
+)
+@pytest.mark.parametrize(
+    "unselected_name",
+    ["mongodb", "MongoDB", "notion", "Notion", "sentry", "Sentry", "github"],
+)
+def test_shared_names_not_generated_are_preserved_even_when_templates_collide(
+    tmp_path, fmt, namespace, unselected_name
+):
+    """Template stems and emitted names cannot prove an existing entry's owner."""
+    module = load_script()
+    path = tmp_path / "client.json"
+    user_entry = {"command": "user-supplied", "env": {"MCP_TOKEN": "private"}}
+    path.write_text(
+        json.dumps({namespace: {unselected_name: user_entry}, "theme": "keep"}),
+        encoding="utf-8",
+    )
+    generated = {namespace: {"new-managed": {"command": "generated"}}}
+    module.merge_configs_to_file(fmt, path, json.dumps(generated))
+    first = path.read_bytes()
+    module.merge_configs_to_file(fmt, path, json.dumps(generated))
+    assert path.read_bytes() == first
+    result = json.loads(first)
+    assert result[namespace][unselected_name] == user_entry
+    assert result[namespace]["new-managed"] == {"command": "generated"}
+    assert result["theme"] == "keep"
+
+
+@pytest.mark.parametrize(
+    "fmt,namespace",
+    [
+        ("json-mcpServers-merge", "mcpServers"),
+        ("json-servers", "servers"),
+        ("json-mcpServers-http", "mcpServers"),
+        ("json-mcpServers-antigravity", "mcpServers"),
+    ],
+)
+def test_shared_generated_name_replaces_customized_entry_as_before(
+    tmp_path, fmt, namespace
+):
+    """Only Basic Memory has a fail-closed customization collision guard."""
+    module = load_script()
+    path = tmp_path / "client.json"
+    path.write_text(
+        json.dumps({namespace: {"github": {"command": "custom", "env": {"X": "1"}}}}),
+        encoding="utf-8",
+    )
+    module.merge_configs_to_file(
+        fmt, path, json.dumps({namespace: {"github": {"command": "generated"}}})
+    )
+    assert json.loads(path.read_text())[namespace] == {
+        "github": {"command": "generated"}
+    }
+
+
+@pytest.mark.parametrize(
+    "fmt,namespace",
+    [
+        ("json-mcpServers-merge", "mcpServers"),
+        ("json-servers", "servers"),
+        ("json-mcpServers-http", "mcpServers"),
+        ("json-mcpServers-antigravity", "mcpServers"),
+    ],
+)
+def test_shared_merge_rejects_invalid_generated_map_without_mutation(
+    tmp_path, fmt, namespace
+):
+    module = load_script()
+    path = tmp_path / "client.json"
+    path.write_text(json.dumps({namespace: {"personal": {"command": "keep"}}}))
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="server map"):
+        module.merge_configs_to_file(
+            fmt, path, json.dumps({namespace: {"new": {"command": "safe"}}, "theme": "bad"})
+        )
+    assert path.read_bytes() == before
+
+
 def test_basic_memory_collision_allows_identical_json_and_non_memory_entries(tmp_path):
     module = load_script()
     path = tmp_path / "client.json"
@@ -751,8 +837,8 @@ def test_basic_memory_registry_renders_compatible_runtime_across_all_clients():
         assert env == expected["env"], tool
 
 
-def test_basic_memory_missing_from_generated_set_does_not_block_removal(tmp_path):
-    """Excluding Basic Memory must not make the legacy entry undeletable."""
+def test_basic_memory_absent_from_generated_set_preserves_unproven_owner(tmp_path, caplog):
+    """An unselected Basic Memory name is not proof of past repo ownership."""
     module = load_script()
     path = tmp_path / "mcp.json"
     path.write_text(
@@ -765,8 +851,10 @@ def test_basic_memory_missing_from_generated_set_does_not_block_removal(tmp_path
         json.dumps({"mcpServers": {"codegraph": {"command": "codegraph"}}}),
     )
     assert json.loads(path.read_text())["mcpServers"] == {
-        "codegraph": {"command": "codegraph"}
+        "basic-memory": {"command": "custom"},
+        "codegraph": {"command": "codegraph"},
     }
+    assert "template-name matches do not prove ownership" in caplog.text
 
 
 @pytest.mark.parametrize(

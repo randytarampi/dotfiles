@@ -455,13 +455,12 @@ def redact_output_content(format_type, output_content):
 
 
 def _known_managed_server_names():
-    """Names this repository can legitimately manage for an MCP client.
+    """Names for advisory collision diagnostics, NOT ownership proof.
 
-    Retirement has to be provable. An entry may be deleted only when its name
-    corresponds to a template or registry override the repository owns;
-    everything else in a shared namespace belongs to the user. Exact names
-    are used deliberately — a name prefix is not an ownership marker. See
-    #359.
+    Templates and registry overrides describe what this repository *could*
+    generate, not who wrote an existing user config entry. In particular,
+    file stems can differ from emitted names (mongodb -> MongoDB). A matching
+    name cannot justify automatic retirement without recorded provenance.
     """
     root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     names = set()
@@ -545,30 +544,38 @@ def merge_configs_to_file(fmt, mcp_path, output):
         # existing JSON file, preserving other top-level keys. Required for
         # shared app config files like claude_desktop_config.json.
         #
-        # The namespace itself is shared with the user: these are files they
-        # also edit. Merge per server name instead of replacing the generated
-        # map, so an unrelated registration survives regeneration. A name the
-        # repository actually owns is still retired when it leaves the
-        # generated set. See #359.
+        # These client namespaces are shared with user-authored registrations.
+        # Only the *current generated set* may be replaced by name. Template
+        # names cannot prove who created an older registration, so entries
+        # absent from the generated set must survive until explicit retirement.
+        # The Basic Memory collision guard above remains stricter; other
+        # generated-name conflicts retain the pre-existing overwrite policy.
         new_data = json.loads(output)
         with open(mcp_path, "r", encoding="utf-8") as f:
             content = f.read().strip()
         existing = json.loads(content) if content else {}
-        managed_names = _known_managed_server_names()
-        for namespace_key, generated_servers in new_data.items():
-            current_servers = existing.get(namespace_key)
-            if not isinstance(current_servers, dict) or not isinstance(
-                generated_servers, dict
-            ):
-                existing[namespace_key] = generated_servers
-                continue
-            merged_servers = {
-                name: entry
-                for name, entry in current_servers.items()
-                if name not in managed_names
-            }
-            merged_servers.update(generated_servers)
-            existing[namespace_key] = merged_servers
+        namespace_key = "servers" if fmt == "json-servers" else "mcpServers"
+        if set(new_data) != {namespace_key} or not isinstance(
+            new_data[namespace_key], dict
+        ):
+            raise ValueError("generated shared MCP config must contain one server map")
+        generated_servers = new_data[namespace_key]
+        current_servers = existing.get(namespace_key, {})
+        if not isinstance(current_servers, dict):
+            raise ValueError("existing MCP server map must be an object")
+        possible_stale = (
+            set(current_servers) & _known_managed_server_names()
+        ) - set(generated_servers)
+        if possible_stale:
+            logger.warning(
+                "Preserving MCP server name(s) %r absent from generated config: "
+                "template-name matches do not prove ownership. "
+                "Review and remove obsolete registrations manually.",
+                sorted(possible_stale),
+            )
+        merged_servers = dict(current_servers)
+        merged_servers.update(generated_servers)
+        existing[namespace_key] = merged_servers
         with open(mcp_path, "w", encoding="utf-8") as f:
             json.dump(existing, f, indent=4)
             f.write("\n")
