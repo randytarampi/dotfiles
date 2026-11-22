@@ -23,8 +23,14 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 from constants import get_litellm_oauth_gate  # noqa: E402 -- scripts/lib bootstrap.
+from litellm_config import (  # noqa: E402 -- scripts/lib bootstrap.
+    CHATGPT_REPORT_OK,
+    chatgpt_verified_openai_models_report,
+)
 from litellm_route_guard import (  # noqa: E402 -- scripts/lib bootstrap.
     REFUSED_AMBIGUOUS_CREDENTIALS,
+    REFUSED_REVOKED,
+    REFUSED_UNUSABLE_REPORT,
     alias_model_id,
     assert_namespace_matches,
     planned_subscription_bindings,
@@ -66,23 +72,40 @@ def main(argv=None):
         for row in routes
         if isinstance(row, dict) and alias_model_id(row.get("model_name"))
     ]
-    if not aliases:
-        return 0
+    planned_ids = {alias_model_id(alias) for alias in aliases}
 
     if not get_litellm_oauth_gate(os.environ):
         # The subscription lane is not in use; a direct route is legitimate.
         return 0
 
-    if (os.environ.get("OPENAI_API_KEY") or "").strip():
+    if (os.environ.get("OPENAI_API_KEY") or "").strip() and planned_ids:
         return _fail(
             f"{REFUSED_AMBIGUOUS_CREDENTIALS}: subscription aliases are planned "
             "while a direct paid OPENAI_API_KEY is set — unset the key or "
             "disable the OAuth gate"
         )
 
-    wires_ok, wires_reason = planned_subscription_bindings(routes)
-    if not wires_ok:
-        return _fail(wires_reason)
+    if planned_ids:
+        # Bind the plan to the *current* report. A projection that outlives the
+        # authorisation it was built from must not authorise a client.
+        state, verified = chatgpt_verified_openai_models_report(os.environ)
+        if state != CHATGPT_REPORT_OK:
+            return _fail(
+                f"{REFUSED_UNUSABLE_REPORT}: verified-model report is {state} "
+                "while subscription aliases are planned"
+            )
+        revoked = sorted(planned_ids - set(verified))
+        if revoked:
+            return _fail(f"{REFUSED_REVOKED}:{','.join(revoked[:3])}")
+        newer = sorted(set(verified) - planned_ids)
+        if newer:
+            print(
+                "warning: report verifies ids absent from the projection "
+                f"({','.join(newer[:3])}); run 'make deploy' to regenerate"
+            )
+        wires_ok, wires_reason = planned_subscription_bindings(routes)
+        if not wires_ok:
+            return _fail(wires_reason)
 
     try:
         api_key = KEY_FILE.read_text(encoding="utf-8").strip()

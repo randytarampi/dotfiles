@@ -49,8 +49,6 @@ source "${LIB_DIR}/tier_args.sh"
 # scripts/lib/provider_endpoints.py: {{ include "scripts/lib/provider_endpoints.py" | sha256sum }}
 # dot_config/opencode/dcp.jsonc: {{ include "dot_config/opencode/dcp.jsonc" | sha256sum }}
 # scripts/configure-opencode.py: {{ include "scripts/configure-opencode.py" | sha256sum }}
-# scripts/reconcile-litellm-routes.py: {{ include "scripts/reconcile-litellm-routes.py" | sha256sum }}
-# scripts/lib/litellm_route_guard.py: {{ include "scripts/lib/litellm_route_guard.py" | sha256sum }}
 # scripts/configure-opencode-tier.py: {{ include "scripts/configure-opencode-tier.py" | sha256sum }}
 # scripts/lib/unavailable_presets.py: {{ include "scripts/lib/unavailable_presets.py" | sha256sum }}
 # scripts/lib/free_presets.py: {{ include "scripts/lib/free_presets.py" | sha256sum }}
@@ -81,22 +79,6 @@ load_env || warn "\$HOME/.env not found, skipping env load"
 if [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" != "1" ]]; then
   info "DOTFILES_RUN_OPENCODE_SETUP='${DOTFILES_RUN_OPENCODE_SETUP:-0}' — skipping opencode tier configuration"
   exit 0
-fi
-
-# Subscription-route preflight, before any gateway-only client config is
-# written. The OAuth report is mutable runtime state that no chezmoi hash can
-# observe, so the guard sits at the point of consumption. It is strictly
-# read-only: a check never regenerates and never restarts the gateway. LiteLLM
-# generation, reload and readiness are owned by configure-all.sh, which runs
-# after chezmoi and is the repair path. This declines to write unqualified
-# client state rather than mutating a shared service. See #361.
-if [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" == "1" && "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
-  ROUTE_CHECK="{{ .chezmoi.sourceDir }}/scripts/reconcile-litellm-routes.py"
-  if ! route_reason="$(python3 "$ROUTE_CHECK" 2>&1)"; then
-    warn "Gateway routes are not qualified: $route_reason"
-    warn "Skipping gateway-only client generation. Repair with 'make deploy' (regenerates, reloads and waits for readiness) or 'make litellm-restart', then re-apply."
-    exit 0
-  fi
 fi
 
 info "Configuring opencode..."

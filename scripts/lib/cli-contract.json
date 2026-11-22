@@ -91,7 +91,22 @@
   },
   "scripts": [
     {
-      "path": "scripts/anchor-review-ref.py",
+      "path": "scripts/report-executable-architecture.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--json",
+        "--path"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/filter-brewfile.py",
       "capabilities": [
         "public",
         "mutates"
@@ -99,32 +114,12 @@
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
-        "--dry-run"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/check-categories.py",
-      "capabilities": [
-        "public"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/check-fleet-coverage.py",
-      "capabilities": [
-        "public"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help"
+        "--dry-run",
+        "--manifest",
+        "--out",
+        "--ignore",
+        "--ignore-list",
+        "--force"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -147,15 +142,18 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/check-model-drift.py",
+      "path": "scripts/migrate-env-sections.py",
       "capabilities": [
-        "public"
+        "mutates",
+        "inspect"
       ],
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
-        "--json",
-        "--require-complete"
+        "--dry-run",
+        "--apply",
+        "--env",
+        "--example"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -176,34 +174,7 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/check-pep604.py",
-      "capabilities": [
-        "public"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/check-plugin-consistency.py",
-      "capabilities": [
-        "public"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--check-installed",
-        "--cache-dir"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/ci-codegraph.sh",
+      "path": "scripts/configure-paseo-metadata.py",
       "capabilities": [
         "public",
         "mutates"
@@ -211,6 +182,108 @@
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
+        "--dry-run",
+        "--apply",
+        "--preset"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-paseo-voice.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply",
+        "--probe-routes",
+        "--stt-model",
+        "--tts-model",
+        "--voice",
+        "--local-vad-models-dir"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-paseo-mcp.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-paseo-acp.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply",
+        "--agents"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/install-paseo-plugins.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply",
+        "--codexbar-daemon-verified",
+        "--prune"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-tailnet-opencode.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply",
+        "--https-port"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/generate-review-bundles.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--check",
+        "--write",
         "--dry-run"
       ],
       "positional_operand": null,
@@ -231,39 +304,22 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/claude-litellm",
+      "path": "scripts/export-claude-desktop-gateway.py",
       "capabilities": [
-        "public",
-        "mutates"
+        "public"
       ],
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
-        "--dry-run"
-      ],
-      "positional_operand": "Claude CLI arguments",
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/cleanup-project.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--workspace-root",
-        "--steps",
-        "--skip",
-        "--force"
+        "--endpoint",
+        "--model",
+        "--helper"
       ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
-      "path": "scripts/collect-bootstrap-acceptance.py",
+      "path": "scripts/litellm-costs.py",
       "capabilities": [
         "public",
         "inspect"
@@ -271,16 +327,45 @@
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
-        "--inspect",
-        "--validate",
-        "--record",
-        "--out",
-        "--force",
-        "--source-sha",
-        "--require-driver",
-        "--repo",
-        "--environment-kind",
-        "--manifest"
+        "--dry-run",
+        "--window",
+        "--start",
+        "--end",
+        "--by",
+        "--client",
+        "--model",
+        "--json",
+        "--endpoint"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/release-drift-inventory.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--json"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/litellm-diagnose.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "failure_policy": "report",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--master-key"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -384,6 +469,20 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/configure-docker.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/configure-caddy.py",
       "capabilities": [
         "public",
@@ -396,26 +495,6 @@
         "--dry-run",
         "--no-backup",
         "--output"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/configure-claude-3p-profiles.py",
-      "capabilities": [
-        "public",
-        "mutates",
-        "backups"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--allow-partial",
-        "--api-key-source",
-        "--replace-credential",
-        "--dry-run",
-        "--help",
-        "--no-backup",
-        "--source-dir"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -437,38 +516,6 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/configure-codex.py",
-      "capabilities": [
-        "public",
-        "mutates",
-        "backups"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--no-backup"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/configure-cortex.py",
-      "capabilities": [
-        "public",
-        "mutates",
-        "backups"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--no-backup"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
       "path": "scripts/configure-ddns.py",
       "capabilities": [
         "public",
@@ -480,39 +527,6 @@
         "--help",
         "--dry-run",
         "--no-backup"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/configure-docker.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/configure-hermes.py",
-      "capabilities": [
-        "public",
-        "mutates",
-        "backups"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--no-backup",
-        "--model",
-        "--endpoint",
-        "--select-active-model"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -543,36 +557,6 @@
         "configure-mcps.py",
         "generate-jetbrains-profiles.py"
       ]
-    },
-    {
-      "path": "scripts/configure-litellm-venv.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--no-backup"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/configure-litellm.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--require-ready"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
     },
     {
       "path": "scripts/configure-mcp-tool.py",
@@ -627,7 +611,7 @@
       ]
     },
     {
-      "path": "scripts/configure-meridian.py",
+      "path": "scripts/configure-codex.py",
       "capabilities": [
         "public",
         "mutates",
@@ -643,7 +627,7 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/configure-omlx-wired-limit.py",
+      "path": "scripts/configure-meridian.py",
       "capabilities": [
         "public",
         "mutates",
@@ -725,6 +709,22 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/refresh-model-catalogues.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "failure_policy": "fail_fast",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--output"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/configure-opencode.py",
       "capabilities": [
         "public",
@@ -758,170 +758,6 @@
         "configure-opencode-voice.py",
         "configure-opencode-dcp.py"
       ]
-    },
-    {
-      "path": "scripts/configure-openwebui.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--reconcile",
-        "--reconcile-terminal",
-        "--reconcile-mcp",
-        "--reconcile-catalogue",
-        "--check",
-        "--probe-routes"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/configure-paseo-acp.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--apply",
-        "--agents"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/configure-paseo-hermes.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--apply"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/configure-paseo-mcp.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--apply"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/configure-paseo-metadata.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--apply",
-        "--preset"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/configure-paseo-tailnet.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--apply"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/configure-paseo-voice.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--apply",
-        "--probe-routes",
-        "--stt-model",
-        "--tts-model",
-        "--voice",
-        "--local-vad-models-dir"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/configure-paseo-web.py",
-      "capabilities": [
-        "public",
-        "mutates",
-        "backups"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--no-backup",
-        "--apply"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/configure-pi.py",
-      "capabilities": [
-        "public",
-        "mutates",
-        "backups",
-        "tier_selector",
-        "scope_selector"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--preset",
-        "--no-backup",
-        "--mode",
-        "--skip",
-        "--no-local-fallbacks",
-        "--local-fallback-placeholder",
-        "--local-fallback-role",
-        "--local-fallback-preset",
-        "--category-model",
-        "--role-model",
-        "--min-reasoning-embedding",
-        "--ollama-base-url",
-        "--profiles-only"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
     },
     {
       "path": "scripts/configure-project.py",
@@ -1006,154 +842,6 @@
       ]
     },
     {
-      "path": "scripts/configure-tailnet-opencode.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--apply",
-        "--https-port"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/copilot-litellm",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run"
-      ],
-      "notes": "Adapter dry-run previews redacted settings without key reads; ordinary Copilot arguments are forwarded.",
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/detect-embedding-inventory.py",
-      "capabilities": [
-        "public",
-        "inspect"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/detect-tier-coverage.py",
-      "capabilities": [
-        "public"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--json",
-        "--slim",
-        "--inventory",
-        "--preset"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/export-claude-desktop-gateway.py",
-      "capabilities": [
-        "public"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--endpoint",
-        "--model",
-        "--helper"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/filter-brewfile.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--manifest",
-        "--out",
-        "--ignore",
-        "--ignore-list",
-        "--force"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/gemini-litellm",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run"
-      ],
-      "notes": "Launches a separately credentialed native Gemini CLI child; dry-run validates nonsecret gates only and does not forward child flags.",
-      "positional_operand": "Gemini CLI arguments",
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/generate-codex-catalogue.py",
-      "capabilities": [
-        "public",
-        "inspect",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--apply",
-        "--replace",
-        "--model",
-        "--context-window",
-        "--endpoint",
-        "--include-launch-hosted"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/generate-review-bundles.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--check",
-        "--write",
-        "--dry-run"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
       "path": "scripts/install-acme-cert.sh",
       "capabilities": [
         "public",
@@ -1182,7 +870,7 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/install-cortex.sh",
+      "path": "scripts/setup-bin-symlinks.py",
       "capabilities": [
         "public",
         "mutates"
@@ -1192,7 +880,7 @@
         "--help",
         "--dry-run"
       ],
-      "positional_operand": null,
+      "positional_operand": "source_dir",
       "child_scripts": []
     },
     {
@@ -1238,24 +926,7 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/install-paseo-plugins.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--apply",
-        "--codexbar-daemon-verified",
-        "--prune"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/install-pi.sh",
+      "path": "scripts/install-plannotator.sh",
       "capabilities": [
         "public",
         "mutates"
@@ -1269,7 +940,90 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/install-plannotator.sh",
+      "path": "scripts/update-system.sh",
+      "capabilities": [
+        "public",
+        "mutates",
+        "orchestrates"
+      ],
+      "enforcement": "strict",
+      "failure_policy": "aggregate",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": [
+        "update-nvm-globals.py",
+        "sync-brewfiles.py"
+      ]
+    },
+    {
+      "path": "scripts/update-plannotator.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/ci-codegraph.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/run-local-review.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--staged",
+        "--model",
+        "--base"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/onboard-agentic-review.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup",
+        "--repo",
+        "--ref",
+        "--workflows-only"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/anchor-review-ref.py",
       "capabilities": [
         "public",
         "mutates"
@@ -1297,13 +1051,11 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/lib/context_mode_native.py",
+      "path": "scripts/check-pep604.py",
       "capabilities": [
-        "public",
-        "mutates"
+        "public"
       ],
       "enforcement": "strict",
-      "failure_policy": "fail",
       "accepted_flags": [
         "--help",
         "--dry-run"
@@ -1312,7 +1064,286 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/litellm-costs.py",
+      "path": "scripts/check-categories.py",
+      "capabilities": [
+        "public"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/check-plugin-consistency.py",
+      "capabilities": [
+        "public"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--check-installed",
+        "--cache-dir"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/install-pi.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/install-cortex.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-cortex.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-pi.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups",
+        "tier_selector",
+        "scope_selector"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--preset",
+        "--no-backup",
+        "--mode",
+        "--skip",
+        "--no-local-fallbacks",
+        "--local-fallback-placeholder",
+        "--local-fallback-role",
+        "--local-fallback-preset",
+        "--category-model",
+        "--role-model",
+        "--min-reasoning-embedding",
+        "--ollama-base-url",
+        "--profiles-only"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/check-model-drift.py",
+      "capabilities": [
+        "public"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--json",
+        "--require-complete"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/detect-tier-coverage.py",
+      "capabilities": [
+        "public"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--json",
+        "--slim",
+        "--inventory",
+        "--preset"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/verify-worktree-ready.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--install",
+        "--dry-run",
+        "--expected-base",
+        "--expected-branch",
+        "--allow-dirty"
+      ],
+      "positional_operand": "worktree",
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/check-fleet-coverage.py",
+      "capabilities": [
+        "public"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/cleanup-project.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--workspace-root",
+        "--steps",
+        "--skip",
+        "--force"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-omlx-wired-limit.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-openwebui.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--reconcile",
+        "--reconcile-terminal",
+        "--reconcile-mcp",
+        "--reconcile-catalogue",
+        "--check",
+        "--probe-routes"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-hermes.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup",
+        "--model",
+        "--endpoint",
+        "--select-active-model"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/copilot-litellm",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "notes": "Adapter dry-run previews redacted settings without key reads; ordinary Copilot arguments are forwarded.",
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-litellm.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--require-ready"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/claude-litellm",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": "Claude CLI arguments",
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/verify-local-ai-smoke.py",
       "capabilities": [
         "public",
         "inspect"
@@ -1321,14 +1352,45 @@
       "accepted_flags": [
         "--help",
         "--dry-run",
-        "--window",
-        "--start",
-        "--end",
-        "--by",
-        "--client",
-        "--model",
-        "--json",
-        "--endpoint"
+        "--home",
+        "--direct",
+        "--gateway",
+        "--mode",
+        "--baseline-config",
+        "--baseline-inventory"
+      ],
+      "positional_operand": null,
+      "child_scripts": [
+        "configure-litellm.py"
+      ]
+    },
+    {
+      "path": "scripts/configure-litellm-venv.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/litellm-oauth.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "notes": "Interactive mutator of ~/.config/litellm OAuth token caches and verified/deferred model reports; --dry-run previews without side effects.",
+      "accepted_flags": [
+        "--help",
+        "--provider",
+        "--dry-run"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -1351,38 +1413,6 @@
       "notes": "Remote maintenance CLI for the live gateway DB model tables; no local file writes, so backup semantics are unsupported."
     },
     {
-      "path": "scripts/litellm-diagnose.py",
-      "capabilities": [
-        "public",
-        "inspect"
-      ],
-      "enforcement": "strict",
-      "failure_policy": "report",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--master-key"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/litellm-oauth.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "notes": "Interactive mutator of ~/.config/litellm OAuth token caches and verified/deferred model reports; --dry-run previews without side effects.",
-      "accepted_flags": [
-        "--help",
-        "--provider",
-        "--dry-run"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
       "path": "scripts/litellm-spend-backfill.py",
       "capabilities": [
         "public",
@@ -1399,24 +1429,37 @@
       "notes": "Maintenance CLI that reprices historical spend rows from the merged model-rate snapshot via the prisma client; no local file writes, so backup semantics are unsupported."
     },
     {
-      "path": "scripts/migrate-env-sections.py",
+      "path": "scripts/configure-paseo-hermes.py",
       "capabilities": [
-        "mutates",
-        "inspect"
+        "public",
+        "mutates"
       ],
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
         "--dry-run",
-        "--apply",
-        "--env",
-        "--example"
+        "--apply"
       ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
-      "path": "scripts/onboard-agentic-review.py",
+      "path": "scripts/configure-paseo-tailnet.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-paseo-web.py",
       "capabilities": [
         "public",
         "mutates",
@@ -1427,21 +1470,144 @@
         "--help",
         "--dry-run",
         "--no-backup",
-        "--repo",
-        "--ref",
-        "--workflows-only"
+        "--apply"
       ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
-      "path": "scripts/reconcile-litellm-routes.py",
+      "path": "scripts/generate-codex-catalogue.py",
       "capabilities": [
-        "public"
+        "public",
+        "inspect",
+        "mutates"
       ],
       "enforcement": "strict",
       "accepted_flags": [
-        "--help"
+        "--help",
+        "--dry-run",
+        "--apply",
+        "--replace",
+        "--model",
+        "--context-window",
+        "--endpoint",
+        "--include-launch-hosted"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/gemini-litellm",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "notes": "Launches a separately credentialed native Gemini CLI child; dry-run validates nonsecret gates only and does not forward child flags.",
+      "positional_operand": "Gemini CLI arguments",
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/verify-local-service-readiness.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--probe",
+        "--strict"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/summarize-local-utility-benchmarks.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--results"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/detect-embedding-inventory.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-claude-3p-profiles.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--allow-partial",
+        "--api-key-source",
+        "--replace-credential",
+        "--dry-run",
+        "--help",
+        "--no-backup",
+        "--source-dir"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/lib/context_mode_native.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "failure_policy": "fail",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/collect-bootstrap-acceptance.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--inspect",
+        "--validate",
+        "--record",
+        "--out",
+        "--force",
+        "--source-sha",
+        "--require-driver",
+        "--repo",
+        "--environment-kind",
+        "--manifest"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -1490,82 +1656,6 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/refresh-model-catalogues.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "failure_policy": "fail_fast",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--output"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/release-drift-inventory.py",
-      "capabilities": [
-        "public",
-        "inspect"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--json"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/report-executable-architecture.py",
-      "capabilities": [
-        "public",
-        "inspect"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--json",
-        "--path"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/run-local-review.sh",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--staged",
-        "--model",
-        "--base"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/setup-bin-symlinks.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run"
-      ],
-      "positional_operand": "source_dir",
-      "child_scripts": []
-    },
-    {
       "path": "scripts/suggest-model-evidence-mappings.py",
       "capabilities": [
         "public"
@@ -1589,105 +1679,15 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/summarize-local-utility-benchmarks.py",
+      "path": "scripts/reconcile-litellm-routes.py",
       "capabilities": [
-        "public",
-        "inspect"
+        "public"
       ],
       "enforcement": "strict",
       "accepted_flags": [
-        "--help",
-        "--results"
+        "--help"
       ],
       "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/update-plannotator.sh",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/update-system.sh",
-      "capabilities": [
-        "public",
-        "mutates",
-        "orchestrates"
-      ],
-      "enforcement": "strict",
-      "failure_policy": "aggregate",
-      "accepted_flags": [
-        "--help",
-        "--dry-run"
-      ],
-      "positional_operand": null,
-      "child_scripts": [
-        "update-nvm-globals.py",
-        "sync-brewfiles.py"
-      ]
-    },
-    {
-      "path": "scripts/verify-local-ai-smoke.py",
-      "capabilities": [
-        "public",
-        "inspect"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run",
-        "--home",
-        "--direct",
-        "--gateway",
-        "--mode",
-        "--baseline-config",
-        "--baseline-inventory"
-      ],
-      "positional_operand": null,
-      "child_scripts": [
-        "configure-litellm.py"
-      ]
-    },
-    {
-      "path": "scripts/verify-local-service-readiness.py",
-      "capabilities": [
-        "public",
-        "inspect"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--probe",
-        "--strict"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/verify-worktree-ready.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--install",
-        "--dry-run",
-        "--expected-base",
-        "--expected-branch",
-        "--allow-dirty"
-      ],
-      "positional_operand": "worktree",
       "child_scripts": []
     }
   ]

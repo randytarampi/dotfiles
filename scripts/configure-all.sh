@@ -407,6 +407,17 @@ if [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" == "1" && "${DOTFILES_USE_LITELLM_PROXY
   python3 "$SCRIPT_DIR/configure-litellm.py" --require-ready || die "LiteLLM key provisioning/readiness failed; refusing gateway-only client configuration"
 fi
 
+# 2.6. Authorise the routes a gateway-only client is about to select. This runs
+# after generation, reload and readiness above, so a failure here is real rather
+# than a stale-service race, and the repair has already been attempted. The
+# check never mutates: it refuses the client write and names the recovery.
+if [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" == "1" && "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]] &&
+  ! step_skipped litellm && [[ "$COMMON_DRY_RUN" != "1" ]]; then
+  if ! route_reason="$(python3 "$SCRIPT_DIR/reconcile-litellm-routes.py" 2>&1)"; then
+    die "Gateway route preflight failed ($route_reason); refusing to generate gateway-only client configuration. Repair with 'make litellm-restart', then re-run 'make deploy'."
+  fi
+fi
+
 # Refresh Junie only after gateway readiness and client-key provisioning.
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Junie model refresh (dry-run mode)"
