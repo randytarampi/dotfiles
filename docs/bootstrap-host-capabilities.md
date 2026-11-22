@@ -34,4 +34,14 @@ The existing required native Ubuntu 24.04/26.04 amd64/arm64 L0 smoke lanes run t
 
 Fixture tests cover unknown CPUs/OSes, armv7l and ppc64le, absent core tools, absent displays, low/unknown RAM, malformed Linux memory records, shell-looking strings in `os-release`, and provider-token canaries that must never appear in the report. This is read-only evidence and should remain separate from owner-only physical Pi/Pine64 acceptance.
 
-For real hardware acceptance, record board/model, OS release, native CPU, RAM, source SHA, installed version of each prerequisite, first and second deploy status, `chezmoi verify`, clean diff, and actual package/service traces. [#275](https://github.com/randytarampi/dotfiles/issues/275) stays open until those receipts or an explicit unsupported/experimental disposition are documented. Do not rely on this report to assert L1, L2 or L3 support.
+For real hardware acceptance, record board/model, OS release, native CPU, RAM, source SHA, installed version of each prerequisite, first and second deploy status, `chezmoi verify`, clean diff, and actual package/service traces. ## Current disposition — 22 November 2026
+
+The owner respecified this scope: Raspberry Pi, Pine64 and Armbian physical execution is optional rather than release-blocking, and GitHub-hosted `ubuntu-24.04-arm` / `ubuntu-26.04-arm` are native ARM64 Ubuntu **VM** evidence for core Linux deployment, not board or driver evidence. The classification above therefore stands as the support contract:
+
+- `amd64` and `arm64` on Linux, macOS or Windows remain `candidate_unverified` — a source-level prerequisite assessment, never a passing deploy.
+- `arm32` and `power` remain `experimental_unverified`; physical host evidence is required before any stronger claim.
+- Unknown OS or CPU remains `not_qualified`.
+- Physical board acceptance is **NOT RUN** and is not a gate on core Linux qualification. Optional board work is tracked in [#384](https://github.com/randytarampi/dotfiles/issues/384), and reusable remote-host transport in [#385](https://github.com/randytarampi/dotfiles/issues/385). Neither blocks [#270](https://github.com/randytarampi/dotfiles/issues/270).
+
+Do not upgrade a support claim from these classes without owner-host receipts. [#275](https://github.com/randytarampi/dotfiles/issues/275) closes against this respecified contract, with physical hardware explicitly recorded as not run.
+ Do not rely on this report to assert L1, L2 or L3 support.
