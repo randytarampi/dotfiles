@@ -16,9 +16,7 @@ This document's public-repository runner threat model and GO/NO-GO criteria rema
 
 ## The problem being solved
 
-`#384` tracks optional native hardware evidence; `#275` now tracks conservative architecture classification. Today the only producer of that evidence
-is a person typing results, which is why the issue has never closed. Automating
-it needs *something* that runs on the board and publishes a receipt.
+`#384` tracks optional native hardware evidence; `#275` now tracks conservative architecture classification. No automated physical-board job or acceptance receipt has been recorded. Until a safely isolated executor exists, board qualification still requires an authorized operator's observation; do not infer it from hosted Ubuntu ARM64 CI.
 
 ## Why a repository-scoped runner is not automatically safe
 
@@ -48,7 +46,7 @@ GitHub-hosted runners stay the only execution surface. Hardware evidence remains
 owner-produced by hand, guided by
 [bootstrap-acceptance-receipts.md](bootstrap-acceptance-receipts.md).
 
-- Cost: `#275` never closes on automation; recurring owner attention.
+- Cost: optional `#384` remains unqualified until actual board evidence; recurring operator attention if that work is later funded.
 - Risk: lowest. Nothing new executes on the owner's hardware.
 
 ### B. Ephemeral self-hosted runner *(recommended if the hardware can be isolated)*
@@ -91,8 +89,7 @@ there is an explicitly approved isolation design. **B** is a conditional
 alternative only if the runner uses a disposable, rebuildable execution image
 that is reset between jobs, and the host is isolated from the home network and
 personal state. A dedicated account plus `--ephemeral` registration alone is
-**not sufficient**. If neither can be maintained safely, `#275` stays open with
-owner-produced receipts rather than inventing acceptance.
+**not sufficient**. If neither can be maintained safely, optional `#384` remains unqualified or is closed `not planned` with an explicit owner-accepted limitation, rather than inventing acceptance.
 
 ## Resolving the event contradiction
 
