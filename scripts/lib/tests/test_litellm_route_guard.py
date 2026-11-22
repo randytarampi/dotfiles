@@ -75,12 +75,27 @@ def test_non_openai_aliases_are_not_inspected():
 # --- producer-side gate --------------------------------------------------
 
 
-def test_producer_gate_skips_direct_mode(oauth_mode):
-    """A deliberately configured direct route is not this gate's business."""
+def test_producer_gate_refuses_ambiguous_direct_key(oauth_mode):
+    """2.5: OAuth intended plus a paid key must refuse, not fall through."""
     ok, reason = guard.assert_subscription_wires(
         {"OPENAI_API_KEY": "sk-direct"}, [_entry("openai/gpt-A", "openai/gpt-A")]
     )
-    assert (ok, reason) == (True, guard.NOT_APPLICABLE)
+    assert ok is False
+    assert reason == guard.REFUSED_AMBIGUOUS_DIRECT
+
+
+def test_producer_gate_permits_service_lane_with_key(oauth_mode):
+    """Service lanes are a deliberately direct transport and stay allowed."""
+    ok, _ = guard.assert_subscription_wires(
+        {"OPENAI_API_KEY": "sk-direct"},
+        [
+            {
+                "model_name": "openai/gpt-A-flex",
+                "litellm_params": {"model": "openai/gpt-A", "service_tier": "flex"},
+            }
+        ],
+    )
+    assert ok is True
 
 
 def test_producer_gate_refuses_mistyped_wire(oauth_mode):

@@ -86,6 +86,9 @@ python3)
       record provision
     else record generate; fi;;
   configure-litellm-venv.py) record patch;;
+  reconcile-litellm-routes.py)
+    [[ "${FAILURE:-}" != preflight ]] || exit 1
+    record preflight;;
   configure-opencode.py|configure-pi.py|configure-jetbrains-ai.py|configure-openwebui.py)
     if [[ "$*" == *--dry-run* ]]; then record preview; exit 0; fi
     if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
@@ -154,6 +157,13 @@ def test_wrapper_fresh_gateway_precedes_all_clients_and_repeat_is_stable(
                 < events.index("provision")
             )
             assert events.count("provision") == 1
+            # Route authorisation must precede every gateway-only client,
+            # including the Junie/JetBrains profiles that run first.
+            assert (
+                events.index("provision")
+                < events.index("preflight")
+                < events.index("configure-jetbrains-ai.py")
+            )
             for client in (
                 "configure-opencode.py",
                 "configure-pi.py",
@@ -168,6 +178,25 @@ def test_wrapper_fresh_gateway_precedes_all_clients_and_repeat_is_stable(
             assert first
             assert events[len(first) :] == first
             assert (key.read_bytes(), service.read_bytes()) == before
+
+
+def test_preflight_failure_blocks_gateway_only_client_generation(tmp_path):
+    """A refused route check must not emit any gateway-only client."""
+    _, wrapper, env, trace = _sandbox(tmp_path, "Darwin")
+    env["FAILURE"] = "preflight"
+    result = subprocess.run(
+        ["/bin/bash", str(wrapper), "--skip", SKIPS],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert result.returncode != 0
+    assert "Gateway route preflight failed" in result.stderr
+    events = _events(trace)
+    assert "configure-opencode.py" not in events
+    assert "configure-pi.py" not in events
+    assert "configure-jetbrains-ai.py" not in events
 
 
 @pytest.mark.parametrize("failure", ["readiness", "provision"])

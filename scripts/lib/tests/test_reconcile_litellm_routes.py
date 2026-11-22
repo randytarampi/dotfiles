@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+import litellm_config
 import model_catalogues
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -96,6 +97,7 @@ def test_stale_advertised_alias_refuses(preflight, monkeypatch):
     module, projection = preflight
     projection.write_text(json.dumps(_routes([("openai/gpt-A", "chatgpt/gpt-A")])))
     _advertise(monkeypatch, {"openai/gpt-A", "openai/gpt-B"})
+    _report(monkeypatch, module, litellm_config.CHATGPT_REPORT_OK, ["gpt-A"])
     assert module.main([]) == 1
 
 
@@ -118,5 +120,69 @@ def test_qualified_passes(preflight, monkeypatch):
             )
         )
     )
+    _report(monkeypatch, module, litellm_config.CHATGPT_REPORT_OK, ["gpt-A"])
     _advertise(monkeypatch, {"openai/gpt-A", "ollama/llama"})
+    assert module.main([]) == 0
+
+
+# --- red-first counterexamples from the #389 confirmation review ----------
+
+
+def _report(monkeypatch, module, state, ids):
+    monkeypatch.setattr(
+        module,
+        "chatgpt_verified_openai_models_report",
+        lambda environ=None: (state, frozenset(ids)),
+    )
+
+
+def test_revoked_report_refuses_with_unchanged_projection(preflight, monkeypatch):
+    """2.1: report revoked to empty while the projection still plans A."""
+    module, projection = preflight
+    projection.write_text(json.dumps(_routes([("openai/gpt-A", "chatgpt/gpt-A")])))
+    _advertise(monkeypatch, {"openai/gpt-A"})
+    _report(monkeypatch, module, litellm_config.CHATGPT_REPORT_OK, [])
+    assert module.main([]) == 1
+
+
+def test_shrunk_report_refuses_partially_revoked_plan(preflight, monkeypatch):
+    """2.1: report keeps A but drops B, projection still plans both."""
+    module, projection = preflight
+    projection.write_text(
+        json.dumps(
+            _routes(
+                [
+                    ("openai/gpt-A", "chatgpt/gpt-A"),
+                    ("openai/gpt-B", "chatgpt/gpt-B"),
+                ]
+            )
+        )
+    )
+    _advertise(monkeypatch, {"openai/gpt-A", "openai/gpt-B"})
+    _report(monkeypatch, module, litellm_config.CHATGPT_REPORT_OK, ["gpt-A"])
+    assert module.main([]) == 1
+
+
+def test_unusable_report_refuses_when_aliases_are_planned(preflight, monkeypatch):
+    module, projection = preflight
+    projection.write_text(json.dumps(_routes([("openai/gpt-A", "chatgpt/gpt-A")])))
+    _advertise(monkeypatch, {"openai/gpt-A"})
+    _report(monkeypatch, module, litellm_config.CHATGPT_REPORT_UNSAFE, [])
+    assert module.main([]) == 1
+
+
+def test_empty_plan_still_detects_stale_advertised_alias(preflight, monkeypatch):
+    """2.3: no planned subscription aliases, but a stale one is still served."""
+    module, projection = preflight
+    projection.write_text(json.dumps(_routes([("ollama/llama", "ollama/llama")])))
+    _advertise(monkeypatch, {"ollama/llama", "openai/gpt-A"})
+    _report(monkeypatch, module, litellm_config.CHATGPT_REPORT_OK, [])
+    assert module.main([]) == 1
+
+
+def test_empty_plan_and_clean_gateway_passes(preflight, monkeypatch):
+    module, projection = preflight
+    projection.write_text(json.dumps(_routes([("ollama/llama", "ollama/llama")])))
+    _advertise(monkeypatch, {"ollama/llama"})
+    _report(monkeypatch, module, litellm_config.CHATGPT_REPORT_OK, [])
     assert module.main([]) == 0

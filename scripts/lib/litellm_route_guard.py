@@ -28,6 +28,9 @@ PLANNED_BINDINGS_VERIFIED = "planned-subscription-bindings-verified"
 QUALIFIED = "qualified"
 
 REFUSED_AMBIGUOUS_CREDENTIALS = "refused-ambiguous-direct-credentials"
+REFUSED_AMBIGUOUS_DIRECT = "refused-ambiguous-direct-key"
+REFUSED_REVOKED = "refused-revoked-subscription-ids"
+REFUSED_UNUSABLE_REPORT = "refused-unusable-report"
 REFUSED_MALFORMED_ENTRY = "refused-malformed-alias-entry"
 REFUSED_DUPLICATE_ALIAS = "refused-duplicate-alias-bindings"
 REFUSED_WIRE_MISMATCH = "refused-wire-model-mismatch"
@@ -87,18 +90,34 @@ def planned_subscription_bindings(entries):
     return True, PLANNED_BINDINGS_VERIFIED
 
 
+def subscription_entries(entries):
+    """Entries the subscription lane owns: ``openai/*`` minus service lanes."""
+    owned = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        params = entry.get("litellm_params")
+        if not isinstance(params, dict) or params.get("service_tier"):
+            continue
+        if alias_model_id(entry.get("model_name")):
+            owned.append(entry)
+    return owned
+
+
 def assert_subscription_wires(environ, entries):
     """Guard the authoritative producer: no paid or mistyped wire under OAuth.
 
-    Only applies while the subscription lane is the intended transport. A
-    deliberately configured direct route, with the OAuth gate off or a paid key
-    present, is not this function's business.
+    With the OAuth gate on and a paid ``OPENAI_API_KEY`` also present, the same
+    alias silently becomes the direct paid route. That ambiguity is refused
+    outright rather than resolved by preference. Service-lane entries are a
+    separately configured direct transport and remain permitted.
     """
-    intended = (
-        get_litellm_oauth_gate(environ)
-        and not (environ.get("OPENAI_API_KEY") or "").strip()
-    )
-    if not intended:
+    if not get_litellm_oauth_gate(environ):
+        return True, NOT_APPLICABLE
+    owned = subscription_entries(entries)
+    if (environ.get("OPENAI_API_KEY") or "").strip():
+        if owned:
+            return False, REFUSED_AMBIGUOUS_DIRECT
         return True, NOT_APPLICABLE
     return planned_subscription_bindings(entries)
 
