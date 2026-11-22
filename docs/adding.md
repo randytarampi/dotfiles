@@ -9,7 +9,7 @@
 1. Add the tier's preset and `_tiers.<name>` block to `configs/opencode/oh-my-opencode-slim.json` — define roles, variants, skills, MCP references, council, and fallback chains. Add provider model IDs to the matching `configs/opencode/*-models.json` allowlist. For local-only tiers, use `_local:<category>` placeholders (reasoning/code-gen/lightweight/vision)
 2. Update `scripts/lib/tier_registry.py` if the tier requires new shared resolution behavior. This registry is consumed by OpenCode, Junie, and Pi and is the single source of truth for tier → role → model mapping.
 3. Edit `scripts/configure-opencode.py` or `.chezmoiscripts/run_onchange_16-configure-opencode.sh.tmpl` only when provider generation or tier auto-detection needs an independent update
-4. Update `AGENTS.md` and `README.md` tier tables
+4. Update [docs/tiers.md](tiers.md) for the tier contract; keep policy and entry-point links in `AGENTS.md` and `README.md` rather than duplicating live tier tables
 5. Update `configs/opencode/anthropic-models.json` if adding new Anthropic model IDs
 6. Test: `scripts/configure-opencode-tier.py --preset <tier>`, then `/preset <name>` in OpenCode
 
@@ -21,15 +21,15 @@ Use the required `--preset <tier>` flag; positional tier arguments are not suppo
 2. Add `profile.name` to `_tiers`, then update policy hooks in `scripts/lib/tier_registry.py` and `scripts/lib/tier_resolve.py` as needed. Check every consumer of the tier family.
 3. Run `scripts/verify-slim-invariants.py` and the profile tests `test_tier_resolve_profiles.py` and `test_configure_opencode_tier.py`.
 
-There is no alias or deprecation mechanism for tier names. If a deprecation is approved, introduce one explicit alias map in `tier_registry.py` and have all consumers honour it; do not scatter renames among consumers.
+The existing `DEPRECATED_TIER_ALIASES` map in `scripts/lib/tier_registry.py` maps `local-mini`, `local-nano` and `local-pro` to `local`. These are compatibility inputs, not separate profiles. Retain them until persisted selectors are qualified under [#380](https://github.com/randytarampi/dotfiles/issues/380); do not add or scatter aliases across consumers.
 
 ---
 
 ## Adding an MCP Server
 
-1. Create `configs/mcp/<server>.json` — MCP config JSON for the server
+1. Create `configs/mcp/templates/<server>.json` — MCP config JSON for the server
 2. Add entry in `configs/mcp/global-mcps.json` — register which AI tools should receive this server config
-3. Test with a single tool: `scripts/configure-mcp-tool.py --dry-run <tool>` (use `--show-secrets` to print resolved values; `<tool>` is a registry key like `cursor`, `claude_desktop`, `vscode`)
+3. Test with a single tool: `scripts/configure-mcp-tool.py --dry-run <tool>` (`<tool>` is a registry key like `cursor`, `claude_desktop`, `vscode`; keep the default redaction when reviewing or sharing output)
 4. Regenerate all configs: `scripts/configure-mcps.py`
 
 Notes:
@@ -49,8 +49,10 @@ Each tool in `global-mcps.json` declares a `format` that `configure-mcp-tool.py`
 | `toml-mcpServers` | `[mcp_servers.NAME]` blocks | Regex strip + append | codex |
 | `opencode-internal` | `{"mcp": {name: {type, command, environment, headers, enabled}}}` | Deep-merge `mcp` key | opencode |
 | `json-settings-merge` | `{"mcpServers": {...}}` | Top-level JSON merge | gemini |
+| `json-mcpServers-http` | `{"mcpServers": {...}}` | Top-level JSON merge | copilot |
+| `json-mcpServers-antigravity` | `{"mcpServers": {...}}` | Top-level JSON merge | agy |
 
-Use `json-mcpServers-merge` (not `json-mcpServers`) when the target file is a shared app config that contains other top-level keys (e.g. `claude_desktop_config.json` has `coworkUserFilesPath`, `preferences`). The plain `json-mcpServers` format overwrites the entire file and would clobber those keys.
+Use `json-mcpServers-merge` (not `json-mcpServers`) when the target file is a shared app config that contains other top-level keys (e.g. `claude_desktop_config.json` has `coworkUserFilesPath`, `preferences`). The plain `json-mcpServers` format overwrites the entire file and would clobber those keys. The top-level merge formats currently replace the named MCP namespace rather than preserving unrelated server entries inside it. Do not describe them as safe per-server reconciliation; [#359](https://github.com/randytarampi/dotfiles/issues/359) tracks that ownership defect. Review existing user-owned registrations before any real deployment.
 
 ### Per-tool constraints
 
