@@ -43,6 +43,6 @@ The owner respecified this scope: Raspberry Pi, Pine64 and Armbian physical exec
 - `amd64` and `arm64` on Linux, macOS or Windows remain `candidate_unverified` — a source-level prerequisite assessment, never a passing deploy.
 - `arm32` and `power` remain `experimental_unverified`; physical host evidence is required before any stronger claim.
 - Unknown OS or CPU remains `not_qualified`.
-- Physical board acceptance is **NOT RUN** and is not a gate on core Linux qualification. Optional board work is tracked in [#384](https://github.com/randytarampi/dotfiles/issues/384), and reusable remote-host transport in [#385](https://github.com/randytarampi/dotfiles/issues/385). Neither blocks [#270](https://github.com/randytarampi/dotfiles/issues/270).
+- Physical board acceptance is **NOT RUN** and is not a gate on core Linux qualification. Optional physical-board work remains open but de-prioritised under [#384](https://github.com/randytarampi/dotfiles/issues/384). The reusable SSH-driver proposal [#385](https://github.com/randytarampi/dotfiles/issues/385) was closed as `not_planned`; finite host acceptance can use ordinary SSH to authorised disposable VMs. Neither decision blocks [#270](https://github.com/randytarampi/dotfiles/issues/270).
 
 Do not use this report to claim L1, L2 or L3 support, or to promote an architecture class without owner-host evidence. [#275](https://github.com/randytarampi/dotfiles/issues/275) closes against this respecified contract, with physical hardware explicitly recorded as not run.
