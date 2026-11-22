@@ -505,6 +505,47 @@ def test_basic_memory_collision_refuses_overwrite_for_json_clients(
     assert path.read_bytes() == before
 
 
+@pytest.mark.parametrize(
+    "fmt,namespace",
+    [
+        ("json-mcpServers-merge", "mcpServers"),
+        ("json-servers", "servers"),
+        ("json-mcpServers-http", "mcpServers"),
+        ("json-mcpServers-antigravity", "mcpServers"),
+    ],
+)
+def test_merge_preserves_unrelated_user_servers_in_shared_namespace(
+    tmp_path, fmt, namespace
+):
+    """A user-registered server must survive regeneration of a managed one.
+
+    These formats write into files the user also edits (Copilot, Claude
+    Desktop, Antigravity, VS Code), so the namespace is shared. Replacing it
+    wholesale on regeneration silently deletes their registrations.
+    """
+    module = load_script()
+    path = tmp_path / "client.json"
+    user_entry = {
+        "command": "/usr/local/bin/personal-notes",
+        "args": ["--vault", "/vault"],
+    }
+    existing = {namespace: {"personal-notes": user_entry}, "theme": "dark"}
+    path.write_text(json.dumps(existing), encoding="utf-8")
+    generated = {
+        namespace: {
+            "basic-memory": {
+                "command": "uvx",
+                "args": ["basic-memory", "mcp"],
+            }
+        }
+    }
+    module.merge_configs_to_file(fmt, path, json.dumps(generated))
+    merged = json.loads(path.read_text())
+    assert merged[namespace]["personal-notes"] == user_entry
+    assert "basic-memory" in merged[namespace]
+    assert merged["theme"] == "dark"
+
+
 def test_basic_memory_collision_allows_identical_json_and_non_memory_entries(tmp_path):
     module = load_script()
     path = tmp_path / "client.json"

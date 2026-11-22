@@ -454,6 +454,38 @@ def redact_output_content(format_type, output_content):
     )
 
 
+def _known_managed_server_names():
+    """Names this repository can legitimately manage for an MCP client.
+
+    Retirement has to be provable. An entry may be deleted only when its name
+    corresponds to a template or registry override the repository owns;
+    everything else in a shared namespace belongs to the user. Exact names
+    are used deliberately — a name prefix is not an ownership marker. See
+    #359.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    names = set()
+    templates_dir = os.path.join(root, "configs", "mcp", "templates")
+    if os.path.isdir(templates_dir):
+        for entry in os.listdir(templates_dir):
+            if entry.endswith(".json"):
+                names.add(entry[: -len(".json")])
+    registry_file = os.path.join(root, "configs", "mcp", "global-mcps.json")
+    try:
+        with open(registry_file, "r", encoding="utf-8") as handle:
+            registry = json.load(handle)
+    except (OSError, ValueError):
+        return names
+    for tool in registry.get("tools", {}).values():
+        for server in tool.get("mcp_servers") or []:
+            if server.get("name_override"):
+                names.add(server["name_override"])
+            if server.get("template"):
+                names.add(server["template"])
+    names.update(registry.get("project_mcp_templates") or [])
+    return names
+
+
 def merge_configs_to_file(fmt, mcp_path, output):
     # Validate the collision before touching the destination. Regular
     # regeneration is idempotent, but a prior custom Basic Memory entry
@@ -512,11 +544,31 @@ def merge_configs_to_file(fmt, mcp_path, output):
         # Merge the generated top-level key (mcpServers or servers) into the
         # existing JSON file, preserving other top-level keys. Required for
         # shared app config files like claude_desktop_config.json.
+        #
+        # The namespace itself is shared with the user: these are files they
+        # also edit. Merge per server name instead of replacing the generated
+        # map, so an unrelated registration survives regeneration. A name the
+        # repository actually owns is still retired when it leaves the
+        # generated set. See #359.
         new_data = json.loads(output)
         with open(mcp_path, "r", encoding="utf-8") as f:
             content = f.read().strip()
         existing = json.loads(content) if content else {}
-        existing.update(new_data)
+        managed_names = _known_managed_server_names()
+        for namespace_key, generated_servers in new_data.items():
+            current_servers = existing.get(namespace_key)
+            if not isinstance(current_servers, dict) or not isinstance(
+                generated_servers, dict
+            ):
+                existing[namespace_key] = generated_servers
+                continue
+            merged_servers = {
+                name: entry
+                for name, entry in current_servers.items()
+                if name not in managed_names
+            }
+            merged_servers.update(generated_servers)
+            existing[namespace_key] = merged_servers
         with open(mcp_path, "w", encoding="utf-8") as f:
             json.dump(existing, f, indent=4)
             f.write("\n")
