@@ -546,7 +546,6 @@ def test_merge_preserves_unrelated_user_servers_in_shared_namespace(
     assert merged["theme"] == "dark"
 
 
-
 @pytest.mark.parametrize(
     "fmt,namespace",
     [
@@ -558,7 +557,16 @@ def test_merge_preserves_unrelated_user_servers_in_shared_namespace(
 )
 @pytest.mark.parametrize(
     "unselected_name",
-    ["mongodb", "MongoDB", "notion", "Notion", "sentry", "Sentry", "github"],
+    [
+        "mongodb",
+        "MongoDB",
+        "notion",
+        "Notion",
+        "sentry",
+        "Sentry",
+        "github",
+        "context-mode",
+    ],
 )
 def test_shared_names_not_generated_are_preserved_even_when_templates_collide(
     tmp_path, fmt, namespace, unselected_name
@@ -627,7 +635,9 @@ def test_shared_merge_rejects_invalid_generated_map_without_mutation(
     before = path.read_bytes()
     with pytest.raises(ValueError, match="server map"):
         module.merge_configs_to_file(
-            fmt, path, json.dumps({namespace: {"new": {"command": "safe"}}, "theme": "bad"})
+            fmt,
+            path,
+            json.dumps({namespace: {"new": {"command": "safe"}}, "theme": "bad"}),
         )
     assert path.read_bytes() == before
 
@@ -837,7 +847,9 @@ def test_basic_memory_registry_renders_compatible_runtime_across_all_clients():
         assert env == expected["env"], tool
 
 
-def test_basic_memory_absent_from_generated_set_preserves_unproven_owner(tmp_path, caplog):
+def test_basic_memory_absent_from_generated_set_preserves_unproven_owner(
+    tmp_path, caplog
+):
     """An unselected Basic Memory name is not proof of past repo ownership."""
     module = load_script()
     path = tmp_path / "mcp.json"

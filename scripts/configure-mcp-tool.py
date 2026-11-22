@@ -469,6 +469,19 @@ def _known_managed_server_names():
         for entry in os.listdir(templates_dir):
             if entry.endswith(".json"):
                 names.add(entry[: -len(".json")])
+                try:
+                    with open(
+                        os.path.join(templates_dir, entry), "r", encoding="utf-8"
+                    ) as template_handle:
+                        template = json.load(template_handle)
+                except (OSError, ValueError):
+                    continue
+                # The canonical emitted name may differ from the filename:
+                # mongodb.json declares "MongoDB"; notion.json says "Notion".
+                if isinstance(template, dict) and isinstance(
+                    template.get("name"), str
+                ):
+                    names.add(template["name"])
     registry_file = os.path.join(root, "configs", "mcp", "global-mcps.json")
     try:
         with open(registry_file, "r", encoding="utf-8") as handle:
@@ -563,9 +576,9 @@ def merge_configs_to_file(fmt, mcp_path, output):
         current_servers = existing.get(namespace_key, {})
         if not isinstance(current_servers, dict):
             raise ValueError("existing MCP server map must be an object")
-        possible_stale = (
-            set(current_servers) & _known_managed_server_names()
-        ) - set(generated_servers)
+        possible_stale = (set(current_servers) & _known_managed_server_names()) - set(
+            generated_servers
+        )
         if possible_stale:
             logger.warning(
                 "Preserving MCP server name(s) %r absent from generated config: "
