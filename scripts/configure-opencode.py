@@ -38,6 +38,9 @@ from litellm_aliases import (  # noqa: E402
     resolve_alias,
 )
 from model_catalogues import get_models  # noqa: E402 -- scripts/lib bootstrap.
+from litellm_route_guard import (  # noqa: E402 -- scripts/lib bootstrap.
+    assert_gateway_routes,
+)
 from opencode_config import (  # noqa: E402 -- local import follows bootstrap.
     get_available_tiers,
     build_tier_args,
@@ -461,8 +464,8 @@ def apply_litellm_client_gate(config: dict) -> None:
     # The allowlist seeds cover dormant presets; anything the live gateway
     # does not list would otherwise fail at request time, so filter it here
     # (UNKNOWN discipline when the catalogue itself is unavailable).
+    client_key = key_path.read_text(encoding="utf-8").strip()
     try:
-        client_key = key_path.read_text(encoding="utf-8").strip()
         catalogue_ids = get_models(f"{base_url}/models", client_key)
         if catalogue_ids is None:
             # get_models returns None for any fetch/auth failure; never
@@ -481,9 +484,27 @@ def apply_litellm_client_gate(config: dict) -> None:
             if identity in catalogue_ids
         }
     except (ValueError, OSError, TimeoutError) as error:
+        # Long-standing contract, kept deliberately: an unreadable catalogue
+        # must not become an empty allowlist, so the inventory is retained and
+        # reported as UNKNOWN. Route qualification below is a separate gate and
+        # still refuses unproved subscription routes.
         logger.warning(
             "UNKNOWN gateway catalogue unavailable (%s) — inventory unfiltered",
             error,
+        )
+    # Selecting a model is only safe when its effective route can be observed.
+    # A generated config and a running daemon are not proof of what is served,
+    # and a direct OPENAI_API_KEY route must never be reached implicitly.
+    routes_ok, routes_reason = assert_gateway_routes(
+        os.environ,
+        list(models),
+        base_url=base_url,
+        api_key=client_key,
+    )
+    if not routes_ok:
+        raise RuntimeError(
+            f"subscription route qualification failed ({routes_reason}); "
+            "refusing to write gateway-only client configuration"
         )
     resolution = resolve_alias(
         "openai/gpt-6-luna",

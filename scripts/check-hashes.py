@@ -130,10 +130,26 @@ def _referenced_children(template: Path) -> set[str]:
     return resolved
 
 
+def _always_run_scripts():
+    """Scripts that execute on every apply, so no trigger is required."""
+    return [
+        script
+        for script in sorted(CHEZMOI_SCRIPTS.glob("run_*.sh.tmpl"))
+        if not script.name.startswith(("run_once_", "run_onchange_"))
+    ]
+
+
 def find_hash_triggers():
-    """Find all hash trigger references in run_onchange scripts."""
+    """Find hash trigger references in run_onchange and always-run scripts.
+
+    An always-run ``run_`` script executes on every apply, which subsumes hash
+    triggering: its inputs never need a ``run_onchange_`` reference. Such inputs
+    count as covered here so that the deliberate use of mutable runtime state
+    does not force a synthetic trigger.
+    """
     covered = set()
     script_triggers = {}
+    always_run_refs = {}
 
     for script in sorted(CHEZMOI_SCRIPTS.glob("run_onchange_*.sh.tmpl")):
         triggers = []
@@ -147,7 +163,19 @@ def find_hash_triggers():
         if triggers:
             script_triggers[script.name] = triggers
 
-    return covered, script_triggers
+    for script in _always_run_scripts():
+        references = []
+        with open(script) as f:
+            for line in f:
+                match = HASH_PATTERN.match(line.strip())
+                if match:
+                    path = match.group(2)
+                    covered.add(path)
+                    references.append(path)
+        if references:
+            always_run_refs[script.name] = references
+
+    return covered, script_triggers, always_run_refs
 
 
 def find_missing_gate_fingerprints():
@@ -206,7 +234,7 @@ def find_trackable_files():
 
 
 def main():
-    covered, script_triggers = find_hash_triggers()
+    covered, script_triggers, always_run_refs = find_hash_triggers()
     trackable = find_trackable_files()
     missing_gate_fingerprints = find_missing_gate_fingerprints()
 
@@ -219,6 +247,11 @@ def main():
     print("\nScripts with hash triggers:")
     for script, triggers in sorted(script_triggers.items()):
         print(f"  {script}: {len(triggers)} trigger(s)")
+
+    if always_run_refs:
+        print("\nAlways-run scripts (inputs covered by every-apply execution):")
+        for script, references in sorted(always_run_refs.items()):
+            print(f"  {script}: {len(references)} input(s)")
 
     if uncovered or missing_gate_fingerprints:
         print(

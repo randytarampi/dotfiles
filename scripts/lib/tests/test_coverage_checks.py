@@ -35,9 +35,10 @@ def test_check_hashes_finds_triggers_and_trackable_files(tmp_path):
     module.SCRIPTS_DIR = scripts
     module.CONFIGS_DIR = configs
     module.REPO_ROOT = tmp_path
-    covered, triggers = module.find_hash_triggers()
+    covered, triggers, always_run = module.find_hash_triggers()
     trackable = module.find_trackable_files()
     assert covered == {"scripts/used.py", "configs/settings.json"}
+    assert always_run == {}
     assert triggers["run_onchange_test.sh.tmpl"] == [
         "scripts/used.py",
         "configs/settings.json",
@@ -212,3 +213,37 @@ def test_brewfile_completeness_maps_categories_and_rejects_missing_files(
     with pytest.raises(SystemExit) as error:
         module.main()
     assert error.value.code == 1
+
+
+def test_check_hashes_counts_always_run_script_inputs_but_not_run_once(tmp_path):
+    """A run_ script executes every apply, so its inputs need no trigger.
+
+    run_once_ scripts do not re-execute, so their inputs stay uncovered.
+    """
+    module = load_script("check-hashes")
+    scripts = tmp_path / "scripts"
+    configs = tmp_path / "configs"
+    chezmoi = tmp_path / ".chezmoiscripts"
+    (scripts / "lib").mkdir(parents=True)
+    configs.mkdir()
+    chezmoi.mkdir()
+    (scripts / "used.py").write_text("print('used')")
+    (scripts / "once.py").write_text("print('once')")
+    (scripts / "check-hashes.py").write_text("")
+    (chezmoi / "run_15b-always.sh.tmpl").write_text(
+        '# scripts/used.py: {{ include "scripts/used.py" | sha256sum }}\n'
+    )
+    (chezmoi / "run_once_seed.sh.tmpl").write_text(
+        '# scripts/once.py: {{ include "scripts/once.py" | sha256sum }}\n'
+    )
+    module.CHEZMOI_SCRIPTS = chezmoi
+    module.SCRIPTS_DIR = scripts
+    module.CONFIGS_DIR = configs
+    module.REPO_ROOT = tmp_path
+
+    covered, triggers, always_run = module.find_hash_triggers()
+
+    assert "scripts/used.py" in covered
+    assert always_run["run_15b-always.sh.tmpl"] == ["scripts/used.py"]
+    assert triggers == {}
+    assert "scripts/once.py" not in covered
