@@ -180,6 +180,9 @@ def test_generation_requires_valid_runtime_only_when_emitting_enabled_lanes(
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("DOTFILES_USE_OPENAI_SERVICE_LANES", gate)
+    # Pin the OAuth gate: the subscription-wire assertion keys off it, and an
+    # operator shell that exports it must not change this test's outcome.
+    monkeypatch.setenv("DOTFILES_LITELLM_OAUTH_PROVIDERS", "0")
     monkeypatch.setattr(CONFIGURE, "load_env", lambda: True)
     monkeypatch.setattr(CONFIGURE, "_database_url_configured", lambda: True)
     monkeypatch.setattr(

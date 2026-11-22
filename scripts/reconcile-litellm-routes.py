@@ -1,102 +1,103 @@
 #!/usr/bin/env python3
-"""Prove the running LiteLLM proxy serves this client's routes, or say so.
+"""Read-only preflight: does the gateway advertise the routes the plan emitted?
 
-Cheap by design: ``GET /model/info`` answers from router state loaded at
-startup and contacts no upstream provider, so this works air-gapped.
+Exits 0 when every planned ``openai/<id>`` alias is bound to exactly
+``chatgpt/<id>`` in the generator's own emitted projection and is advertised by
+the running gateway to the client key. Exits 1 otherwise, naming the reason.
 
-Exit codes:
-  0  qualified, or no subscription route is requested
-  3  not qualified — a repair is warranted, reason on stdout
-  1  cannot prove anything (no client config yet, unusable inputs)
-
-The caller performs any repair. This script never writes client state and never
-restarts the service. See #361.
+It never regenerates, never restarts, never writes client state and never calls
+an admin endpoint. ``/v1/models`` advertises aliases and does not attest backend
+identity, so presence is all that is established at runtime; wire identity comes
+from the projection that ``write_config`` co-writes with the config it
+describes. See #361.
 """
 
 import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
 LIB_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib")
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
+from constants import get_litellm_oauth_gate  # noqa: E402 -- scripts/lib bootstrap.
 from litellm_route_guard import (  # noqa: E402 -- scripts/lib bootstrap.
-    NO_ROUTES_REQUESTED,
-    QUALIFIED,
-    assert_gateway_routes,
+    REFUSED_AMBIGUOUS_CREDENTIALS,
+    alias_model_id,
+    assert_namespace_matches,
+    planned_subscription_bindings,
 )
 
-CONFIG_FILE = os.path.join(
-    os.path.expanduser("~"), ".config", "opencode", "opencode.json"
-)
-KEY_FILE = os.path.join(
-    os.path.expanduser("~"), ".local", "share", "litellm", "clients", "opencode.key"
-)
+LITELLM_DIR = Path("~/.local/share/litellm").expanduser()
+PROJECTION_FILE = LITELLM_DIR / "free-route-config.json"
+KEY_FILE = LITELLM_DIR / "clients" / "opencode.key"
 
 
-def requested_gateway_models(config_file=CONFIG_FILE):
-    """Return the model identities this client selects through the gateway.
-
-    A missing file means no gateway-only client exists yet, which is nothing to
-    enforce. An unreadable or malformed file is UNKNOWN and returns ``None``.
-    """
-    if not os.path.exists(config_file):
-        return []
-    try:
-        with open(config_file, "r", encoding="utf-8") as handle:
-            config = json.load(handle)
-    except (OSError, ValueError):
-        return None
-    providers = config.get("providers")
-    if not isinstance(providers, dict):
-        return []
-    gateway = providers.get("litellm")
-    if not isinstance(gateway, dict):
-        return []
-    models = gateway.get("models")
-    if not isinstance(models, dict):
-        return []
-    return list(models)
+def _fail(reason):
+    print(reason)
+    return 1
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config-file", default=CONFIG_FILE)
-    parser.add_argument("--key-file", default=KEY_FILE)
-    parser.add_argument(
-        "--base-url",
-        default=f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
-    )
-    args = parser.parse_args(argv)
+    parser.parse_args(argv)
 
-    model_refs = requested_gateway_models(args.config_file)
-    if model_refs is None:
-        print(f"cannot read client configuration: {args.config_file}")
-        return 1
-    if not model_refs:
-        print("no gateway routes requested")
-        return 0
+    port = os.environ.get("LITELLM_PORT", "4000")
+    base_url = f"http://127.0.0.1:{port}/v1"
+
     try:
-        with open(args.key_file, "r", encoding="utf-8") as handle:
-            api_key = handle.read().strip()
-    except OSError as error:
-        print(f"cannot read gateway client key: {error}")
-        return 1
-    if not api_key:
-        print("gateway client key is empty")
-        return 1
+        projection = json.loads(PROJECTION_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return _fail(
+            "no emitted route projection; LiteLLM has not generated a config yet "
+            "— run 'make deploy'"
+        )
+    except (OSError, ValueError) as error:
+        return _fail(f"route projection is unreadable ({error})")
 
-    ok, reason = assert_gateway_routes(
-        os.environ, model_refs, base_url=args.base_url, api_key=api_key
-    )
-    if ok:
-        if reason != QUALIFIED and reason != NO_ROUTES_REQUESTED:
-            print(f"qualified: {reason}")
+    routes = projection.get("routes")
+    if not isinstance(routes, list):
+        return _fail("route projection has no route list")
+
+    aliases = [
+        row.get("model_name")
+        for row in routes
+        if isinstance(row, dict) and alias_model_id(row.get("model_name"))
+    ]
+    if not aliases:
         return 0
-    print(reason)
-    return 3
+
+    if not get_litellm_oauth_gate(os.environ):
+        # The subscription lane is not in use; a direct route is legitimate.
+        return 0
+
+    if (os.environ.get("OPENAI_API_KEY") or "").strip():
+        return _fail(
+            f"{REFUSED_AMBIGUOUS_CREDENTIALS}: subscription aliases are planned "
+            "while a direct paid OPENAI_API_KEY is set — unset the key or "
+            "disable the OAuth gate"
+        )
+
+    wires_ok, wires_reason = planned_subscription_bindings(routes)
+    if not wires_ok:
+        return _fail(wires_reason)
+
+    try:
+        api_key = KEY_FILE.read_text(encoding="utf-8").strip()
+    except OSError as error:
+        return _fail(f"cannot read gateway client key ({error})")
+    if not api_key:
+        return _fail("gateway client key is empty")
+
+    from model_catalogues import get_models  # noqa: E402 -- scripts/lib bootstrap.
+
+    served = get_models(f"{base_url}/models", api_key)
+    matches, matches_reason = assert_namespace_matches(aliases, served)
+    if not matches:
+        return _fail(matches_reason)
+    return 0
 
 
 if __name__ == "__main__":

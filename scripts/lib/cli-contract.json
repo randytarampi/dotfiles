@@ -1441,10 +1441,7 @@
       ],
       "enforcement": "strict",
       "accepted_flags": [
-        "--help",
-        "--config-file",
-        "--key-file",
-        "--base-url"
+        "--help"
       ],
       "positional_operand": null,
       "child_scripts": []
