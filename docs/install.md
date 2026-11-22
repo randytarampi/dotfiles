@@ -116,7 +116,7 @@ git archive HEAD | docker build --platform linux/arm64 --build-arg UBUNTU_VERSIO
 docker run --rm --network none --platform linux/arm64 dotfiles-core:26-arm64
 ```
 
-This is **not** proof that the full Homebrew/WinGet category sets install or that Docker emulation reproduces a physical Raspberry Pi/Pine64. The CLI toolchain is installed into the disposable image explicitly; native VM and owner-hardware acceptance remain separate.
+This is **not** proof that the full Homebrew/WinGet category sets install or that Docker emulation reproduces a physical Raspberry Pi/Pine64. The classification contract for what a host can actually claim — architecture classes, gates and explicit non-claims — is [Read-only host bootstrap capability report](bootstrap-host-capabilities.md). The CLI toolchain is installed into the disposable image explicitly; native VM and owner-hardware acceptance remain separate.
 
 ### Step 4: Verification & Local Linting (Optional)
 To verify repository and script health offline:
