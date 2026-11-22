@@ -32,6 +32,7 @@ from litellm_config import (  # noqa: E402
 )
 import litellm_config  # noqa: E402
 import tier_registry  # noqa: E402
+from litellm_route_guard import assert_subscription_wires  # noqa: E402
 from litellm_client_auth import resolve_client_auth  # noqa: E402
 
 
@@ -1096,6 +1097,17 @@ def main():
             return 1
         for note in litellm_config.last_generation_notes:
             logger.warning("LiteLLM coverage: %s", note)
+        # The generator is the authoritative producer: refuse a paid or
+        # mistyped wire for an alias the subscription lane owns, before any
+        # config is written. See #361.
+        wires_ok, wires_reason = assert_subscription_wires(os.environ, entries)
+        if not wires_ok:
+            logger.error(
+                "Subscription route bindings are inconsistent (%s); "
+                "refusing to write LiteLLM config",
+                wires_reason,
+            )
+            return 1
         if args.dry_run:
             master_key_set = bool(os.environ.get("LITELLM_MASTER_KEY", "").strip())
             rates_state = _refresh_rates_snapshot(dry_run=True)

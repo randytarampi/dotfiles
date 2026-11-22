@@ -1,137 +1,128 @@
-"""Gateway route qualification for subscription-routed model aliases.
+"""Subscription-route authorisation, split by what each side can attest.
 
-A generated config, a running daemon and a served alias are three different
-facts. Only the last authorises client generation, so this module inspects the
-running LiteLLM proxy instead of trusting on-disk YAML or a cached observation.
+Backend identity is a **plan-side** property. For an ``openai/<id>`` alias the
+only admissible wire model on the subscription lane is exactly
+``chatgpt/<id>``, and that is asserted against the generator's own entries
+before anything is written. There is no need for a runtime probe to establish
+it, because the value is determined by the alias.
 
-Inspection is deliberately local: ``GET /model/info`` answers from the router
-state loaded at startup and never contacts an upstream provider, so the
-already-qualified path works on an air-gapped host. See #361.
+Runtime proof is only that the running gateway **advertises** the alias to the
+client key. ``/v1/models`` advertises aliases and does not attest backend
+identity, so it is never used here to claim more than presence.
+
+Checks do not mutate. There is no regeneration, no restart, and no
+credentialed admin endpoint in this module: the repository already asserts that
+``/model/info`` is an unsafe destination for an authenticated metadata GET
+(``scripts/lib/tests/test_strictfree_evidence.py``), and reusing it would
+reintroduce a credential path the codebase deliberately excluded. See #361.
 """
 
-from __future__ import annotations
-
-import json
-import urllib.error
-import urllib.request
-
 from constants import get_litellm_oauth_gate
-from litellm_config import (
-    CHATGPT_REPORT_OK,
-    chatgpt_verified_openai_models_report,
-    oauth_cache_expiry,
-)
 
-SUBSCRIPTION_BINDING = "chatgpt"
-DIRECT_OPENAI_PREFIX = "openai/"
+ALIAS_PREFIX = "openai/"
+SUBSCRIPTION_WIRE_PREFIX = "chatgpt/"
 
+NO_SUBSCRIPTION_REQUESTED = "no-subscription-alias-requested"
+NOT_APPLICABLE = "subscription-lane-not-in-use"
+PLANNED_BINDINGS_VERIFIED = "planned-subscription-bindings-verified"
 QUALIFIED = "qualified"
-NO_ROUTES_REQUESTED = "no-subscription-routes-requested"
-SUBSCRIPTION_REQUIRED = "subscription-required"
 
 REFUSED_AMBIGUOUS_CREDENTIALS = "refused-ambiguous-direct-credentials"
-REFUSED_UNUSABLE_REPORT = "refused-unusable-report"
-REFUSED_UNQUALIFIED = "refused-unqualified-subscription-ids"
+REFUSED_MALFORMED_ENTRY = "refused-malformed-alias-entry"
+REFUSED_DUPLICATE_ALIAS = "refused-duplicate-alias-bindings"
+REFUSED_WIRE_MISMATCH = "refused-wire-model-mismatch"
+REFUSED_ALIAS_NOT_ADVERTISED = "refused-alias-not-advertised"
 REFUSED_UNKNOWN_SERVICE = "refused-unknown-service-state"
-REFUSED_MISSING_ALIAS = "refused-alias-not-served"
-REFUSED_WRONG_BINDING = "refused-alias-not-subscription-bound"
-REFUSED_MIXED_BINDING = "refused-alias-has-multiple-upstreams"
+REFUSED_STALE_ALIAS = "refused-stale-advertised-alias"
 
 
-def requested_openai_ids(model_refs):
-    """Return the model IDs requested through the ``openai/`` namespace."""
-    ids = set()
-    for ref in model_refs:
-        if not isinstance(ref, str) or not ref.startswith(DIRECT_OPENAI_PREFIX):
-            continue
-        model_id = ref.split("/", 1)[1]
-        if model_id:
-            ids.add(model_id)
-    return ids
+def alias_model_id(alias):
+    """Return the bare model ID for an ``openai/<id>`` alias, else ``None``."""
+    if not isinstance(alias, str) or not alias.startswith(ALIAS_PREFIX):
+        return None
+    return alias[len(ALIAS_PREFIX) :] or None
 
 
-def route_expectation(environ, model_refs):
-    """Return ``(state, expected_aliases)`` for subscription-routed refs.
+def planned_subscription_bindings(entries):
+    """Assert every ``openai/<id>`` entry binds exactly ``chatgpt/<id>``.
 
-    ``expected_aliases`` is the intersection of what this configuration
-    requests and what the report proves is verified. Verified IDs that are not
-    requested are never required — publishing them is not a goal.
+    Duplicates, mistyped wires and malformed rows are refused: a single good
+    row must not launder a bad one sitting beside it. Entries carrying an
+    explicit ``service_tier`` are skipped — service lanes are a separate,
+    deliberately direct transport that the subscription lane does not own.
     """
-    requested = requested_openai_ids(model_refs)
-    if not requested:
-        return NO_ROUTES_REQUESTED, frozenset()
-    if not get_litellm_oauth_gate(environ):
-        return NO_ROUTES_REQUESTED, frozenset()
-    if (environ.get("OPENAI_API_KEY") or "").strip():
-        # The same alias silently becomes the direct paid route. Equality of
-        # the report digest cannot authorise that switch, so refuse outright.
-        return REFUSED_AMBIGUOUS_CREDENTIALS, frozenset()
-    if oauth_cache_expiry("chatgpt", environ) is None:
-        return NO_ROUTES_REQUESTED, frozenset()
-    state, verified = chatgpt_verified_openai_models_report(environ)
-    if state != CHATGPT_REPORT_OK:
-        return REFUSED_UNUSABLE_REPORT, frozenset()
-    expected = frozenset(
-        f"{DIRECT_OPENAI_PREFIX}{model_id}" for model_id in requested & set(verified)
+    bindings = {}
+    malformed = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            malformed.append("non-object")
+            continue
+        params = entry.get("litellm_params")
+        if not isinstance(params, dict):
+            malformed.append(str(entry.get("model_name")))
+            continue
+        if params.get("service_tier"):
+            continue
+        alias = entry.get("model_name")
+        wire = params.get("model")
+        if not isinstance(alias, str) or not isinstance(wire, str) or not wire:
+            malformed.append(str(alias))
+            continue
+        bindings.setdefault(alias, []).append(wire)
+    if malformed:
+        return False, f"{REFUSED_MALFORMED_ENTRY}:{','.join(malformed[:3])}"
+    checked = 0
+    for alias, wires in bindings.items():
+        model_id = alias_model_id(alias)
+        if model_id is None:
+            continue
+        checked += 1
+        if len(wires) != 1:
+            return False, f"{REFUSED_DUPLICATE_ALIAS}:{alias}"
+        expected = f"{SUBSCRIPTION_WIRE_PREFIX}{model_id}"
+        if wires[0] != expected:
+            return False, f"{REFUSED_WIRE_MISMATCH}:{alias}"
+    if not checked:
+        return True, NO_SUBSCRIPTION_REQUESTED
+    return True, PLANNED_BINDINGS_VERIFIED
+
+
+def assert_subscription_wires(environ, entries):
+    """Guard the authoritative producer: no paid or mistyped wire under OAuth.
+
+    Only applies while the subscription lane is the intended transport. A
+    deliberately configured direct route, with the OAuth gate off or a paid key
+    present, is not this function's business.
+    """
+    intended = (
+        get_litellm_oauth_gate(environ)
+        and not (environ.get("OPENAI_API_KEY") or "").strip()
     )
-    if not expected:
-        # An ok-but-empty intersection proves no requested ID is verified. It
-        # is not authorisation to select a subscription model anyway.
-        return REFUSED_UNQUALIFIED, frozenset()
-    return SUBSCRIPTION_REQUIRED, expected
+    if not intended:
+        return True, NOT_APPLICABLE
+    return planned_subscription_bindings(entries)
 
 
-def served_routes(base_url, api_key, timeout=5.0):
-    """Map alias -> set of upstream binding prefixes, or ``None`` when unknown.
+def openai_namespace(aliases):
+    """The subset of aliases owned by the ``openai/`` namespace."""
+    return {alias for alias in aliases or [] if alias_model_id(alias)}
 
-    ``None`` means UNKNOWN, never "no routes"; callers must fail closed.
+
+def assert_namespace_matches(planned, served):
+    """The gateway must advertise exactly the planned ``openai`` aliases.
+
+    Stricter than presence: an alias still advertised after it left the plan is
+    a stale service — the report no longer authorises it, so it must not remain
+    selectable. This is the runtime half of the report-shrink defence.
     """
-    if not base_url or not api_key:
-        return None
-    url = base_url.rstrip("/") + "/model/info"
-    request = urllib.request.Request(
-        url, headers={"Authorization": f"Bearer {api_key}"}
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            payload = json.loads(response.read())
-    except (urllib.error.URLError, OSError, ValueError):
-        return None
-    rows = payload.get("data") if isinstance(payload, dict) else payload
-    if not isinstance(rows, list):
-        return None
-    routes = {}
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        alias = row.get("model_name")
-        upstream = (row.get("litellm_params") or {}).get("model")
-        if not isinstance(alias, str) or not isinstance(upstream, str):
-            continue
-        routes.setdefault(alias, set()).add(upstream.split("/", 1)[0])
-    return routes
-
-
-def assert_gateway_routes(environ, model_refs, *, base_url, api_key, timeout=5.0):
-    """Return ``(ok, reason)`` proving expected aliases bind to the subscription.
-
-    Every route that could satisfy an expected alias must be subscription-bound;
-    a single direct or mixed deployment is enough to refuse.
-    """
-    state, expected = route_expectation(environ, model_refs)
-    if state == NO_ROUTES_REQUESTED:
-        return True, state
-    if state != SUBSCRIPTION_REQUIRED:
-        return False, state
-    routes = served_routes(base_url, api_key, timeout=timeout)
-    if routes is None:
+    if served is None:
         return False, REFUSED_UNKNOWN_SERVICE
-    for alias in sorted(expected):
-        bound = routes.get(alias)
-        if not bound:
-            return False, f"{REFUSED_MISSING_ALIAS}:{alias}"
-        if len(bound) > 1:
-            return False, f"{REFUSED_MIXED_BINDING}:{alias}"
-        if bound != {SUBSCRIPTION_BINDING}:
-            return False, f"{REFUSED_WRONG_BINDING}:{alias}"
+    planned_ids = openai_namespace(planned)
+    served_ids = openai_namespace(served)
+    missing = sorted(planned_ids - served_ids)
+    if missing:
+        return False, f"{REFUSED_ALIAS_NOT_ADVERTISED}:{','.join(missing[:3])}"
+    stale = sorted(served_ids - planned_ids)
+    if stale:
+        return False, f"{REFUSED_STALE_ALIAS}:{','.join(stale[:3])}"
     return True, QUALIFIED
