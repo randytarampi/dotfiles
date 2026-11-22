@@ -18,6 +18,7 @@ def test_codexbar_requires_executable_and_machine_status_unsupported_on_015():
         (0, 15, 0),
         node_version=(22, 18, 0),
         daemon_codexbar_verified=True,
+        environ={},
     )
     assert "uiyzzi/codexbar-usage" in selected
     assert "dutchakdev/machine-status" not in selected
@@ -25,7 +26,7 @@ def test_codexbar_requires_executable_and_machine_status_unsupported_on_015():
         "dutchakdev/machine-status",
         "published support ends at Paseo 0.13",
     ) in omitted
-    without_cli, skipped = module.plan(lambda name: None, (0, 15, 0))
+    without_cli, skipped = module.plan(lambda name: None, (0, 15, 0), environ={})
     assert "uiyzzi/codexbar-usage" not in without_cli
     # Context Mode additionally requires its own opt-in gate.
     assert len(skipped) == 7
@@ -135,6 +136,7 @@ def test_plugin_compatibility_is_strict_about_paseo_node_and_platform():
         (0, 11, 0),
         platform="linux",
         node_version=(22, 17, 9),
+        environ={},
     )
     assert "stevecastaneda/progress" not in selected
     assert "roundreddot/better-paseo" not in selected
@@ -152,6 +154,7 @@ def test_plugin_compatibility_is_strict_about_paseo_node_and_platform():
         platform="darwin",
         node_version=(22, 18, 0),
         daemon_codexbar_verified=True,
+        environ={},
     )
     assert "stevecastaneda/progress" in selected
     assert "roundreddot/better-paseo" in selected
@@ -297,12 +300,16 @@ def test_daemon_version_not_cli_version_gates_plugin_floors(monkeypatch):
         module.daemon_version("/bin/paseo", fake_run),
         node_version=(26, 0, 0),
         daemon_codexbar_verified=True,
+        # Context Mode has no Paseo floor any more: d9fef898 replaced it with
+        # the DOTFILES_RUN_CONTEXT_MODE_SETUP gate. Pin the gate so this
+        # assertion cannot silently depend on the caller's environment.
+        environ={"DOTFILES_RUN_CONTEXT_MODE_SETUP": "1"},
     )
     reasons = dict(omitted)
     assert "asherlc/devices" not in selected
     assert reasons["asherlc/devices"] == "Paseo >=0.16.2 required"
     assert reasons["asherlc/cheapskate"] == "Paseo >=0.16.1 required"
-    assert "omercnet/context-mode" not in selected
+    assert "omercnet/context-mode" in selected
 
 
 def test_apply_refuses_unknown_daemon_version_without_plugin_writes(monkeypatch):
