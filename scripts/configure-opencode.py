@@ -2357,7 +2357,7 @@ def main():
             base_data["acpAgents"] = slim_data["acpAgents"]
             slim_candidate = json.dumps(base_data, indent=2) + "\n"
         tier_candidate = None
-        if "tier" not in skipped and not args.dry_run and not acp_merge_ready:
+        if "tier" not in skipped and not args.dry_run:
             tier_args_list = (
                 build_tier_args(
                     tier=args.preset, no_local_fallbacks=not with_local_ollama
@@ -2405,18 +2405,18 @@ def main():
     if args.mode == "project":
         return
 
-    # 3. Set active tier
+    # 3. Report the active tier. Step 2 installs it as part of the config pair
+    # (see tier_candidate); there is no separate tier write here, so never
+    # claim one succeeded. This used to log success while acp_merge_ready
+    # silently dropped the tier and left the base preset active.
     if "tier" in skipped:
         logger.info("Skipping active tier configuration")
+    elif args.dry_run:
+        logger.info(f"[dry-run] Active tier would be {args.preset}")
+    elif tier_candidate is not None:
+        logger.info(f"Active tier applied: {args.preset}")
     else:
-        logger.info(f"Setting active tier to {args.preset}...")
-    try:
-        if "tier" in skipped:
-            pass
-        else:
-            logger.info(f"Active tier set to {args.preset}")
-    except Exception as e:
-        logger.error(f"Failed to set active tier: {e}")
+        logger.warning(f"Active tier {args.preset} was not applied")
         failures += 1
 
     # 4. Configure voice plugin (cli.json)
