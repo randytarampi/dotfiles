@@ -46,81 +46,92 @@ def _fail(reason):
     return 1
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.parse_args(argv)
-
-    port = os.environ.get("LITELLM_PORT", "4000")
-    base_url = f"http://127.0.0.1:{port}/v1"
-
+def _load_plan():
+    """Return ``((routes, aliases, planned_ids), None)`` or ``(None, reason)``."""
     try:
         projection = json.loads(PROJECTION_FILE.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        return _fail(
+        return None, (
             "no emitted route projection; LiteLLM has not generated a config yet "
             "— run 'make deploy'"
         )
     except (OSError, ValueError) as error:
-        return _fail(f"route projection is unreadable ({error})")
-
+        return None, f"route projection is unreadable ({error})"
     routes = projection.get("routes")
     if not isinstance(routes, list):
-        return _fail("route projection has no route list")
-
+        return None, "route projection has no route list"
     aliases = [
         row.get("model_name")
         for row in routes
         if isinstance(row, dict) and alias_model_id(row.get("model_name"))
     ]
     planned_ids = {alias_model_id(alias) for alias in aliases}
+    return (routes, aliases, planned_ids), None
+
+
+def _plan_refusal(routes, planned_ids):
+    """Return a reason when the plan is not authorised by the current report."""
+    if (os.environ.get("OPENAI_API_KEY") or "").strip() and planned_ids:
+        return (
+            f"{REFUSED_AMBIGUOUS_CREDENTIALS}: subscription aliases are planned "
+            "while a direct paid OPENAI_API_KEY is set — unset the key or "
+            "disable the OAuth gate"
+        )
+    if not planned_ids:
+        return None
+    # A projection that outlives the authorisation it was built from must not
+    # authorise a client.
+    state, verified = chatgpt_verified_openai_models_report(os.environ)
+    if state != CHATGPT_REPORT_OK:
+        return (
+            f"{REFUSED_UNUSABLE_REPORT}: verified-model report is {state} "
+            "while subscription aliases are planned"
+        )
+    revoked = sorted(planned_ids - set(verified))
+    if revoked:
+        return f"{REFUSED_REVOKED}:{','.join(revoked[:3])}"
+    newer = sorted(set(verified) - planned_ids)
+    if newer:
+        print(
+            "warning: report verifies ids absent from the projection "
+            f"({','.join(newer[:3])}); run 'make deploy' to regenerate"
+        )
+    wires_ok, wires_reason = planned_subscription_bindings(routes)
+    return None if wires_ok else wires_reason
+
+
+def _served_refusal(aliases, base_url):
+    """Return a reason when the gateway does not advertise the plan."""
+    try:
+        api_key = KEY_FILE.read_text(encoding="utf-8").strip()
+    except OSError as error:
+        return f"cannot read gateway client key ({error})"
+    if not api_key:
+        return "gateway client key is empty"
+    from model_catalogues import get_models  # noqa: E402 -- scripts/lib bootstrap.
+
+    matches, matches_reason = assert_namespace_matches(
+        aliases, get_models(f"{base_url}/models", api_key)
+    )
+    return None if matches else matches_reason
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.parse_args(argv)
+    base_url = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
+
+    plan, reason = _load_plan()
+    if plan is None:
+        return _fail(reason)
+    routes, aliases, planned_ids = plan
 
     if not get_litellm_oauth_gate(os.environ):
         # The subscription lane is not in use; a direct route is legitimate.
         return 0
 
-    if (os.environ.get("OPENAI_API_KEY") or "").strip() and planned_ids:
-        return _fail(
-            f"{REFUSED_AMBIGUOUS_CREDENTIALS}: subscription aliases are planned "
-            "while a direct paid OPENAI_API_KEY is set — unset the key or "
-            "disable the OAuth gate"
-        )
-
-    if planned_ids:
-        # Bind the plan to the *current* report. A projection that outlives the
-        # authorisation it was built from must not authorise a client.
-        state, verified = chatgpt_verified_openai_models_report(os.environ)
-        if state != CHATGPT_REPORT_OK:
-            return _fail(
-                f"{REFUSED_UNUSABLE_REPORT}: verified-model report is {state} "
-                "while subscription aliases are planned"
-            )
-        revoked = sorted(planned_ids - set(verified))
-        if revoked:
-            return _fail(f"{REFUSED_REVOKED}:{','.join(revoked[:3])}")
-        newer = sorted(set(verified) - planned_ids)
-        if newer:
-            print(
-                "warning: report verifies ids absent from the projection "
-                f"({','.join(newer[:3])}); run 'make deploy' to regenerate"
-            )
-        wires_ok, wires_reason = planned_subscription_bindings(routes)
-        if not wires_ok:
-            return _fail(wires_reason)
-
-    try:
-        api_key = KEY_FILE.read_text(encoding="utf-8").strip()
-    except OSError as error:
-        return _fail(f"cannot read gateway client key ({error})")
-    if not api_key:
-        return _fail("gateway client key is empty")
-
-    from model_catalogues import get_models  # noqa: E402 -- scripts/lib bootstrap.
-
-    served = get_models(f"{base_url}/models", api_key)
-    matches, matches_reason = assert_namespace_matches(aliases, served)
-    if not matches:
-        return _fail(matches_reason)
-    return 0
+    refusal = _plan_refusal(routes, planned_ids) or _served_refusal(aliases, base_url)
+    return _fail(refusal) if refusal else 0
 
 
 if __name__ == "__main__":
