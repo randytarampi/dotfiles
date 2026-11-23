@@ -150,9 +150,9 @@ PY
   )
   OH_MY_PLUGIN="${PLUGIN_SPECS[0]}"
   if command -v bun >/dev/null 2>&1; then
-    echo n | bunx "$OH_MY_PLUGIN" install --background-subagents=yes 2>/dev/null || warn "oh-my-opencode-slim install failed (may already be installed)"
+    echo n | bunx "$OH_MY_PLUGIN" install --no-tui 2>/dev/null || warn "oh-my-opencode-slim install failed (may already be installed)"
   else
-    echo n | npx "$OH_MY_PLUGIN" install --background-subagents=yes 2>/dev/null || warn "oh-my-opencode-slim install failed (may already be installed)"
+    echo n | npx "$OH_MY_PLUGIN" install --no-tui 2>/dev/null || warn "oh-my-opencode-slim install failed (may already be installed)"
   fi
   exit 0
 fi
@@ -172,7 +172,10 @@ PY
 )
 
 # Install oh-my-opencode-slim via its dedicated installer (not opencode plugin)
-# --background-subagents=yes enables background subagents during install
+# Upstream removed --background-subagents=yes (background subagents are now the
+# OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS env var), and passing it made every
+# install fail with "Unknown install option". --no-tui keeps this non-interactive
+# so deploy never waits on the installer's prompts.
 # Pipe 'n' to skip the "Star the repo on GitHub?" prompt
 # OMO-Slim is the orchestrator (first manifest entry): a failed install is a
 # hard failure (missing required plugin), not a "may already be installed".
@@ -187,7 +190,7 @@ fi
 # Inherited OTLP exporters push OpenCode's version probe past OMO's 3s timeout.
 # Scope the workaround to this child; preserve explicit SDK-disable policy.
 if echo n | env -u OTEL_EXPORTER_OTLP_ENDPOINT -u OTEL_EXPORTER_OTLP_PROTOCOL -u OTEL_METRIC_EXPORT_INTERVAL \
-  "${OMO_INSTALLER[@]}" "$OH_MY_PLUGIN" install --background-subagents=yes 2>/dev/null; then
+  "${OMO_INSTALLER[@]}" "$OH_MY_PLUGIN" install --no-tui 2>/dev/null; then
   ok "oh-my-opencode-slim installed"
 else
   warn "oh-my-opencode-slim install failed"
