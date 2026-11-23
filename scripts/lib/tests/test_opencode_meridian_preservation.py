@@ -189,3 +189,50 @@ def test_registered_meridian_survives_two_full_generator_runs(tmp_path, monkeypa
     # Manifest-owned surfaces stay stable between runs.
     for key in ("compaction", "providers", "agents", "disabled_providers"):
         assert outputs[0][key] == outputs[1][key], key
+
+
+def test_successful_acp_merge_still_applies_the_active_tier(tmp_path, monkeypatch):
+    """A successful ACP merge must not suppress tier preparation.
+
+    Regression: the tier candidate was only prepared when ``acp_merge_ready``
+    was false, so on any host whose ACP generation succeeded the base preset
+    stayed active while the generator logged the configured tier as applied.
+    The installed config must keep both the tier preset and the ACP agents.
+    """
+    config_dir = _seed_registry(tmp_path, monkeypatch)
+    acp_section = {"alpha": {"mode": "primary", "model": "meridian/test-model"}}
+    (tmp_path / "configs/opencode/acp-agents.json").write_text(
+        json.dumps({"acpAgents": acp_section})
+    )
+
+    prepared_tier_args = []
+
+    def record_prepare(_config_dir, tier_args, _consumer_config, **kwargs):
+        prepared_tier_args.append(list(tier_args))
+        payload = dict(kwargs["base_slim"])
+        payload["preset"] = "pro-plus-anthropic"
+        payload["acpAgents"] = acp_section
+        return json.dumps(payload, indent=2) + "\n"
+
+    monkeypatch.setattr(configure_opencode, "prepare_tier_candidate", record_prepare)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "configure-opencode.py",
+            "--mode",
+            "global",
+            "--preset",
+            "pro-plus-anthropic",
+            "--skip",
+            "mcps,voice,dcp",
+        ],
+    )
+    configure_opencode.main.__wrapped__()
+
+    assert (
+        prepared_tier_args
+    ), "tier preparation was skipped after a successful ACP merge"
+    installed = json.loads((config_dir.parent / "oh-my-opencode-slim.json").read_text())
+    assert installed["preset"] == "pro-plus-anthropic"
+    assert installed["acpAgents"] == acp_section
