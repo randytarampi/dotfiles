@@ -407,14 +407,27 @@ if [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" == "1" && "${DOTFILES_USE_LITELLM_PROXY
   python3 "$SCRIPT_DIR/configure-litellm.py" --require-ready || die "LiteLLM key provisioning/readiness failed; refusing gateway-only client configuration"
 fi
 
-# 2.6. Authorise the routes a gateway-only client is about to select. This runs
-# after generation, reload and readiness above, so a failure here is real rather
-# than a stale-service race, and the repair has already been attempted. The
-# check never mutates: it refuses the client write and names the recovery.
-if [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" == "1" && "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]] &&
-  ! step_skipped litellm && [[ "$COMMON_DRY_RUN" != "1" ]]; then
+# 2.6. Client authorisation is independent of service mutation. The Junie,
+# OpenCode and Pi steps below decide to run on their own, so a skipped LiteLLM
+# service step must not skip the proof that the clients it would write are
+# safe. This is read-only: it never generates, reloads or restarts.
+_authorising_gateway_client() {
+  if ! step_skipped junie && [[ "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}" == "1" ]]; then
+    return 0
+  fi
+  if ! step_skipped opencode && [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" == "1" ]]; then
+    return 0
+  fi
+  if ! step_skipped pi && [[ "${DOTFILES_RUN_PI_SETUP:-0}" == "1" ]]; then
+    return 0
+  fi
+  return 1
+}
+
+if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" && "$COMMON_DRY_RUN" != "1" ]] &&
+  _authorising_gateway_client; then
   if ! route_reason="$(python3 "$SCRIPT_DIR/reconcile-litellm-routes.py" 2>&1)"; then
-    die "Gateway route preflight failed ($route_reason); refusing to generate gateway-only client configuration. Repair with 'make litellm-restart', then re-run 'make deploy'."
+    die "Gateway route preflight failed ($route_reason); refusing to generate gateway-only client configuration. Repair with 'make deploy' or 'make litellm-restart', and keep DOTFILES_RUN_LITELLM_SETUP=1 so a projection exists, then re-run."
   fi
 fi
 

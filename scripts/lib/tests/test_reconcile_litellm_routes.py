@@ -39,6 +39,9 @@ def preflight(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "PROJECTION_FILE", projection)
     monkeypatch.setattr(module, "KEY_FILE", key_file)
     monkeypatch.setattr(module, "get_litellm_oauth_gate", lambda environ=None: True)
+    # Pin the token state: a live cache on the operator's host must not change
+    # this test's outcome.
+    monkeypatch.setattr(module, "oauth_cache_expiry", lambda provider, environ=None: 1)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     return module, projection
 
@@ -186,3 +189,15 @@ def test_empty_plan_and_clean_gateway_passes(preflight, monkeypatch):
     _advertise(monkeypatch, {"ollama/llama"})
     _report(monkeypatch, module, litellm_config.CHATGPT_REPORT_OK, [])
     assert module.main([]) == 0
+
+
+def test_expired_oauth_cache_refuses_planned_aliases(preflight, monkeypatch):
+    """Generation would not emit these routes without a live token."""
+    module, projection = preflight
+    projection.write_text(json.dumps(_routes([("openai/gpt-A", "chatgpt/gpt-A")])))
+    monkeypatch.setattr(
+        module, "oauth_cache_expiry", lambda provider, environ=None: None
+    )
+    _report(monkeypatch, module, litellm_config.CHATGPT_REPORT_OK, ["gpt-A"])
+    _advertise(monkeypatch, {"openai/gpt-A"})
+    assert module.main([]) == 1

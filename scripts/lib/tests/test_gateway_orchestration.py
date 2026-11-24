@@ -87,8 +87,8 @@ python3)
     else record generate; fi;;
   configure-litellm-venv.py) record patch;;
   reconcile-litellm-routes.py)
-    [[ "${FAILURE:-}" != preflight ]] || exit 1
-    record preflight;;
+    record preflight
+    [[ "${FAILURE:-}" != preflight ]] || exit 1;;
   configure-opencode.py|configure-pi.py|configure-jetbrains-ai.py|configure-openwebui.py)
     if [[ "$*" == *--dry-run* ]]; then record preview; exit 0; fi
     if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
@@ -317,3 +317,80 @@ def test_rendered_gateway_template_provisions_before_junie(tmp_path, system):
     )
     assert events.count("provision") == 1
     assert events.index("start") < events.index("ready") < events.index("provision")
+
+
+def _seed_qualified_client(env):
+    """Represent an existing projection and client key: service work is not
+    required, only authorisation."""
+    key = Path(env["HOME"]) / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True, exist_ok=True)
+    key.write_text("stable-key", encoding="utf-8")
+
+
+def _run(wrapper, env, skip):
+    return subprocess.run(
+        ["/bin/bash", str(wrapper), "--skip", skip],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+
+
+def test_skip_litellm_still_authorises_before_clients(tmp_path):
+    """A skipped service step must not skip client authorisation."""
+    _, wrapper, env, trace = _sandbox(tmp_path, "Darwin")
+    _seed_qualified_client(env)
+    env["FAILURE"] = "preflight"
+    result = _run(wrapper, env, SKIPS + ",litellm")
+    assert result.returncode != 0
+    assert "Gateway route preflight failed" in result.stderr
+    events = _events(trace)
+    assert "preflight" in events
+    for client in (
+        "configure-jetbrains-ai.py",
+        "configure-opencode.py",
+        "configure-pi.py",
+    ):
+        assert client not in events
+
+
+def test_skip_litellm_permits_clients_when_already_qualified(tmp_path):
+    """A verified projection must not force service work that was skipped."""
+    _, wrapper, env, trace = _sandbox(tmp_path, "Linux")
+    _seed_qualified_client(env)
+    result = _run(wrapper, env, SKIPS + ",litellm")
+    assert result.returncode == 0, result.stderr
+    events = _events(trace)
+    assert "preflight" in events
+    assert "configure-opencode.py" in events
+    for service in ("generate", "restart", "provision", "patch"):
+        assert service not in events
+
+
+def test_dry_run_with_skip_touches_no_service_or_credentials(tmp_path):
+    _, wrapper, env, trace = _sandbox(tmp_path, "Darwin")
+    result = subprocess.run(
+        ["/bin/bash", str(wrapper), "--dry-run", "--skip", SKIPS + ",litellm"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert result.returncode == 0, result.stderr
+    events = _events(trace)
+    assert "preflight" not in events
+    for service in ("generate", "restart", "provision"):
+        assert service not in events
+
+
+def test_skipping_every_authorising_gateway_client_skips_the_gate(tmp_path):
+    """No gateway-only client written means nothing to authorise.
+
+    JetBrains, OpenCode and Pi are the consumers this gate covers. Open WebUI's
+    catalogue reconciliation is a separate lane and is not claimed as safe here.
+    """
+    _, wrapper, env, trace = _sandbox(tmp_path, "Darwin")
+    result = _run(wrapper, env, SKIPS + ",junie,opencode,pi")
+    assert result.returncode == 0, result.stderr
+    assert "preflight" not in _events(trace)
