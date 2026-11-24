@@ -539,7 +539,23 @@ def merge_configs_to_file(fmt, mcp_path, output):
         with open(mcp_path, "r", encoding="utf-8") as f:
             content = f.read().strip()
         existing = json.loads(content) if content else {}
-        existing.update(new_data)
+        # Gemini settings.json is shared with the user and holds unrelated
+        # settings. Merge per generated name only: a name this run does not
+        # generate is user-owned and is never deleted, and ownership is not
+        # inferred from a template stem. See #393.
+        generated_servers = new_data.get("mcpServers")
+        if isinstance(generated_servers, dict):
+            current_servers = existing.get("mcpServers", {})
+            if not isinstance(current_servers, dict):
+                raise ValueError(
+                    f"refusing to replace a non-object mcpServers namespace: {mcp_path}"
+                )
+            merged_servers = dict(current_servers)
+            merged_servers.update(generated_servers)
+            existing["mcpServers"] = merged_servers
+        for key, value in new_data.items():
+            if key != "mcpServers":
+                existing.setdefault(key, value)
         with open(mcp_path, "w", encoding="utf-8") as f:
             json.dump(existing, f, indent=4)
             f.write("\n")

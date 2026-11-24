@@ -888,3 +888,87 @@ def test_basic_memory_extra_owned_settings_refuse_overwrite(tmp_path, extra):
     with pytest.raises(ValueError, match="refusing to overwrite"):
         module.merge_configs_to_file("opencode-internal", path, json.dumps(generated))
     assert path.read_bytes() == before
+
+
+# --- Gemini settings.json shared-namespace merge (#393) ------------------
+
+_SETTINGS_GENERATED = {
+    "mcpServers": {"basic-memory": {"command": "uvx", "args": ["basic-memory", "mcp"]}}
+}
+
+
+def test_settings_merge_preserves_unrelated_user_servers_and_fields(tmp_path):
+    """Gemini settings.json is a shared file; only generated names are owned."""
+    module = load_script()
+    path = tmp_path / "settings.json"
+    user_entry = {
+        "command": "/usr/local/bin/personal-notes",
+        "args": ["--vault", "/vault"],
+        "env": {"TOKEN": "user-owned"},
+    }
+    existing = {
+        "mcpServers": {"personal-notes": user_entry},
+        "theme": "dark",
+        "ui": {"footer": "hidden"},
+    }
+    path.write_text(json.dumps(existing), encoding="utf-8")
+
+    module.merge_configs_to_file(
+        "json-settings-merge", path, json.dumps(_SETTINGS_GENERATED)
+    )
+
+    merged = json.loads(path.read_text())
+    assert merged["mcpServers"]["personal-notes"] == user_entry
+    assert "basic-memory" in merged["mcpServers"]
+    assert merged["theme"] == "dark"
+    assert merged["ui"] == {"footer": "hidden"}
+
+
+def test_settings_merge_keeps_unmanaged_names_that_match_no_template(tmp_path):
+    """No stem-based ownership: a name absent from this run is never deleted."""
+    module = load_script()
+    path = tmp_path / "settings.json"
+    path.write_text(
+        json.dumps({"mcpServers": {"sentry": {"command": "user-sentry"}}}),
+        encoding="utf-8",
+    )
+
+    module.merge_configs_to_file(
+        "json-settings-merge", path, json.dumps(_SETTINGS_GENERATED)
+    )
+
+    merged = json.loads(path.read_text())
+    assert merged["mcpServers"]["sentry"] == {"command": "user-sentry"}
+    assert "basic-memory" in merged["mcpServers"]
+
+
+def test_settings_merge_is_idempotent(tmp_path):
+    module = load_script()
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"mcpServers": {}}), encoding="utf-8")
+
+    module.merge_configs_to_file(
+        "json-settings-merge", path, json.dumps(_SETTINGS_GENERATED)
+    )
+    first = path.read_text(encoding="utf-8")
+    module.merge_configs_to_file(
+        "json-settings-merge", path, json.dumps(_SETTINGS_GENERATED)
+    )
+    assert path.read_text(encoding="utf-8") == first
+
+
+def test_settings_merge_refuses_malformed_namespace_without_mutating(tmp_path):
+    module = load_script()
+    path = tmp_path / "settings.json"
+    path.write_text(
+        json.dumps({"mcpServers": ["not", "an", "object"], "theme": "dark"}),
+        encoding="utf-8",
+    )
+    before = path.read_bytes()
+
+    with pytest.raises(ValueError, match="must be an object"):
+        module.merge_configs_to_file(
+            "json-settings-merge", path, json.dumps(_SETTINGS_GENERATED)
+        )
+
+    assert path.read_bytes() == before
