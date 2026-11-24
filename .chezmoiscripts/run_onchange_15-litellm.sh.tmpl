@@ -167,6 +167,15 @@ else
 PLIST_EOF
   chmod 600 "$PLIST"
   if ! litellm_service_start; then die "${LITELLM_SERVICE_ERROR:-Failed to start LiteLLM}"; fi
+  # Record the generation this process was launched with, so a later preflight
+  # can tell whether the running daemon predates the config on disk. Written
+  # after a successful start and deliberately non-fatal. See #361.
+  if _digest="$( (shasum -a 256 "$CONFIG" 2>/dev/null || sha256sum "$CONFIG" 2>/dev/null) | cut -d" " -f1)" && [[ -n "$_digest" ]]; then
+    (
+      umask 077
+      printf "%s\n%s\n%s\n" "$_digest" "$(date +%s)" "${LITELLM_PORT:-4000}" >"$HOME/.local/share/litellm/.loaded-generation"
+    ) 2>/dev/null || true
+  fi
   for _ in {1..30}; do
     if curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then break; fi
     sleep 2
