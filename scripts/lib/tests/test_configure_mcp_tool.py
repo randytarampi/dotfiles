@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -1090,3 +1091,66 @@ def test_toml_merge_keeps_array_of_tables_alongside_generated_servers(tmp_path):
         "old": {"command": "old"},
         "new": {"command": "new"},
     }
+
+
+# --- write safety (#395) -------------------------------------------------
+
+
+def test_merge_refuses_symlinked_destination(tmp_path):
+    module = load_script()
+    real = tmp_path / "real.json"
+    real.write_text(json.dumps({"mcpServers": {}}), encoding="utf-8")
+    link = tmp_path / "link.json"
+    link.symlink_to(real)
+    before = real.read_bytes()
+    with pytest.raises(ValueError, match="symlink"):
+        module.merge_configs_to_file(
+            "json-mcpServers-merge", link, json.dumps({"mcpServers": {"a": {}}})
+        )
+    assert real.read_bytes() == before
+
+
+def test_merge_refuses_hardlinked_destination(tmp_path):
+    module = load_script()
+    original = tmp_path / "original.json"
+    original.write_text(json.dumps({"mcpServers": {}}), encoding="utf-8")
+    second = tmp_path / "second.json"
+    os.link(original, second)
+    before = original.read_bytes()
+    with pytest.raises(ValueError, match="link"):
+        module.merge_configs_to_file(
+            "json-mcpServers-merge", second, json.dumps({"mcpServers": {"a": {}}})
+        )
+    assert original.read_bytes() == before
+
+
+def test_failed_write_leaves_previous_file_intact(tmp_path, monkeypatch):
+    module = load_script()
+    path = tmp_path / "client.json"
+    path.write_text(json.dumps({"mcpServers": {"keep": {"command": "x"}}}))
+    before = path.read_bytes()
+
+    def _boom(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(module.os, "replace", _boom)
+    with pytest.raises(OSError):
+        module.merge_configs_to_file(
+            "json-mcpServers-merge", path, json.dumps({"mcpServers": {"a": {}}})
+        )
+    assert path.read_bytes() == before
+    assert not [
+        n for n in os.listdir(tmp_path) if n.startswith(".mcp-") and n.endswith(".tmp")
+    ]
+
+
+def test_atomic_write_leaves_no_temporary_files(tmp_path):
+    module = load_script()
+    path = tmp_path / "client.json"
+    path.write_text(json.dumps({"mcpServers": {}}), encoding="utf-8")
+    module.merge_configs_to_file(
+        "json-mcpServers-merge",
+        path,
+        json.dumps({"mcpServers": {"a": {"command": "c"}}}),
+    )
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["client.json"]

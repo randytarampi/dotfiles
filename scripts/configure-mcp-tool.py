@@ -9,6 +9,7 @@ import json
 import argparse
 import os
 import re
+import stat
 import fnmatch
 import tempfile
 import subprocess  # nosec B404 - fixed argv; no shell or generated configuration commands.
@@ -496,6 +497,41 @@ def _known_managed_server_names():
     return names
 
 
+def _write_mcp_destination(mcp_path, content):
+    """Replace an MCP config atomically, refusing unsafe targets.
+
+    A truncating write leaves the user with a half-written client config when it
+    fails, and following a symlink rewrites a file this repository does not own.
+    Write beside the destination and rename, so a failure keeps the previous
+    file intact. See #395.
+    """
+    path = os.path.abspath(mcp_path)
+    if os.path.islink(path):
+        raise ValueError(f"refusing to replace a symlinked MCP config: {path}")
+    if os.path.exists(path) and os.stat(path).st_nlink != 1:
+        raise ValueError(f"refusing to replace a multiply-linked MCP config: {path}")
+    directory = os.path.dirname(path) or "."
+    fd, temporary = tempfile.mkstemp(prefix=".mcp-", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if os.path.exists(path):
+            os.chmod(temporary, stat.S_IMODE(os.stat(path).st_mode))
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+
+
 def merge_configs_to_file(fmt, mcp_path, output):
     # Validate the collision before touching the destination. Regular
     # regeneration is idempotent, but a prior custom Basic Memory entry
@@ -529,8 +565,7 @@ def merge_configs_to_file(fmt, mcp_path, output):
             copilot_wildcard_tools=(fmt == "json-mcpServers-http"),
         )
     if not os.path.exists(mcp_path):
-        with open(mcp_path, "w", encoding="utf-8") as f:
-            f.write(output)
+        _write_mcp_destination(mcp_path, output)
         logger.info(f"Created file with configuration: {mcp_path}")
         return
 
@@ -556,9 +591,7 @@ def merge_configs_to_file(fmt, mcp_path, output):
         for key, value in new_data.items():
             if key != "mcpServers":
                 existing.setdefault(key, value)
-        with open(mcp_path, "w", encoding="utf-8") as f:
-            json.dump(existing, f, indent=4)
-            f.write("\n")
+        _write_mcp_destination(mcp_path, json.dumps(existing, indent=4) + "\n")
         logger.info(f"Merged config into: {mcp_path}")
 
     elif fmt in (
@@ -603,9 +636,7 @@ def merge_configs_to_file(fmt, mcp_path, output):
         merged_servers = dict(current_servers)
         merged_servers.update(generated_servers)
         existing[namespace_key] = merged_servers
-        with open(mcp_path, "w", encoding="utf-8") as f:
-            json.dump(existing, f, indent=4)
-            f.write("\n")
+        _write_mcp_destination(mcp_path, json.dumps(existing, indent=4) + "\n")
         logger.info(f"Merged config into: {mcp_path}")
 
     elif fmt == "opencode-internal":
@@ -617,9 +648,7 @@ def merge_configs_to_file(fmt, mcp_path, output):
             if "mcp" not in existing:
                 existing["mcp"] = {}
             existing["mcp"].update(new_data["mcp"])
-        with open(mcp_path, "w", encoding="utf-8") as f:
-            json.dump(existing, f, indent=4)
-            f.write("\n")
+        _write_mcp_destination(mcp_path, json.dumps(existing, indent=4) + "\n")
         logger.info(f"Merged mcp configs into: {mcp_path}")
 
     elif fmt == "toml-mcpServers":
@@ -678,12 +707,10 @@ def merge_configs_to_file(fmt, mcp_path, output):
         expected["mcp_servers"] = merged_servers
         if updated_data != expected:
             raise ValueError("refusing TOML MCP merge that changes unrelated settings")
-        with open(mcp_path, "w", encoding="utf-8") as f:
-            f.write(updated)
+        _write_mcp_destination(mcp_path, updated)
         logger.info(f"Updated TOML mcp servers in: {mcp_path}")
     else:
-        with open(mcp_path, "w", encoding="utf-8") as f:
-            f.write(output)
+        _write_mcp_destination(mcp_path, output)
         logger.info(f"Overwrote file with configuration: {mcp_path}")
 
 
@@ -937,7 +964,13 @@ def orchestrate_mcp_config(args):
     if not args.no_backup and os.path.exists(resolved_mcp_path):
         from file_utils import backup_file
 
-        backup_file(resolved_mcp_path, enabled=True)
+        if backup_file(resolved_mcp_path, enabled=True) is None:
+            # A backup that silently failed is not a backup. Without one there
+            # is no way back from a bad merge, so refuse rather than write.
+            raise SystemExit(
+                f"refusing to modify {resolved_mcp_path}: backup failed "
+                "(pass --no-backup to accept that risk explicitly)"
+            )
 
     if args.tool == "pi":
         old_path = os.path.join(os.path.dirname(resolved_mcp_path), "mcp.json")
