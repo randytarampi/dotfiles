@@ -378,6 +378,8 @@ command = "beta"
     parsed = tomllib.loads(twice)
     assert parsed["model_providers"]["meridian"]["name"] == "Meridian"
     assert parsed["mcp_servers"] == {
+        # Not generated in this run, so it is user-owned and retained. See #394.
+        "old": {"command": "old"},
         "alpha": {"command": "alpha", "env": {"TOKEN": "test"}},
         "beta": {"command": "beta"},
     }
@@ -396,7 +398,12 @@ def test_toml_mcp_merge_handles_indented_headers_and_rejects_multiline_strings(
     module.merge_configs_to_file(
         "toml-mcpServers", path, '[mcp_servers.new]\ncommand = "new"\n'
     )
-    assert tomllib.loads(path.read_text())["mcp_servers"] == {"new": {"command": "new"}}
+    assert tomllib.loads(path.read_text())["mcp_servers"] == {
+        # An indented header for a name this run does not generate is still a
+        # user-owned table and is retained. See #394.
+        "old": {"command": "old"},
+        "new": {"command": "new"},
+    }
     assert tomllib.loads(path.read_text())["model_providers"]["user"]["name"] == "keep"
 
     original = '[model_providers.user]\nname = """\n[mcp_servers.fake]\n"""\n'
@@ -457,7 +464,6 @@ def test_toml_mcp_merge_then_codex_owned_block_reconcile_is_idempotent(
 @pytest.mark.parametrize(
     "original",
     [
-        '[mcp_servers.old]\ncommand = "old"\n[[user.items]]\nname = "keep"\n',
         '[mcp_servers."quoted-name"]\ncommand = "old"\n',
     ],
 )
@@ -972,3 +978,115 @@ def test_settings_merge_refuses_malformed_namespace_without_mutating(tmp_path):
         )
 
     assert path.read_bytes() == before
+
+
+# --- TOML mcp_servers preservation (#394) --------------------------------
+
+_TOML_GENERATED = """[mcp_servers.codegraph]
+command = "codegraph"
+args = ["serve"]
+"""
+
+
+def test_toml_merge_preserves_ungenerated_user_tables(tmp_path):
+    """A table this run does not generate belongs to the user."""
+    module = load_script()
+    path = tmp_path / "config.toml"
+    path.write_text(
+        'model = "gpt"\n\n'
+        "[mcp_servers.personal-notes]\n"
+        'command = "/usr/local/bin/pn"\n'
+        'args = ["--vault", "/vault"]\n\n'
+        "[mcp_servers.personal-notes.env]\n"
+        'TOKEN = "user-owned"\n',
+        encoding="utf-8",
+    )
+
+    module.merge_configs_to_file("toml-mcpServers", path, _TOML_GENERATED)
+
+    import tomllib
+
+    merged = tomllib.loads(path.read_text(encoding="utf-8"))
+    assert merged["model"] == "gpt"
+    assert merged["mcp_servers"]["personal-notes"] == {
+        "command": "/usr/local/bin/pn",
+        "args": ["--vault", "/vault"],
+        "env": {"TOKEN": "user-owned"},
+    }
+    assert merged["mcp_servers"]["codegraph"]["command"] == "codegraph"
+
+
+def test_toml_merge_replaces_only_the_generated_name(tmp_path):
+    module = load_script()
+    path = tmp_path / "config.toml"
+    path.write_text(
+        "[mcp_servers.codegraph]\n"
+        'command = "stale"\n\n'
+        "[mcp_servers.other]\n"
+        'command = "keep"\n',
+        encoding="utf-8",
+    )
+
+    module.merge_configs_to_file("toml-mcpServers", path, _TOML_GENERATED)
+
+    import tomllib
+
+    merged = tomllib.loads(path.read_text(encoding="utf-8"))
+    assert merged["mcp_servers"]["codegraph"]["command"] == "codegraph"
+    assert merged["mcp_servers"]["other"]["command"] == "keep"
+
+
+def test_toml_merge_is_two_pass_stable(tmp_path):
+    module = load_script()
+    path = tmp_path / "config.toml"
+    path.write_text('[mcp_servers.user]\ncommand = "keep"\n', encoding="utf-8")
+    module.merge_configs_to_file("toml-mcpServers", path, _TOML_GENERATED)
+    first = path.read_text(encoding="utf-8")
+    module.merge_configs_to_file("toml-mcpServers", path, _TOML_GENERATED)
+    assert path.read_text(encoding="utf-8") == first
+
+
+def test_toml_merge_still_refuses_multiline_strings(tmp_path):
+    module = load_script()
+    path = tmp_path / "config.toml"
+    path.write_text(
+        '[mcp_servers.user]\ncommand = """\n[mcp_servers.evil]\n"""\n',
+        encoding="utf-8",
+    )
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="multiline"):
+        module.merge_configs_to_file("toml-mcpServers", path, _TOML_GENERATED)
+    assert path.read_bytes() == before
+
+
+def test_toml_merge_refuses_quoted_mcp_table_names(tmp_path):
+    module = load_script()
+    path = tmp_path / "config.toml"
+    path.write_text('[mcp_servers."odd name"]\ncommand = "x"\n', encoding="utf-8")
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="quoted MCP table names"):
+        module.merge_configs_to_file("toml-mcpServers", path, _TOML_GENERATED)
+    assert path.read_bytes() == before
+
+
+def test_toml_merge_keeps_array_of_tables_alongside_generated_servers(tmp_path):
+    """A neighbouring array-of-tables must not be disturbed by the merge."""
+    module = load_script()
+    path = tmp_path / "config.toml"
+    path.write_text(
+        '[mcp_servers.old]\ncommand = "old"\n[[user.items]]\nname = "keep"\n',
+        encoding="utf-8",
+    )
+
+    module.merge_configs_to_file(
+        "toml-mcpServers", path, '[mcp_servers.new]\ncommand = "new"\n'
+    )
+
+    import tomllib
+
+    merged = tomllib.loads(path.read_text(encoding="utf-8"))
+    assert merged["user"]["items"] == [{"name": "keep"}]
+    assert merged["mcp_servers"] == {
+        "old": {"command": "old"},
+        "new": {"command": "new"},
+    }
