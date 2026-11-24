@@ -26,9 +26,11 @@ from constants import get_litellm_oauth_gate  # noqa: E402 -- scripts/lib bootst
 from litellm_config import (  # noqa: E402 -- scripts/lib bootstrap.
     CHATGPT_REPORT_OK,
     chatgpt_verified_openai_models_report,
+    oauth_cache_expiry,
 )
 from litellm_route_guard import (  # noqa: E402 -- scripts/lib bootstrap.
     REFUSED_AMBIGUOUS_CREDENTIALS,
+    REFUSED_EXPIRED_AUTH,
     REFUSED_REVOKED,
     REFUSED_UNUSABLE_REPORT,
     alias_model_id,
@@ -79,6 +81,14 @@ def _plan_refusal(routes, planned_ids):
         )
     if not planned_ids:
         return None
+    if oauth_cache_expiry("chatgpt", os.environ) is None:
+        # Generation would not emit these routes without a live token, so a
+        # plan that still names them is stale authorisation.
+        return (
+            f"{REFUSED_EXPIRED_AUTH}: chatgpt OAuth cache is absent or expired "
+            "while subscription aliases are planned — run "
+            "scripts/litellm-oauth.py --provider chatgpt"
+        )
     # A projection that outlives the authorisation it was built from must not
     # authorise a client.
     state, verified = chatgpt_verified_openai_models_report(os.environ)
