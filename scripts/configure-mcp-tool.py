@@ -646,8 +646,12 @@ def merge_configs_to_file(fmt, mcp_path, output):
         if set(generated_data) != {"mcp_servers"}:
             raise ValueError("generated TOML must contain only MCP servers")
 
-        # Remove only MCP table headers and their payloads. Comments between
-        # tables belong to the surrounding document and must remain untouched.
+        # Remove only the tables this run generates. A table with another name
+        # is user-owned: the repository cannot prove it owns it, so it is
+        # retained rather than stripped. Comments between tables belong to the
+        # surrounding document and must remain untouched. See #394.
+        generated_servers = generated_data["mcp_servers"]
+        generated_names = set(generated_servers)
         lines = content.splitlines(keepends=True)
         retained = []
         removing_mcp = False
@@ -658,14 +662,20 @@ def merge_configs_to_file(fmt, mcp_path, output):
                 if '"' in table or "'" in table:
                     if table.startswith("mcp_servers."):
                         raise ValueError("refusing quoted MCP table names")
-                removing_mcp = table.startswith("mcp_servers.")
+                if table.startswith("mcp_servers."):
+                    owner = table.split(".", 1)[1].split(".", 1)[0]
+                    removing_mcp = owner in generated_names
+                else:
+                    removing_mcp = False
             if not removing_mcp or line.lstrip().startswith("#"):
                 retained.append(line)
         content = "".join(retained)
         updated = content.rstrip() + "\n\n" + output.strip() + "\n"
         updated_data = tomllib.loads(updated)
         expected = dict(existing_data)
-        expected["mcp_servers"] = generated_data["mcp_servers"]
+        merged_servers = dict(existing_data.get("mcp_servers", {}))
+        merged_servers.update(generated_servers)
+        expected["mcp_servers"] = merged_servers
         if updated_data != expected:
             raise ValueError("refusing TOML MCP merge that changes unrelated settings")
         with open(mcp_path, "w", encoding="utf-8") as f:
