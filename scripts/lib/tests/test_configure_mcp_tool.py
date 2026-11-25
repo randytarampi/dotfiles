@@ -1154,3 +1154,142 @@ def test_atomic_write_leaves_no_temporary_files(tmp_path):
         json.dumps({"mcpServers": {"a": {"command": "c"}}}),
     )
     assert sorted(p.name for p in tmp_path.iterdir()) == ["client.json"]
+
+
+@pytest.mark.parametrize("kind", ["symlink", "hardlink"])
+def test_mcp_backup_refuses_link_without_mutating_files(tmp_path, kind):
+    module = load_script()
+    path = tmp_path / "client.json"
+    write_config(path, {"keep": {}})
+    before = path.read_bytes()
+    unrelated = tmp_path / "unrelated"
+    unrelated.write_bytes(b"unrelated")
+    backup = tmp_path / "client.json.bak"
+    if kind == "symlink":
+        backup.symlink_to(unrelated)
+    else:
+        os.link(unrelated, backup)
+    with pytest.raises(ValueError, match="link"):
+        module.merge_configs_to_file(
+            "json-mcpServers-merge",
+            path,
+            json.dumps({"mcpServers": {"new": {}}}),
+            backup=True,
+        )
+    assert path.read_bytes() == before
+    assert unrelated.read_bytes() == b"unrelated"
+    assert backup.read_bytes() == b"unrelated"
+
+
+def test_mcp_linked_parent_refused_before_read(tmp_path):
+    module = load_script()
+    real = tmp_path / "real"
+    real.mkdir()
+    path = real / "client.json"
+    path.write_bytes(b"not even JSON")
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlink"):
+        module.merge_configs_to_file(
+            "json-mcpServers-merge", link / path.name, "{}", backup=True
+        )
+    assert path.read_bytes() == b"not even JSON"
+    assert sorted(p.name for p in real.iterdir()) == ["client.json"]
+
+
+def test_backup_failure_and_explicit_opt_out(tmp_path, monkeypatch):
+    module = load_script()
+    path = tmp_path / "client.json"
+    write_config(path, {"keep": {}})
+    before = path.read_bytes()
+    replace = module.os.replace
+
+    def fail_backup(source, destination):
+        if str(destination).endswith(".bak"):
+            raise OSError("disk full")
+        return replace(source, destination)
+
+    monkeypatch.setattr(module.os, "replace", fail_backup)
+    output = json.dumps({"mcpServers": {"new": {}}})
+    with pytest.raises(OSError, match="backup failed"):
+        module.merge_configs_to_file("json-mcpServers-merge", path, output, backup=True)
+    assert path.read_bytes() == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["client.json"]
+    module.merge_configs_to_file("json-mcpServers-merge", path, output)
+    assert read_config(path)["mcpServers"] == {"keep": {}, "new": {}}
+
+
+def test_mcp_backup_preserves_original_bytes_and_noop(tmp_path):
+    module = load_script()
+    path = tmp_path / "client.json"
+    before = b'{"mcpServers": {}}\r\n'
+    path.write_bytes(before)
+    output = json.dumps({"mcpServers": {"new": {}}})
+    module.merge_configs_to_file("json-mcpServers-merge", path, output, backup=True)
+    backup = tmp_path / "client.json.bak"
+    assert backup.read_bytes() == before
+    snapshot = path.stat()
+    module.merge_configs_to_file("json-mcpServers-merge", path, output, backup=True)
+    assert backup.read_bytes() == before
+    assert path.stat().st_mtime_ns == snapshot.st_mtime_ns
+
+
+@pytest.mark.parametrize("name", ["mcp.json", "mcp-adapter.json"])
+def test_pi_migration_refuses_linked_leaf(tmp_path, name):
+    module = load_script()
+    old = tmp_path / "mcp.json"
+    adapter = tmp_path / "mcp-adapter.json"
+    real = tmp_path / "unrelated"
+    real.write_bytes(b"not JSON")
+    for path in (old, adapter):
+        if path.name == name:
+            path.symlink_to(real)
+        else:
+            write_config(path, {"keep": {}})
+    with pytest.raises(ValueError, match="symlink"):
+        module.migrate_pi_mcp_config(old, adapter)
+    assert old.exists() and adapter.exists()
+    assert real.read_bytes() == b"not JSON"
+    assert not list(tmp_path.glob("*.bak"))
+
+
+def test_pi_migration_backs_up_legacy_bytes(tmp_path):
+    module = load_script()
+    old = tmp_path / "mcp.json"
+    adapter = tmp_path / "mcp-adapter.json"
+    write_config(old, {"legacy": {}})
+    before = old.read_bytes()
+    assert module.migrate_pi_mcp_config(old, adapter)
+    assert not old.exists()
+    assert (tmp_path / "mcp.json.bak").read_bytes() == before
+    assert read_config(adapter)["mcpServers"] == {"legacy": {}}
+
+
+def test_pi_orchestration_refuses_linked_backup(tmp_path, monkeypatch):
+    module = load_script()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("DOTFILES_RUN_MCP_SETUP", "1")
+    directory = tmp_path / ".pi" / "agent"
+    directory.mkdir(parents=True)
+    adapter = directory / "mcp-adapter.json"
+    write_config(adapter, {"keep": {}})
+    before = adapter.read_bytes()
+    unrelated = tmp_path / "unrelated"
+    unrelated.write_bytes(b"unrelated")
+    (directory / "mcp-adapter.json.bak").symlink_to(unrelated)
+    monkeypatch.setattr(
+        module,
+        "resolve_defs_list",
+        lambda *_args: [{"name": "new", "command": "generated"}],
+    )
+    monkeypatch.setattr(
+        module,
+        "format_configs_to_str",
+        lambda *_args: json.dumps({"mcpServers": {"new": {}}}),
+    )
+    args = _args(tmp_path)
+    args.no_backup = False
+    with pytest.raises(ValueError, match="symlink"):
+        module.orchestrate_mcp_config(args)
+    assert adapter.read_bytes() == before
+    assert unrelated.read_bytes() == b"unrelated"
