@@ -192,7 +192,21 @@ jobs:
           # minimumVersion 2.70.2 and does not honour the interpreters
           # configuration (observed: raw fork/exec of .sh scripts failed
           # identically across runs 1-3).
-          choco install make --version=4.4.1 --no-progress -y
+          # Bounded retry with backoff. The Chocolatey feed has returned
+          # transient HTTP 503 for a pinned, unchanged package on three separate
+          # runs, failing the job before any repository code executes. A fixed
+          # retry keeps the pinned version and the required-check matrix intact;
+          # changing the supported architecture or suppressing ci/required would
+          # hide a real regression instead of surviving an outage. See #276.
+          $attempts = 4
+          for ($i = 1; $i -le $attempts; $i++) {
+            choco install make --version=4.4.1 --no-progress -y
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($i -eq $attempts) {
+              throw "choco install make failed after $attempts attempts (exit $LASTEXITCODE) - upstream feed outage, not a repository failure"
+            }
+            Start-Sleep -Seconds (15 * $i)
+          }
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\bin" | Out-Null
       - name: Install chezmoi (Windows)
         if: runner.os == 'Windows'
