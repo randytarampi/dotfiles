@@ -512,7 +512,8 @@ def _mcp_file_stat(path):
             continue
         if (
             stat.S_ISLNK(info.st_mode)
-            or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+            or getattr(info, "st_file_attributes", 0)
+            & stat.FILE_ATTRIBUTE_REPARSE_POINT
         ):
             raise ValueError(f"refusing symlink or reparse point: {component}")
         if component != target:
@@ -520,7 +521,9 @@ def _mcp_file_stat(path):
                 raise ValueError(f"refusing non-directory MCP parent: {component}")
             continue
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-            raise ValueError(f"refusing non-regular or multiply-linked MCP file: {path}")
+            raise ValueError(
+                f"refusing non-regular or multiply-linked MCP file: {path}"
+            )
         if hasattr(os, "geteuid") and info.st_uid != os.geteuid():
             raise ValueError(f"refusing MCP file owned by another user: {path}")
         return info
@@ -546,7 +549,9 @@ def _backup_mcp_destination(path, expected):
     original = Path(path).read_bytes()
     _check_mcp_snapshot(path, expected)
     try:
-        _write_mcp_destination(backup_path, original, expected=backup_stat, private=True)
+        _write_mcp_destination(
+            backup_path, original, expected=backup_stat, private=True
+        )
     except OSError as exc:
         raise OSError(
             f"backup failed for {path}; pass --no-backup to opt out explicitly"
