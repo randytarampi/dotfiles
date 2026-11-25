@@ -13,7 +13,6 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
-
 UNKNOWN = "refused-no-loaded-generation-receipt"
 STALE = "refused-stale-loaded-generation"
 FOREIGN = "refused-loaded-generation-port-mismatch"
