@@ -32,6 +32,7 @@ source "$LIB_DIR/systemd_managed_unit.sh"
 # configs/opencode/nvidia-nim-models.json: {{ include "configs/opencode/nvidia-nim-models.json" | sha256sum }}
 # scripts/lib/litellm_routing.py: {{ include "scripts/lib/litellm_routing.py" | sha256sum }}
 # scripts/lib/litellm_service.sh: {{ include "scripts/lib/litellm_service.sh" | sha256sum }}
+# scripts/lib/litellm_generation.py: {{ include "scripts/lib/litellm_generation.py" | sha256sum }}
 # scripts/lib/systemd_managed_unit.sh: {{ include "scripts/lib/systemd_managed_unit.sh" | sha256sum }}
 # env fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_USE_LITELLM_PROXY" | default "0" }}:{{ env "DOTFILES_LITELLM_OAUTH_PROVIDERS" | default "0" }}:{{ env "DOTFILES_RUN_JUNIE_CLI_SETUP" | default "0" }}:{{ env "DOTFILES_RUN_CURSOR_SETUP" | default "0" }}:{{ env "DOTFILES_LITELLM_VERSION" | default "1.108.11" }}:{{ env "LITELLM_PORT" | default "4000" }}
 # secret fingerprint: {{ env "LITELLM_MASTER_KEY" | sha256sum | trunc 12 }}
@@ -78,11 +79,12 @@ litellm_require_database_url
 
 LITELLM_HOME="$HOME/.local/share/litellm"
 VENV="$LITELLM_HOME/venv"
-CONFIG="$LITELLM_HOME/config.yaml"
 DATA="$LITELLM_HOME/data"
 LOGS="$LITELLM_HOME/logs"
 SERVICE_ENV="$LITELLM_HOME/service.env"
 VERSION="${DOTFILES_LITELLM_VERSION:-1.108.11}"
+PORT="${LITELLM_PORT:-4000}"
+[[ "$PORT" =~ ^[1-9][0-9]{0,4}$ ]] && (( PORT <= 65535 )) || die "Invalid LiteLLM port"
 PYTHON_BIN=""
 for candidate in python3.11 python3.12 python3.10; do
   if command -v "$candidate" >/dev/null 2>&1; then
@@ -100,12 +102,13 @@ fi
 # every image-bearing request to an ollama/* model fails with HTTP 500
 # ("ollama image conversion failed please run pip install Pillow"), which is
 # how the OpenCode observer vision probes failed on 2026-10-12.
-if ! "$VENV/bin/python" -m pip install -q "litellm[proxy]==${VERSION}" "prisma==0.15.0" "Pillow==12.3.0"; then
+if ! "$VENV/bin/python" -m pip install -q "litellm[proxy]==${VERSION}" "prisma==0.15.0" "Pillow==12.3.0" "psutil==7.2.2"; then
   warn "LiteLLM install failed; retrying once"
   sleep 2
-  "$VENV/bin/python" -m pip install -q "litellm[proxy]==${VERSION}" "prisma==0.15.0" "Pillow==12.3.0" || die "Failed to install litellm[proxy]==${VERSION}"
+  "$VENV/bin/python" -m pip install -q "litellm[proxy]==${VERSION}" "prisma==0.15.0" "Pillow==12.3.0" "psutil==7.2.2" || die "Failed to install litellm[proxy]==${VERSION}"
 fi
 litellm_ensure_prisma_client "$VENV" || die "Failed to prepare LiteLLM Prisma client"
+"$VENV/bin/python" -I "$LIB_DIR/litellm_generation.py" install "$LITELLM_HOME" || die "Failed to install LiteLLM generation launcher"
 mkdir -p "$DATA" "$LOGS"
 chmod 700 "$DATA" "$LOGS"
 litellm_service_env_sync "$SERVICE_ENV" || die "Failed to reconcile LiteLLM service.env"
@@ -131,14 +134,15 @@ Description=LiteLLM proxy gateway
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/env -i HOME=%h PATH=/usr/bin:/bin:%h/.local/share/litellm/venv/bin /bin/bash --noprofile --norc -c 'set -a; source "$LITELLM_HOME/service.env"; set +a; exec "$LITELLM_HOME/venv/bin/litellm" --config "$LITELLM_HOME/config.yaml" --host 127.0.0.1 --port "${LITELLM_PORT:-4000}" --num_workers 1'
+ExecStart=/usr/bin/env -i HOME=%h PATH=/usr/bin:/bin:%h/.local/share/litellm/venv/bin /bin/bash --noprofile --norc -c 'set -a && source "$LITELLM_HOME/service.env" && set +a && exec "$VENV/bin/python" -I "$LITELLM_HOME/launch-generation.py" launch "$LITELLM_HOME" $PORT'
 Restart=on-failure
 StandardOutput=append:$LITELLM_HOME/logs/proxy.log
 StandardError=append:$LITELLM_HOME/logs/proxy.log
 EOF
   if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
     systemctl --user daemon-reload || warn "systemd user daemon-reload failed"
-    systemctl --user enable --now litellm.service || warn "systemd user LiteLLM start failed"
+    systemctl --user enable litellm.service || die "systemd user LiteLLM enable failed"
+    systemctl --user restart litellm.service || die "systemd user LiteLLM restart failed"
     for _ in {1..30}; do
       if curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then break; fi
       sleep 2
@@ -158,7 +162,7 @@ else
   <key>Label</key><string>com.litellm.proxy</string>
   <key>ProgramArguments</key><array>
     <string>/bin/bash</string><string>-c</string>
-    <string>exec /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin:$VENV/bin" /bin/bash --noprofile --norc -c 'set -a &amp;&amp; source "$SERVICE_ENV" &amp;&amp; set +a &amp;&amp; exec "$VENV/bin/litellm" --config "$CONFIG" --host 127.0.0.1 --port "{{ env "LITELLM_PORT" | default "4000" }}" --num_workers 1'</string>
+    <string>exec /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin:$VENV/bin" /bin/bash --noprofile --norc -c 'set -a &amp;&amp; source "$SERVICE_ENV" &amp;&amp; set +a &amp;&amp; exec "$VENV/bin/python" -I "$LITELLM_HOME/launch-generation.py" launch "$LITELLM_HOME" $PORT'</string>
   </array>
   <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>$LOGS/proxy.log</string>
@@ -167,15 +171,6 @@ else
 PLIST_EOF
   chmod 600 "$PLIST"
   if ! litellm_service_start; then die "${LITELLM_SERVICE_ERROR:-Failed to start LiteLLM}"; fi
-  # Record the generation this process was launched with, so a later preflight
-  # can tell whether the running daemon predates the config on disk. Written
-  # after a successful start and deliberately non-fatal. See #361.
-  if _digest="$( (shasum -a 256 "$CONFIG" 2>/dev/null || sha256sum "$CONFIG" 2>/dev/null) | cut -d" " -f1)" && [[ -n "$_digest" ]]; then
-    (
-      umask 077
-      printf "%s\n%s\n%s\n" "$_digest" "$(date +%s)" "${LITELLM_PORT:-4000}" >"$HOME/.local/share/litellm/.loaded-generation"
-    ) 2>/dev/null || true
-  fi
   for _ in {1..30}; do
     if curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then break; fi
     sleep 2

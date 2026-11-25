@@ -3961,7 +3961,7 @@ def test_litellm_template_prepares_prisma_before_service_start():
         / ".chezmoiscripts/run_onchange_15-litellm.sh.tmpl"
     ).read_text(encoding="utf-8")
     prepare = template.index('litellm_ensure_prisma_client "$VENV"')
-    assert prepare < template.index("systemctl --user enable --now litellm.service")
+    assert prepare < template.index("systemctl --user restart litellm.service")
     assert prepare < template.index("litellm_service_start")
 
 
