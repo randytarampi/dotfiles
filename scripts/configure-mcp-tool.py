@@ -12,6 +12,7 @@ import re
 import stat
 import fnmatch
 import tempfile
+from pathlib import Path
 import subprocess  # nosec B404 - fixed argv; no shell or generated configuration commands.
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -497,34 +498,85 @@ def _known_managed_server_names():
     return names
 
 
-def _write_mcp_destination(mcp_path, content):
-    """Replace an MCP config atomically, refusing unsafe targets.
+def _mcp_file_stat(path):
+    """Validate before I/O in trusted, quiescent directories.
 
-    A truncating write leaves the user with a half-written client config when it
-    fails, and following a symlink rewrites a file this repository does not own.
-    Write beside the destination and rename, so a failure keeps the previous
-    file intact. See #395.
+    This guard is not a sandbox against concurrent hostile directory renames.
+    Never resolve a symlink to make it acceptable.
     """
-    path = os.path.abspath(mcp_path)
-    if os.path.islink(path):
-        raise ValueError(f"refusing to replace a symlinked MCP config: {path}")
-    if os.path.exists(path) and os.stat(path).st_nlink != 1:
-        raise ValueError(f"refusing to replace a multiply-linked MCP config: {path}")
-    directory = os.path.dirname(path) or "."
+    target = Path(os.path.abspath(path))
+    for component in (*reversed(target.parents), target):
+        try:
+            info = component.lstat()
+        except FileNotFoundError:
+            continue
+        if (
+            stat.S_ISLNK(info.st_mode)
+            or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+        ):
+            raise ValueError(f"refusing symlink or reparse point: {component}")
+        if component != target:
+            if not stat.S_ISDIR(info.st_mode):
+                raise ValueError(f"refusing non-directory MCP parent: {component}")
+            continue
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise ValueError(f"refusing non-regular or multiply-linked MCP file: {path}")
+        if hasattr(os, "geteuid") and info.st_uid != os.geteuid():
+            raise ValueError(f"refusing MCP file owned by another user: {path}")
+        return info
+    return None
+
+
+def _mcp_snapshot(info):
+    if info is None:
+        return None
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
+def _check_mcp_snapshot(path, expected):
+    if _mcp_snapshot(_mcp_file_stat(path)) != _mcp_snapshot(expected):
+        raise ValueError(f"refusing MCP file changed during configuration: {path}")
+
+
+def _backup_mcp_destination(path, expected):
+    """Keep exact original bytes in a private atomic sibling backup."""
+    _check_mcp_snapshot(path, expected)
+    backup_path = os.fspath(path) + ".bak"
+    backup_stat = _mcp_file_stat(backup_path)
+    original = Path(path).read_bytes()
+    _check_mcp_snapshot(path, expected)
+    try:
+        _write_mcp_destination(backup_path, original, expected=backup_stat, private=True)
+    except OSError as exc:
+        raise OSError(
+            f"backup failed for {path}; pass --no-backup to opt out explicitly"
+        ) from exc
+
+
+def _write_mcp_destination(path, content, *, expected, backup=False, private=False):
+    """Replace an MCP file atomically after validating its read snapshot."""
+    path = os.path.abspath(path)
+    _check_mcp_snapshot(path, expected)
+    if isinstance(content, str):
+        content = content.encode("utf-8")
+    if expected is not None and not private:
+        if Path(path).read_bytes() == content:
+            _check_mcp_snapshot(path, expected)
+            return
+    if backup and expected is not None:
+        _backup_mcp_destination(path, expected)
+    directory = os.path.dirname(path)
     fd, temporary = tempfile.mkstemp(prefix=".mcp-", suffix=".tmp", dir=directory)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        with os.fdopen(fd, "wb") as handle:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
-        if os.path.exists(path):
-            os.chmod(temporary, stat.S_IMODE(os.stat(path).st_mode))
+        if expected is not None and not private:
+            os.chmod(temporary, stat.S_IMODE(expected.st_mode))
+        _check_mcp_snapshot(path, expected)
         os.replace(temporary, path)
     except BaseException:
-        try:
-            os.close(fd)
-        except OSError:
-            pass
         try:
             os.unlink(temporary)
         except OSError:
@@ -532,13 +584,20 @@ def _write_mcp_destination(mcp_path, content):
         raise
 
 
-def merge_configs_to_file(fmt, mcp_path, output):
+def merge_configs_to_file(fmt, mcp_path, output, *, backup=False):
+    mcp_path = os.path.abspath(mcp_path)
+    file_stat = _mcp_file_stat(mcp_path)
+
+    def write(content):
+        _write_mcp_destination(mcp_path, content, expected=file_stat, backup=backup)
+
     # Validate the collision before touching the destination. Regular
     # regeneration is idempotent, but a prior custom Basic Memory entry
     # must never lose its user-selected vault or security environment.
-    if os.path.isfile(mcp_path):
+    if file_stat is not None:
         with open(mcp_path, "r", encoding="utf-8") as handle:
             current_text = handle.read()
+        _check_mcp_snapshot(mcp_path, file_stat)
         if fmt == "toml-mcpServers":
             try:
                 import tomllib
@@ -564,15 +623,14 @@ def merge_configs_to_file(fmt, mcp_path, output):
             # tools:["*"] as equivalent to the default unrestricted list.
             copilot_wildcard_tools=(fmt == "json-mcpServers-http"),
         )
-    if not os.path.exists(mcp_path):
-        _write_mcp_destination(mcp_path, output)
+    if file_stat is None:
+        write(output)
         logger.info(f"Created file with configuration: {mcp_path}")
         return
 
     if fmt == "json-settings-merge":
         new_data = json.loads(output)
-        with open(mcp_path, "r", encoding="utf-8") as f:
-            content = f.read().strip()
+        content = current_text.strip()
         existing = json.loads(content) if content else {}
         # Gemini settings.json is shared with the user and holds unrelated
         # settings. Merge per generated name only: a name this run does not
@@ -591,7 +649,7 @@ def merge_configs_to_file(fmt, mcp_path, output):
         for key, value in new_data.items():
             if key != "mcpServers":
                 existing.setdefault(key, value)
-        _write_mcp_destination(mcp_path, json.dumps(existing, indent=4) + "\n")
+        write(json.dumps(existing, indent=4) + "\n")
         logger.info(f"Merged config into: {mcp_path}")
 
     elif fmt in (
@@ -611,8 +669,7 @@ def merge_configs_to_file(fmt, mcp_path, output):
         # The Basic Memory collision guard above remains stricter; other
         # generated-name conflicts retain the pre-existing overwrite policy.
         new_data = json.loads(output)
-        with open(mcp_path, "r", encoding="utf-8") as f:
-            content = f.read().strip()
+        content = current_text.strip()
         existing = json.loads(content) if content else {}
         namespace_key = "servers" if fmt == "json-servers" else "mcpServers"
         if set(new_data) != {namespace_key} or not isinstance(
@@ -636,24 +693,22 @@ def merge_configs_to_file(fmt, mcp_path, output):
         merged_servers = dict(current_servers)
         merged_servers.update(generated_servers)
         existing[namespace_key] = merged_servers
-        _write_mcp_destination(mcp_path, json.dumps(existing, indent=4) + "\n")
+        write(json.dumps(existing, indent=4) + "\n")
         logger.info(f"Merged config into: {mcp_path}")
 
     elif fmt == "opencode-internal":
         new_data = json.loads(output)
-        with open(mcp_path, "r", encoding="utf-8") as f:
-            content = f.read().strip()
+        content = current_text.strip()
         existing = json.loads(content) if content else {}
         if "mcp" in new_data:
             if "mcp" not in existing:
                 existing["mcp"] = {}
             existing["mcp"].update(new_data["mcp"])
-        _write_mcp_destination(mcp_path, json.dumps(existing, indent=4) + "\n")
+        write(json.dumps(existing, indent=4) + "\n")
         logger.info(f"Merged mcp configs into: {mcp_path}")
 
     elif fmt == "toml-mcpServers":
-        with open(mcp_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = current_text
 
         try:
             import tomllib
@@ -707,32 +762,11 @@ def merge_configs_to_file(fmt, mcp_path, output):
         expected["mcp_servers"] = merged_servers
         if updated_data != expected:
             raise ValueError("refusing TOML MCP merge that changes unrelated settings")
-        _write_mcp_destination(mcp_path, updated)
+        write(updated)
         logger.info(f"Updated TOML mcp servers in: {mcp_path}")
     else:
-        _write_mcp_destination(mcp_path, output)
+        write(output)
         logger.info(f"Overwrote file with configuration: {mcp_path}")
-
-
-def _atomic_write_json(path, data):
-    """Write JSON beside the destination and replace it atomically."""
-    directory = os.path.dirname(path) or "."
-    fd, temporary = tempfile.mkstemp(
-        prefix=".mcp-adapter-", suffix=".tmp", dir=directory
-    )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(data, handle, indent=4)
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    except Exception:
-        try:
-            os.unlink(temporary)
-        except FileNotFoundError:
-            pass
-        raise
 
 
 def _combine_pi_mcp_documents(old_data, generated_data, adapter_data):
@@ -753,40 +787,69 @@ def _combine_pi_mcp_documents(old_data, generated_data, adapter_data):
     return result
 
 
-def migrate_pi_mcp_config(old_path, adapter_path, generated_data=None, dry_run=False):
+def migrate_pi_mcp_config(
+    old_path, adapter_path, generated_data=None, dry_run=False, *, backup=True
+):
     """Migrate Pi's old MCP file, retaining adapter-owned duplicate entries."""
     old = os.path.abspath(os.path.expanduser(old_path))
     adapter = os.path.abspath(os.path.expanduser(adapter_path))
-    if not os.path.isfile(old):
+    paths = [old, adapter]
+    if backup:
+        paths.extend([old + ".bak", adapter + ".bak"])
+    if len(set(map(os.path.normcase, paths))) != len(paths):
+        raise ValueError("legacy, adapter and backup MCP paths must differ")
+    old_stat = _mcp_file_stat(old)
+    adapter_stat = _mcp_file_stat(adapter)
+    if old_stat is None:
         return False
     with open(old, "r", encoding="utf-8") as handle:
         old_data = json.load(handle)
+    _check_mcp_snapshot(old, old_stat)
     if generated_data:
         # The legacy Pi file is user-owned, even when the current adapter
         # file is absent. Do not replace a pre-existing custom memory vault.
         ensure_basic_memory_ownership(old_data, generated_data, "mcpServers")
     adapter_data = {}
-    if os.path.isfile(adapter):
+    if adapter_stat is not None:
         with open(adapter, "r", encoding="utf-8") as handle:
             adapter_data = json.load(handle)
+        _check_mcp_snapshot(adapter, adapter_stat)
     merged = _combine_pi_mcp_documents(old_data, generated_data, adapter_data)
     if not dry_run:
+        if backup:
+            if adapter_stat is not None:
+                _mcp_file_stat(adapter + ".bak")
+            _backup_mcp_destination(old, old_stat)
         os.makedirs(os.path.dirname(adapter), exist_ok=True)
-        _atomic_write_json(adapter, merged)
+        _write_mcp_destination(
+            adapter,
+            json.dumps(merged, indent=4) + "\n",
+            expected=adapter_stat,
+            backup=backup,
+        )
+        _check_mcp_snapshot(old, old_stat)
         os.remove(old)
     logger.info(f"Migrated Pi MCP config {old} -> {adapter}")
     return True
 
 
-def merge_pi_adapter_config(adapter_path, output):
+def merge_pi_adapter_config(adapter_path, output, *, backup=False):
     """Write one atomic Pi adapter document with adapter precedence."""
+    adapter_path = os.path.abspath(adapter_path)
+    expected = _mcp_file_stat(adapter_path)
     generated = json.loads(output)
     existing = {}
-    if os.path.isfile(adapter_path):
+    if expected is not None:
         with open(adapter_path, "r", encoding="utf-8") as handle:
             existing = json.load(handle)
+        _check_mcp_snapshot(adapter_path, expected)
     merged = _combine_pi_mcp_documents({}, generated, existing)
-    _atomic_write_json(adapter_path, merged)
+    _write_mcp_destination(
+        adapter_path,
+        json.dumps(merged, indent=4) + "\n",
+        expected=expected,
+        backup=backup,
+    )
     logger.info(f"Merged Pi MCP config into: {adapter_path}")
 
 
@@ -957,34 +1020,27 @@ def orchestrate_mcp_config(args):
             print(redact_output_content(format_type, output_content))
         return
 
-    parent_dir = os.path.dirname(resolved_mcp_path)
-    if parent_dir:
-        os.makedirs(parent_dir, exist_ok=True)
+    resolved_mcp_path = os.path.abspath(resolved_mcp_path)
+    _mcp_file_stat(resolved_mcp_path)
+    backup = not args.no_backup
 
-    if not args.no_backup and os.path.exists(resolved_mcp_path):
-        from file_utils import backup_file
-
-        if backup_file(resolved_mcp_path, enabled=True) is None:
-            # A backup that silently failed is not a backup. Without one there
-            # is no way back from a bad merge, so refuse rather than write.
-            raise SystemExit(
-                f"refusing to modify {resolved_mcp_path}: backup failed "
-                "(pass --no-backup to accept that risk explicitly)"
-            )
-
-    if args.tool == "pi":
+    if args.tool == "pi" and args.mode == "global":
         old_path = os.path.join(os.path.dirname(resolved_mcp_path), "mcp.json")
-        generated_data = json.loads(output_content)
-        if args.mode == "global" and os.path.isfile(old_path):
+        if _mcp_file_stat(old_path) is not None:
             migrate_pi_mcp_config(
-                old_path, resolved_mcp_path, generated_data=generated_data
+                old_path,
+                resolved_mcp_path,
+                generated_data=json.loads(output_content),
+                backup=backup,
             )
             return
-        if args.mode == "global":
-            merge_pi_adapter_config(resolved_mcp_path, output_content)
-            return
 
-    merge_configs_to_file(format_type, resolved_mcp_path, output_content)
+    os.makedirs(os.path.dirname(resolved_mcp_path), exist_ok=True)
+    if args.tool == "pi" and args.mode == "global":
+        merge_pi_adapter_config(resolved_mcp_path, output_content, backup=backup)
+        return
+
+    merge_configs_to_file(format_type, resolved_mcp_path, output_content, backup=backup)
 
     logger.info(f"{args.tool} MCP config written to {resolved_mcp_path}")
 
