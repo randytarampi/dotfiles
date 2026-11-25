@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 import litellm_config
-import litellm_config
 import model_catalogues
 
 ROOT = Path(__file__).resolve().parents[3]
