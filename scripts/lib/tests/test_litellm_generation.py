@@ -95,16 +95,20 @@ def test_changed_projection_after_authorization_refuses(home):
 def test_missing_config_fails_closed(home):
     path, config, projection, _ = home
     config.unlink()
-    assert generation.main(
-        ["check", str(path), "4000", generation._digest(projection.read_bytes())]
-    ) == 1
+    assert (
+        generation.main(
+            ["check", str(path), "4000", generation._digest(projection.read_bytes())]
+        )
+        == 1
+    )
 
 
 def test_foreign_port_refuses(home):
     path, _, projection, _ = home
-    assert generation.check(
-        path, "5000", generation._digest(projection.read_bytes())
-    ) == generation.FOREIGN
+    assert (
+        generation.check(path, "5000", generation._digest(projection.read_bytes()))
+        == generation.FOREIGN
+    )
 
 
 def test_missing_listener_refuses(home, monkeypatch):
@@ -119,9 +123,12 @@ def test_unsafe_receipt_is_not_followed(home):
     receipt.rename(foreign)
     receipt.symlink_to(foreign)
     before = foreign.read_bytes()
-    assert generation.main(
-        ["check", str(path), "4000", generation._digest(projection.read_bytes())]
-    ) == 1
+    assert (
+        generation.main(
+            ["check", str(path), "4000", generation._digest(projection.read_bytes())]
+        )
+        == 1
+    )
     assert foreign.read_bytes() == before
 
 
@@ -129,9 +136,12 @@ def test_duplicate_yaml_keys_refused(home):
     path, config, projection, _ = home
     config.write_bytes(config.read_bytes() + b"model_list: []\n")
     generation.launch(path, "4000")
-    assert generation.main(
-        ["check", str(path), "4000", generation._digest(projection.read_bytes())]
-    ) == 1
+    assert (
+        generation.main(
+            ["check", str(path), "4000", generation._digest(projection.read_bytes())]
+        )
+        == 1
+    )
 
 
 def test_process_requires_exact_identity_command_and_listener(tmp_path, monkeypatch):
