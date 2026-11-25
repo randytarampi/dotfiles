@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
-"""Read-only preflight: does the gateway advertise the routes the plan emitted?
+"""Read-only subscription-route preflight (#361).
 
-Exits 0 when every planned ``openai/<id>`` alias is bound to exactly
-``chatgpt/<id>`` in the generator's own emitted projection and is advertised by
-the running gateway to the client key. Exits 1 otherwise, naming the reason.
-
-It never regenerates, never restarts, never writes client state and never calls
-an admin endpoint. ``/v1/models`` advertises aliases and does not attest backend
-identity, so presence is all that is established at runtime; wire identity comes
-from the projection that ``write_config`` co-writes with the config it
-describes. See #361.
+Check the current OAuth report, the exact projection and managed launch
+generation, and the advertised alias namespace. A launch receipt attests
+the immutable-by-convention config snapshot supplied to a live listener,
+not the gateway's parsed router state or dynamic backend selection.
+No regeneration, restart, admin request or default inference is performed.
 """
 
 import argparse
+import hashlib
 import json
 import os
+import subprocess  # nosec B404 - fixed managed generation checker argv.
 import sys
 import urllib.request
 from pathlib import Path
@@ -24,6 +22,7 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 from constants import get_litellm_oauth_gate  # noqa: E402 -- scripts/lib bootstrap.
+from free_route_manifest import config_binding_digest  # noqa: E402
 from litellm_config import (  # noqa: E402 -- scripts/lib bootstrap.
     CHATGPT_REPORT_OK,
     chatgpt_verified_openai_models_report,
@@ -43,7 +42,6 @@ LITELLM_DIR = Path("~/.local/share/litellm").expanduser()
 PROJECTION_FILE = LITELLM_DIR / "free-route-config.json"
 KEY_FILE = LITELLM_DIR / "clients" / "opencode.key"
 CONFIG_FILE = LITELLM_DIR / "config.yaml"
-RECEIPT_FILE = LITELLM_DIR / ".loaded-generation"
 
 REFUSED_NO_RECEIPT = "refused-no-loaded-generation-receipt"
 REFUSED_STALE_GENERATION = "refused-stale-loaded-generation"
@@ -58,7 +56,8 @@ def _fail(reason):
 def _load_plan():
     """Return ``((routes, aliases, planned_ids), None)`` or ``(None, reason)``."""
     try:
-        projection = json.loads(PROJECTION_FILE.read_text(encoding="utf-8"))
+        raw = PROJECTION_FILE.read_bytes()
+        projection = json.loads(raw)
     except FileNotFoundError:
         return None, (
             "no emitted route projection; LiteLLM has not generated a config yet "
@@ -66,16 +65,24 @@ def _load_plan():
         )
     except (OSError, ValueError) as error:
         return None, f"route projection is unreadable ({error})"
+    if not isinstance(projection, dict):
+        return None, "invalid route projection"
     routes = projection.get("routes")
     if not isinstance(routes, list):
         return None, "route projection has no route list"
+    try:
+        binding = config_binding_digest(routes)
+    except (AttributeError, TypeError, ValueError):
+        return None, "invalid route projection bindings"
+    if binding != projection.get("config_binding_sha256"):
+        return None, "route projection binding digest differs"
     aliases = [
         row.get("model_name")
         for row in routes
         if isinstance(row, dict) and alias_model_id(row.get("model_name"))
     ]
     planned_ids = {alias_model_id(alias) for alias in aliases}
-    return (routes, aliases, planned_ids), None
+    return (routes, aliases, planned_ids, hashlib.sha256(raw).hexdigest()), None
 
 
 def _plan_refusal(routes, planned_ids):
@@ -133,65 +140,60 @@ def _served_refusal(aliases, base_url):
     return None if matches else matches_reason
 
 
-def _sha256_file(path):
-    import hashlib
-
+def _run_generation_check(port, projection_digest):
+    python = CONFIG_FILE.parent / "venv/bin/python"
+    helper = Path(LIB_DIR) / "litellm_generation.py"
     try:
-        return hashlib.sha256(path.read_bytes()).hexdigest()
-    except OSError:
-        return None
-
-
-def _receipt_refusal(port, platform_name=None):
-    """Prove the running process was launched with the config now on disk.
-
-    Only macOS launches through a repository-generated wrapper, so an absent
-    receipt is UNKNOWN there and NOT APPLICABLE elsewhere — treating absence as
-    failure on Linux would break legitimate deploys. See #361.
-    """
-    platform_name = platform_name or sys.platform
-    expected = _sha256_file(CONFIG_FILE)
-    if expected is None:
-        return None
-    try:
-        lines = RECEIPT_FILE.read_text(encoding="utf-8").split()
-    except OSError:
-        if platform_name == "darwin":
-            return (
-                f"{REFUSED_NO_RECEIPT}: the service was not started by the "
-                "repository wrapper, so the loaded configuration is unknown — "
-                "run 'make litellm-restart'"
-            )
-        return None
-    if len(lines) < 3:
-        return f"{REFUSED_NO_RECEIPT}: malformed loaded-generation receipt"
-    digest, started_at, receipt_port = lines[0], lines[1], lines[2]
-    if receipt_port != str(port):
-        return f"{REFUSED_FOREIGN_GENERATION}: receipt port {receipt_port} != {port}"
-    if digest != expected:
-        return (
-            f"{REFUSED_STALE_GENERATION}: the running process was launched with "
-            "different config bytes than the current config.yaml — run "
-            "'make litellm-restart'"
+        result = subprocess.run(  # nosec B603 - fixed managed checker, no shell.
+            [
+                str(python),
+                "-I",
+                str(helper),
+                "check",
+                str(CONFIG_FILE.parent),
+                str(port),
+                projection_digest,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
         )
-    try:
-        if int(started_at) < int(CONFIG_FILE.stat().st_mtime):
-            return (
-                f"{REFUSED_STALE_GENERATION}: the launch predates the current "
-                "config.yaml — run 'make litellm-restart'"
-            )
-    except (OSError, ValueError):
-        return f"{REFUSED_NO_RECEIPT}: unreadable loaded-generation receipt"
+    except (OSError, subprocess.SubprocessError):
+        return REFUSED_NO_RECEIPT
+    if result.returncode == 0:
+        return None
+    reason = result.stdout.strip()
+    if reason in {
+        REFUSED_NO_RECEIPT,
+        REFUSED_STALE_GENERATION,
+        REFUSED_FOREIGN_GENERATION,
+        "refused-loaded-generation-projection-mismatch",
+        "refused-loaded-generation-process-mismatch",
+    }:
+        return reason
+    return REFUSED_NO_RECEIPT
+
+
+def _receipt_refusal(port, projection_digest, platform_name=None):
+    """Unsupported, unreadable or unverified launch evidence is UNKNOWN."""
+    platform_name = platform_name or sys.platform
+    if platform_name not in {"darwin", "linux"}:
+        return f"{REFUSED_NO_RECEIPT}: unmanaged platform; generation UNKNOWN"
+    reason = _run_generation_check(port, projection_digest)
+    if reason:
+        return (
+            f"{reason}: managed launch generation is unknown or stale — "
+            "run 'make deploy' to install the launcher, then 'make litellm-restart'"
+        )
     return None
 
 
 def _deep_probe(alias, base_url, api_key, timeout=20):
     """One on-demand inference request. Never called by deploy. See #361."""
-    import json as _json
-
     from paseo_http import open_credentialed
 
-    body = _json.dumps(
+    body = json.dumps(
         {
             "model": alias,
             "max_tokens": 1,
@@ -209,7 +211,7 @@ def _deep_probe(alias, base_url, api_key, timeout=20):
     )
     try:
         with open_credentialed(request, timeout) as response:
-            return response.status < 300
+            return 200 <= response.status < 300
     except Exception:
         return False
 
@@ -227,24 +229,31 @@ def main(argv=None):
     plan, reason = _load_plan()
     if plan is None:
         return _fail(reason)
-    routes, aliases, planned_ids = plan
+    routes, aliases, planned_ids, projection_digest = plan
 
     if not get_litellm_oauth_gate(os.environ):
         # The subscription lane is not in use; a direct route is legitimate.
         return 0
 
+    port = os.environ.get("LITELLM_PORT", "4000")
     refusal = (
         _plan_refusal(routes, planned_ids)
-        or _receipt_refusal(os.environ.get("LITELLM_PORT", "4000"))
+        or _receipt_refusal(port, projection_digest)
         or _served_refusal(aliases, base_url)
+        or _receipt_refusal(port, projection_digest)
     )
     if refusal:
         return _fail(refusal)
     if args.deep:
         # On demand only: one real inference request per planned alias. Never
         # reached by deploy, so no deploy-time latency or spend. See #361.
-        api_key = KEY_FILE.read_text(encoding="utf-8").strip()
-        for alias in sorted(aliases):
+        try:
+            api_key = KEY_FILE.read_text(encoding="utf-8").strip()
+        except OSError:
+            return _fail("refused-deep-probe-key-unavailable")
+        if not api_key:
+            return _fail("refused-deep-probe-key-unavailable")
+        for alias in sorted(set(aliases)):
             if not _deep_probe(alias, base_url, api_key):
                 return _fail(f"refused-deep-probe-failed:{alias}")
     return 0

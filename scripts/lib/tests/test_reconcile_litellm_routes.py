@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import litellm_config
+from free_route_manifest import config_binding_digest
 import model_catalogues
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -21,18 +22,15 @@ def _load():
 
 
 def _routes(pairs):
-    return {
-        "config_binding_sha256": "deadbeef",
-        "routes": [
-            {"model_name": alias, "litellm_params": {"model": wire}}
-            for alias, wire in pairs
-        ],
-    }
+    rows = [
+        {"model_name": alias, "litellm_params": {"model": wire}}
+        for alias, wire in pairs
+    ]
+    return {"config_binding_sha256": config_binding_digest(rows), "routes": rows}
 
 
 @pytest.fixture
 def preflight(tmp_path, monkeypatch):
-    import hashlib
     import sys as _sys
 
     module = _load()
@@ -40,15 +38,12 @@ def preflight(tmp_path, monkeypatch):
     key_file = tmp_path / "opencode.key"
     key_file.write_text("k-test", encoding="utf-8")
     config = tmp_path / "config.yaml"
-    config.write_bytes(b"model_list: []\n")
-    receipt = tmp_path / ".loaded-generation"
-    digest = hashlib.sha256(config.read_bytes()).hexdigest()
-    receipt.write_text(f"{digest}\n{int(config.stat().st_mtime) + 5}\n4000\n")
     monkeypatch.setattr(module, "PROJECTION_FILE", projection)
     monkeypatch.setattr(module, "KEY_FILE", key_file)
     monkeypatch.setattr(module, "CONFIG_FILE", config)
-    monkeypatch.setattr(module, "RECEIPT_FILE", receipt)
     monkeypatch.setattr(_sys, "platform", "darwin")
+    # Process/YAML evidence is tested independently in test_litellm_generation.
+    monkeypatch.setattr(module, "_run_generation_check", lambda *_: None)
     # Pin the report: a real report on the operator host must not decide these.
     monkeypatch.setattr(
         module,
@@ -226,67 +221,47 @@ def test_expired_oauth_cache_refuses_planned_aliases(preflight, monkeypatch):
 # --- loaded-generation receipt (361-A) -----------------------------------
 
 
-def test_missing_receipt_refuses_on_darwin(preflight):
+@pytest.mark.parametrize("platform_name", ["darwin", "linux"])
+def test_missing_receipt_refuses_on_managed_platform(
+    preflight, monkeypatch, platform_name
+):
+    module, projection = preflight
+    projection.write_text(json.dumps(_routes([("openai/gpt-A", "chatgpt/gpt-A")])))
+    monkeypatch.setattr(module.sys, "platform", platform_name)
+    monkeypatch.setattr(
+        module, "_run_generation_check", lambda *_: module.REFUSED_NO_RECEIPT
+    )
+
+    def _boom(*args, **kwargs):
+        pytest.fail("gateway must not be queried without launch evidence")
+
+    monkeypatch.setattr(model_catalogues, "get_models", _boom)
+    assert module.main([]) == 1
+
+
+def test_unmanaged_platform_is_unknown(preflight):
     module, _ = preflight
-    module.RECEIPT_FILE.unlink()
-    module.main([])
+    assert module._receipt_refusal("4000", "digest", "win32")
+
+
+def test_projection_digest_refuses_before_gateway(preflight, monkeypatch):
+    module, projection = preflight
+    document = _routes([("openai/gpt-A", "chatgpt/gpt-A")])
+    document["config_binding_sha256"] = "forged"
+    projection.write_text(json.dumps(document))
+    monkeypatch.setattr(
+        model_catalogues, "get_models", lambda *_: pytest.fail("unexpected gateway")
+    )
     assert module.main([]) == 1
 
 
-def test_missing_receipt_is_not_applicable_off_darwin(preflight, monkeypatch):
-    """Linux and Windows have no repository-generated launch wrapper."""
-    import sys as _sys
-
+def test_generation_change_during_advertisement_refuses(preflight, monkeypatch):
     module, projection = preflight
     projection.write_text(json.dumps(_routes([("openai/gpt-A", "chatgpt/gpt-A")])))
-    module.RECEIPT_FILE.unlink()
-    monkeypatch.setattr(_sys, "platform", "linux")
     _advertise(monkeypatch, {"openai/gpt-A"})
-    assert module.main([]) == 0
-
-
-def test_receipt_hash_mismatch_refuses(preflight, monkeypatch):
-    module, projection = preflight
-    projection.write_text(json.dumps(_routes([("openai/gpt-A", "chatgpt/gpt-A")])))
-    module.RECEIPT_FILE.write_text("0" * 64 + "\n9999999999\n4000\n")
-    _advertise(monkeypatch, {"openai/gpt-A"})
+    reasons = iter([None, module.REFUSED_STALE_GENERATION])
+    monkeypatch.setattr(module, "_run_generation_check", lambda *_: next(reasons))
     assert module.main([]) == 1
-
-
-def test_receipt_older_than_config_refuses(preflight, monkeypatch):
-    module, projection = preflight
-    projection.write_text(json.dumps(_routes([("openai/gpt-A", "chatgpt/gpt-A")])))
-    import hashlib
-
-    digest = hashlib.sha256(module.CONFIG_FILE.read_bytes()).hexdigest()
-    module.RECEIPT_FILE.write_text(f"{digest}\n1\n4000\n")
-    _advertise(monkeypatch, {"openai/gpt-A"})
-    assert module.main([]) == 1
-
-
-def test_receipt_for_another_port_refuses(preflight, monkeypatch):
-    module, projection = preflight
-    projection.write_text(json.dumps(_routes([("openai/gpt-A", "chatgpt/gpt-A")])))
-    import hashlib
-
-    digest = hashlib.sha256(module.CONFIG_FILE.read_bytes()).hexdigest()
-    module.RECEIPT_FILE.write_text(f"{digest}\n9999999999\n5000\n")
-    _advertise(monkeypatch, {"openai/gpt-A"})
-    assert module.main([]) == 1
-
-
-def test_malformed_receipt_refuses(preflight, monkeypatch):
-    module, projection = preflight
-    projection.write_text(json.dumps(_routes([("openai/gpt-A", "chatgpt/gpt-A")])))
-    module.RECEIPT_FILE.write_text("only-one-line\n")
-    _advertise(monkeypatch, {"openai/gpt-A"})
-    assert module.main([]) == 1
-
-
-def test_missing_config_is_not_applicable(preflight):
-    module, _ = preflight
-    module.CONFIG_FILE.unlink()
-    assert module._receipt_refusal("4000") is None
 
 
 def test_deep_probe_reports_success(monkeypatch):

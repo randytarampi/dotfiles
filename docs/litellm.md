@@ -191,3 +191,32 @@ The LTS includes fixes pertinent to this repository: large-body 429 retry memory
 **Owner-host acceptance:** capture installed version/health and private backups of database, `service.env` and client key metadata, without sharing credentials. Deploy the gated service, then verify exact installed LTS, unchanged client-key hashes, proxy aliases, authenticated Responses tool calls and streamed Messages/thinking/tool use; explicit missing-key/401 and 429/upstream-error paths; no unexpected paid egress; and two idempotent reconciliations. For rollback use the former pin **with its matching database backup**, never automatic key rotation or blind downgrade of an already migrated database.
 
 **Cost-source precedence:** GPT-6.2 Sol/Astra authoritative short/long-context rates are checked into `configs/litellm/model-rates.json` and must override stale models.dev prices for those six base/flex/fast identities during gateway configuration and bundled-cost-map reconciliation. Other model rates retain existing models.dev precedence. The standard 30-minute and 12-hour cache-write rates differ. LiteLLM 1.108.11 selects its `cache_creation_input_token_cost_above_1hr` field from Anthropic-style `ephemeral_1h_input_tokens`, NOT OpenAI's `prompt_cache_retention=12h`; we deliberately do not populate it with OpenAI's 12-hour price. **Requests selecting 12-hour retention can be undercounted** by the current cost reports; do not use them for spend-sensitive accounting until an actual 12-hour-request cost path and billing receipt are qualified. Even the >272K cost fields require a real response/usage receipt. See [official model pricing](https://developers.openai.com/api/docs/pricing).
+
+
+### Managed launch generation (subscription route preflight)
+
+For repository-managed macOS LaunchAgents and Linux systemd user services,
+the launcher now supplies LiteLLM a private, content-addressed snapshot of
+`config.yaml` and atomically records its SHA-256 digest, PID, process creation
+time and port in `~/.local/share/litellm/.loaded-generation`. The gateway venv
+supplies the pinned process-inspection dependency `psutil`. The read-only
+preflight compares the YAML's route bindings with the exact authorised
+projection, and confirms that the recorded process has the expected command
+and owns the loopback listener. A missing, unreadable, incompatible or stale
+receipt is UNKNOWN and refuses subscription-route reconciliation; it is not
+proof of a direct or subscription backend.
+
+Run `make deploy` to install or update the managed launcher and supervisor
+definition, then `make litellm-restart` if the current service is stale.
+Automatic supervisor restarts use the same launcher. Externally managed
+processes and hosts unable to inspect the listener are not qualified by this
+check. The launch receipt is not an attestation of parsed or dynamically
+modified router state; actual owner-host acceptance remains necessary.
+
+The private `.loaded-config-<digest>.yaml` snapshots are reused for identical
+configurations and retained across launches. Only remove obsolete snapshots
+with the service stopped; keep the active generation and never share the
+contents. `scripts/reconcile-litellm-routes.py --deep` additionally sends one
+real inference request per planned subscription alias, explicitly on demand;
+it can consume quota or incur charges and a successful response is not
+subscription-transport evidence. Deploy never invokes this option.

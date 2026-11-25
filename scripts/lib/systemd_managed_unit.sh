@@ -4,7 +4,7 @@
 # a systemd unit: it may be user-owned or deliberately modified.
 dotfiles_managed_systemd_unit_matches() {
   local unit_file="$1" service="$2" home="$3"
-  local description prefix suffix
+  local description prefix suffix generation_prefix=""
 
   [[ -f "$unit_file" && ! -L "$unit_file" ]] || return 1
   case "$service" in
@@ -12,6 +12,7 @@ dotfiles_managed_systemd_unit_matches() {
     description="LiteLLM proxy gateway"
     prefix="/usr/bin/env -i HOME=%h PATH=/usr/bin:/bin:%h/.local/share/litellm/venv/bin /bin/bash --noprofile --norc -c 'set -a; source \"$home/.local/share/litellm/service.env\"; set +a; exec \"$home/.local/share/litellm/venv/bin/litellm\" --config \"$home/.local/share/litellm/config.yaml\" --host 127.0.0.1 --port "
     suffix=" --num_workers 1'"
+    generation_prefix="/usr/bin/env -i HOME=%h PATH=/usr/bin:/bin:%h/.local/share/litellm/venv/bin /bin/bash --noprofile --norc -c 'set -a && source \"$home/.local/share/litellm/service.env\" && set +a && exec \"$home/.local/share/litellm/venv/bin/python\" -I \"$home/.local/share/litellm/launch-generation.py\" launch \"$home/.local/share/litellm\" "
     ;;
   openwebui)
     description="Open WebUI"
@@ -23,7 +24,7 @@ dotfiles_managed_systemd_unit_matches() {
     ;;
   esac
 
-  awk -v expected_description="$description" -v expected_prefix="$prefix" -v expected_suffix="$suffix" '
+  awk -v expected_description="$description" -v expected_prefix="$prefix" -v expected_suffix="$suffix" -v generation_prefix="$generation_prefix" '
     function trim(s) {
       sub(/^[ \t]+/, "", s)
       sub(/[ \t]+$/, "", s)
@@ -52,12 +53,17 @@ dotfiles_managed_systemd_unit_matches() {
     END {
       if (descriptions != 1 || exec_starts != 1 ||
           description != expected_description) exit 1
+      if (generation_prefix != "" && substr(command, 1, length(generation_prefix)) == generation_prefix) {
+        port = substr(command, length(generation_prefix) + 1)
+        if (port !~ /^[0-9]+\047$/) exit 1
+        exit 0
+      }
       if (substr(command, 1, length(expected_prefix)) != expected_prefix) exit 1
       remaining = substr(command, length(expected_prefix) + 1)
       if (length(remaining) <= length(expected_suffix) ||
           substr(remaining, length(remaining) - length(expected_suffix) + 1) != expected_suffix) exit 1
       port = substr(remaining, 1, length(remaining) - length(expected_suffix))
-      if (port !~ /^[0-9]+$/) exit 1
+      if (port !~ /^[0-9]+$/ && port !~ /^"[0-9]+"$/) exit 1
     }
   ' "$unit_file"
 }

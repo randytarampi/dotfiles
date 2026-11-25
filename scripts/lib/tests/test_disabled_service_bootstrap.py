@@ -78,12 +78,22 @@ def _modified_unit(text, payload, kind):
         )
     if kind == "duplicate_exec":
         return text + "ExecStart=/usr/bin/false\n"
+    if kind == "generation_suffix":
+        return text.replace("4000'", "4000 extra'")
     if kind == "foreign":
         return "[Unit]\nDescription=Unrelated service\n[Service]\nExecStart=/usr/bin/false\n"
     raise AssertionError(f"Unknown variant: {kind}")
 
 
-def _run(tmp_path, service, *, installed=False, linked_unit=False, modified=None):
+def _run(
+    tmp_path,
+    service,
+    *,
+    installed=False,
+    linked_unit=False,
+    modified=None,
+    generation=False,
+):
     home = tmp_path / "home"
     home.mkdir()
     stubs = tmp_path / "bin"
@@ -111,6 +121,18 @@ def _run(tmp_path, service, *, installed=False, linked_unit=False, modified=None
             payload.write_text("#!/bin/sh\nexit 0\n")
             payload.chmod(0o755)
             generated = _generated_unit(home, service, payload)
+            if generation:
+                gateway = home / ".local/share/litellm"
+                generated = (
+                    "[Unit]\nDescription=LiteLLM proxy gateway\n[Service]\n"
+                    "ExecStart=/usr/bin/env -i HOME=%h "
+                    "PATH=/usr/bin:/bin:%h/.local/share/litellm/venv/bin "
+                    "/bin/bash --noprofile --norc -c 'set -a && source "
+                    f'"{gateway}/service.env" && set +a && exec '
+                    f'"{gateway}/venv/bin/python" -I '
+                    f'"{gateway}/launch-generation.py" launch "{gateway}" 4000'
+                    "'\n"
+                )
             unit.write_text(
                 _modified_unit(generated, payload, modified) if modified else generated,
                 encoding="utf-8",
@@ -195,3 +217,18 @@ def test_foreign_or_modified_unit_is_not_disabled_or_signalled(
     assert calls == []
     assert unit.exists()
     assert payload.exists()
+
+
+@pytest.mark.parametrize("modified", [None, "generation_suffix"])
+def test_managed_generation_unit_ownership(tmp_path, modified):
+    result, calls, unit, payload = _run(
+        tmp_path, "litellm", installed=True, generation=True, modified=modified
+    )
+    assert result.returncode == 0, result.stderr
+    assert payload.exists()
+    if modified:
+        assert unit.exists()
+        assert calls == []
+    else:
+        assert not unit.exists()
+        assert any("disable --now litellm.service" in call for call in calls)
