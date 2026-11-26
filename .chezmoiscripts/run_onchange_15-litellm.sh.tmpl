@@ -84,7 +84,7 @@ LOGS="$LITELLM_HOME/logs"
 SERVICE_ENV="$LITELLM_HOME/service.env"
 VERSION="${DOTFILES_LITELLM_VERSION:-1.108.11}"
 PORT="${LITELLM_PORT:-4000}"
-[[ "$PORT" =~ ^[1-9][0-9]{0,4}$ ]] && (( PORT <= 65535 )) || die "Invalid LiteLLM port"
+[[ "$PORT" =~ ^[1-9][0-9]{0,4}$ ]] && ((PORT <= 65535)) || die "Invalid LiteLLM port"
 PYTHON_BIN=""
 for candidate in python3.11 python3.12 python3.10; do
   if command -v "$candidate" >/dev/null 2>&1; then
