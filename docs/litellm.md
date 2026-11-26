@@ -220,3 +220,9 @@ contents. `scripts/reconcile-litellm-routes.py --deep` additionally sends one
 real inference request per planned subscription alias, explicitly on demand;
 it can consume quota or incur charges and a successful response is not
 subscription-transport evidence. Deploy never invokes this option.
+
+The same read-only contract is shared rather than reimplemented: `scripts/lib/litellm_route_preflight.py` holds the projection, report, OAuth-cache, launch-receipt and advertisement checks, and `scripts/reconcile-litellm-routes.py` is now only its command-line adapter.
+`scripts/configure-opencode.py` and `scripts/configure-pi.py` consult it before writing gateway-only client configuration, so a direct invocation is not weaker than the orchestrator and a stale, revoked or unattestable generation produces no new `opencode.json` or Pi `settings.json`/`models.json`.
+The guard runs after the effective environment, mode and model selection are known and before any output directory, child process or file write, so `--dry-run`, gate-off and direct invocations stay read-only.
+Each client is authorised with its own key (`LITELLM_OPENCODE_KEY`, `LITELLM_PI_KEY`); a Pi-only deployment never needs the OpenCode key.
+Missing, unreadable or unattestable evidence is UNKNOWN and refused, never treated as success; recover with `make litellm-restart`, or with `make deploy` and `DOTFILES_RUN_LITELLM_SETUP=1` so a projection exists.

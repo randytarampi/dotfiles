@@ -1620,6 +1620,9 @@ def test_opencode_explicit_replacement_warns_before_discovery(monkeypatch, tmp_p
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
     monkeypatch.setenv("DOTFILES_USE_LOCAL_OLLAMA", "1")
+    # Direct mode: this test covers the preset-replacement warning, not gateway
+    # authorisation, so the proxy gate must not depend on the caller's shell.
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
     monkeypatch.delenv("DOTFILES_OPENCODE_TIER", raising=False)
     monkeypatch.delenv("DOTFILES_LOCAL_FALLBACK_PRESET", raising=False)
     monkeypatch.setattr(script, "load_env", lambda *args: False)

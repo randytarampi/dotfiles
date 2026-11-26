@@ -83,6 +83,9 @@ from local_engines import (  # noqa: E402 -- local import follows bootstrap.
     resolve_engine,
 )
 from litellm_aliases import resolve_alias  # noqa: E402
+from litellm_route_preflight import (  # noqa: E402 -- scripts/lib bootstrap.
+    authorize_gateway_client,
+)
 from ai_models import is_specialized_model_name  # noqa: E402
 import tier_registry  # noqa: E402 -- local import follows bootstrap.
 import pi_profiles  # noqa: E402
@@ -980,6 +983,24 @@ def main():
                 ", ".join(str(path) for path in existing),
             )
             return
+        # A stale, revoked or unattestable subscription generation must not
+        # become new gateway-only Pi configuration. Same read-only contract as
+        # `configure-all.sh`, checked against this client's own pi.key only: a
+        # Pi deployment is never asked to hold the OpenCode key. The
+        # advertisement set is the one `litellm_cloud_aliases` just read, so
+        # this does not repeat the catalogue request.
+        authorization = authorize_gateway_client(
+            "pi", catalogue=set(cloud_routes.get("_available", {}))
+        )
+        if not authorization.permitted:
+            logger.critical(
+                "Refusing gateway-only Pi configuration (%s): %s "
+                "— repair with 'make litellm-restart' (or 'make deploy' with "
+                "DOTFILES_RUN_LITELLM_SETUP=1), then re-run.",
+                authorization.state,
+                authorization.reason,
+            )
+            return 1
         # Every advertised gateway identity belongs in Pi's model list —
         # users pick from /model, not just preset role selections.
         gateway_models.update(cloud_routes.get("_available", {}))
