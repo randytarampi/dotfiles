@@ -54,7 +54,13 @@ def _names(rendered, variable):
     names = []
     for line in rendered.splitlines():
         stripped = line.strip()
-        if not stripped.startswith(variable):
+        # Match declarations/appends only; the Linux cohort mutates the single
+        # array in place (``selected_brewfiles[0]=...``) and is not a second
+        # selection.
+        if not (
+            stripped.startswith(variable + "=(")
+            or stripped.startswith(variable + "+=(")
+        ):
             continue
         match = re.search(r'"([^"]+)"', stripped)
         if match:
@@ -209,6 +215,9 @@ def _sandbox(tmp_path, categories):
 
 def test_linux_refusal_and_gate_off_make_no_package_calls(tmp_path):
     script, calls, out, env = _sandbox(tmp_path, {"dev": True})
+    # Linux Homebrew work now requires the Linux cohort gate; enable it so the
+    # audit (not the gate) is what refuses the dev selection.
+    env["DOTFILES_RUN_LINUX_PACKAGES_SETUP"] = "1"
     refused = subprocess.run(
         ["bash", str(script)], capture_output=True, text=True, timeout=120, env=env
     )
@@ -228,8 +237,9 @@ def test_linux_refusal_and_gate_off_make_no_package_calls(tmp_path):
     assert not calls.exists()
 
 
-def test_linux_base_selection_bundles_once_without_eula_or_ignored_names(tmp_path):
+def test_linux_cohort_bundles_once_without_eula_or_ignored_names(tmp_path):
     script, calls, out, env = _sandbox(tmp_path, {})
+    env["DOTFILES_RUN_LINUX_PACKAGES_SETUP"] = "1"
     env["DOTFILES_BREWFILE_IGNORE"] = "jq,ripgrep"
     result = subprocess.run(
         ["bash", str(script)], capture_output=True, text=True, timeout=120, env=env
@@ -240,9 +250,14 @@ def test_linux_base_selection_bundles_once_without_eula_or_ignored_names(tmp_pat
     bundles = list(out.iterdir())
     assert len(bundles) == 1
     bundled = bundles[0].read_text(encoding="utf-8")
+    # The cohort is the base manifest narrowed to chezmoi/jq/ripgrep only;
+    # operator ignores still remove names from that view.
+    assert 'brew "chezmoi"' in bundled
     assert 'brew "jq"' not in bundled
     assert 'brew "ripgrep"' not in bundled
-    assert 'brew "git"' in bundled
+    assert 'brew "git"' not in bundled
+    assert 'tap "' not in bundled
     # Linux must not accept a licence the operator did not supply.
     assert "HOMEBREW_ACCEPT_EULA" not in env
-    assert "npm " in "\n".join(invocations)  # companion lane still runs on macOS parity
+    # The npm companion lane is macOS-only; the cohort has no npm members.
+    assert "npm " not in "\n".join(invocations)
