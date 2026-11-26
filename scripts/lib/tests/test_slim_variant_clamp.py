@@ -185,3 +185,44 @@ def test_variant_clamp_rejects_unknown_or_malformed_effort_catalogue():
     configure.clamp_slim_variants(slim, providers)
     for role in ("a", "b", "c"):
         assert "variant" not in slim["presets"]["pro"][role]
+
+
+def test_variant_clamp_reads_v2_reasoning_capability():
+    """An already-converted entry keeps its declared effort values."""
+    slim = {
+        "presets": {"pro": {"orchestrator": {"model": "litellm/m", "variant": "max"}}}
+    }
+    providers = {
+        "litellm": {
+            "models": {
+                "m": {
+                    "capabilities": {
+                        "reasoning": {
+                            "supported": True,
+                            "effort": ["low", "high", "max"],
+                        }
+                    }
+                }
+            }
+        }
+    }
+    configure.clamp_slim_variants(slim, providers)
+    assert slim["presets"]["pro"]["orchestrator"]["variant"] == "max"
+
+
+def test_variant_clamp_honours_an_authored_variant_id():
+    """A model-declared custom variant is a valid target, not a missing one."""
+    slim = {"presets": {"pro": {"worker": {"model": "litellm/m", "variant": "deep"}}}}
+    providers = {
+        "litellm": {
+            "models": {
+                "m": {
+                    "variants": [
+                        {"id": "deep", "settings": {"reasoningEffort": "high"}}
+                    ]
+                }
+            }
+        }
+    }
+    configure.clamp_slim_variants(slim, providers)
+    assert slim["presets"]["pro"]["worker"]["variant"] == "deep"

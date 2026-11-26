@@ -236,6 +236,57 @@ def _convert_mcp_server_entry(name, entry):
 OPENCODE_CONFIG_FILE_NAME = "opencode.json"
 
 
+def _native_reasoning_capability(model):
+    """Translate V1 ``reasoning``/``reasoning_options`` into V2 capability form.
+
+    V2 builds model variants from ``capabilities.reasoning.effort`` (plus
+    ``toggle`` and ``budget``); the V1 ``reasoning_options`` list is accepted by
+    the schema but declares no variants. Leaving V1 fields in place made every
+    generated provider model fall back to the provider package default
+    (``low``/``medium``/``high``), so an authored ``max``/``xhigh`` Slim role
+    variant failed model resolution with ``VariantUnavailableError``.
+
+    Mutates ``model`` by removing the V1 fields; returns the V2 dictionary, or
+    ``None`` when the entry declared nothing usable.
+    """
+    supported = model.pop("reasoning", None)
+    options = model.pop("reasoning_options", None)
+    capability = {}
+    if isinstance(supported, bool):
+        capability["supported"] = supported
+    declared = False
+    if isinstance(options, list):
+        for option in options:
+            if not isinstance(option, dict):
+                continue
+            kind = option.get("type")
+            if kind == "toggle":
+                capability["toggle"] = True
+                declared = True
+            elif kind == "effort":
+                values = option.get("values")
+                if (
+                    isinstance(values, list)
+                    and values
+                    and all(isinstance(value, str) and value for value in values)
+                ):
+                    capability["effort"] = list(values)
+                    declared = True
+            elif kind == "budget_tokens":
+                budget = {}
+                for key in ("min", "max"):
+                    value = option.get(key)
+                    if isinstance(value, (int, float)) and not isinstance(value, bool):
+                        budget[key] = int(value)
+                if budget:
+                    capability["budget"] = budget
+                    declared = True
+    if declared and "supported" not in capability:
+        # V2 treats effort/toggle/budget as controls on a reasoning model.
+        capability["supported"] = True
+    return capability or None
+
+
 def _native_model_entry(entry):
     """Convert supported V1 model metadata at the V2 provider boundary."""
     if not isinstance(entry, dict):
@@ -251,6 +302,9 @@ def _native_model_entry(entry):
                 capabilities[direction] = modalities[direction]
     if "tool_call" in model:
         capabilities["tools"] = model.pop("tool_call")
+    reasoning = _native_reasoning_capability(model)
+    if reasoning:
+        capabilities["reasoning"] = reasoning
     if capabilities:
         model["capabilities"] = capabilities
     cost = model.get("cost")
@@ -981,8 +1035,56 @@ def normalize_marketplace_activation(slim_data):
             market[key] = canonical
 
 
+def _declared_variant_ids(entry):
+    """Return the variant IDs a model actually offers, or None.
+
+    Reads the V2 ``capabilities.reasoning.effort`` list first, then the V1
+    ``reasoning_options`` effort values (still present before the V2 boundary
+    conversion), and finally any explicitly authored ``variants`` — a name to
+    settings dict or the V2 list of ``{id, settings}`` objects.
+    """
+    if not isinstance(entry, dict):
+        return None
+    effort = None
+    capability = entry.get("capabilities")
+    if isinstance(capability, dict):
+        reasoning = capability.get("reasoning")
+        if isinstance(reasoning, dict):
+            candidate = reasoning.get("effort")
+            if isinstance(candidate, list):
+                effort = candidate
+    if effort is None:
+        options = entry.get("reasoning_options")
+        if isinstance(options, list):
+            for option in options:
+                if isinstance(option, dict) and option.get("type") == "effort":
+                    effort = option.get("values")
+                    break
+    ids = []
+    if isinstance(effort, list):
+        ids.extend(value for value in effort if isinstance(value, str) and value)
+    variants = entry.get("variants")
+    if isinstance(variants, dict):
+        ids.extend(name for name in variants if isinstance(name, str) and name)
+    elif isinstance(variants, list):
+        for variant in variants:
+            if isinstance(variant, dict):
+                identifier = variant.get("id")
+                if isinstance(identifier, str) and identifier:
+                    ids.append(identifier)
+    if not ids:
+        return None
+    seen = set()
+    ordered = []
+    for identifier in ids:
+        if identifier not in seen:
+            seen.add(identifier)
+            ordered.append(identifier)
+    return ordered
+
+
 def clamp_slim_variants(slim_data, providers, selected_preset=None):
-    """Clamp authored Slim role variants to model-declared effort values."""
+    """Clamp authored Slim role variants to model-declared variant IDs."""
     models = {}
     for provider, block in (providers or {}).items():
         for model_id, entry in (block.get("models") or {}).items():
@@ -999,23 +1101,8 @@ def clamp_slim_variants(slim_data, providers, selected_preset=None):
             entry = models.get(model_id)
             if not entry:
                 continue
-            options = entry.get("reasoning_options")
-            effort = (
-                next(
-                    (
-                        option
-                        for option in options
-                        if isinstance(option, dict) and option.get("type") == "effort"
-                    ),
-                    None,
-                )
-                if isinstance(options, list)
-                else None
-            )
-            values = effort.get("values") if effort else None
-            if not isinstance(values, list) or not all(
-                isinstance(value, str) for value in values
-            ):
+            values = _declared_variant_ids(entry)
+            if not values:
                 values = None
             authored = ref["variant"]
             effective = authored
