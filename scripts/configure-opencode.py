@@ -37,6 +37,9 @@ from litellm_aliases import (  # noqa: E402
     canonical_allowlist_key,
     resolve_alias,
 )
+from litellm_route_preflight import (  # noqa: E402 -- scripts/lib bootstrap.
+    authorize_gateway_client,
+)
 from model_catalogues import get_models  # noqa: E402 -- scripts/lib bootstrap.
 from opencode_config import (  # noqa: E402 -- local import follows bootstrap.
     get_available_tiers,
@@ -1547,6 +1550,24 @@ def main():
                 "Unable to resolve dynamic free preset before writes: %s", error
             )
             sys.exit(1)
+
+    # A stale, revoked or unattestable subscription generation must not become
+    # new gateway-only client configuration. This is the same read-only
+    # contract `configure-all.sh` preflights before the fleet writes any
+    # gateway-only client, so a direct invocation is never weaker than the
+    # orchestrator. Read-only: no generation, reload, admin request or restart.
+    if get_litellm_proxy_mode():
+        authorization = authorize_gateway_client("opencode")
+        if not authorization.permitted:
+            logger.critical(
+                "Refusing gateway-only OpenCode configuration (%s): %s "
+                "— repair with 'make litellm-restart' (or 'make deploy' with "
+                "DOTFILES_RUN_LITELLM_SETUP=1), then re-run.",
+                authorization.state,
+                authorization.reason,
+            )
+            sys.exit(1)
+        logger.info("Gateway authorisation: %s", authorization.state)
 
     if args.dry_run:
         logger.info(

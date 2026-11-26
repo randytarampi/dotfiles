@@ -13,6 +13,7 @@ from unittest.mock import patch
 import local_engines
 import pi_profiles
 import pytest
+from gateway_authority import install_gateway_authority
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(TESTS_DIR, "..", "..", ".."))
@@ -752,6 +753,9 @@ def _run_pi_main(
         key_file.parent.chmod(0o700)
         key_file.write_text("fixture-secret", encoding="utf-8")
         key_file.chmod(0o600)
+    # This catalogue plans no subscription alias, so the projection plans none
+    # either: the gateway authorisation is current and nothing is attested.
+    install_gateway_authority(Path(home), monkeypatch, planned=set())
     monkeypatch.setattr(configure_pi, "get_catalogue", lambda *_args: catalogue)
     # Transport regressions use the former static role fixture, not the new
     # evidence-dependent free selector. Dynamic selection has separate tests.

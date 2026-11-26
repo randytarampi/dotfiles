@@ -6,13 +6,15 @@ generation, and the advertised alias namespace. A launch receipt attests
 the immutable-by-convention config snapshot supplied to a live listener,
 not the gateway's parsed router state or dynamic backend selection.
 No regeneration, restart, admin request or default inference is performed.
+
+This is the fleet adapter only. The checks themselves live in
+``scripts/lib/litellm_route_preflight.py`` so the direct client writers cannot
+drift from what ``configure-all.sh`` enforces.
 """
 
 import argparse
-import hashlib
 import json
 import os
-import subprocess  # nosec B404 - fixed managed generation checker argv.
 import sys
 import urllib.request
 from pathlib import Path
@@ -21,21 +23,15 @@ LIB_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib")
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
-from constants import get_litellm_oauth_gate  # noqa: E402 -- scripts/lib bootstrap.
-from free_route_manifest import config_binding_digest  # noqa: E402
+import litellm_route_preflight as preflight  # noqa: E402 -- lib bootstrap.
+from constants import get_litellm_oauth_gate  # noqa: E402
 from litellm_config import (  # noqa: E402 -- scripts/lib bootstrap.
-    CHATGPT_REPORT_OK,
     chatgpt_verified_openai_models_report,
     oauth_cache_expiry,
 )
-from litellm_route_guard import (  # noqa: E402 -- scripts/lib bootstrap.
-    REFUSED_AMBIGUOUS_CREDENTIALS,
-    REFUSED_EXPIRED_AUTH,
-    REFUSED_REVOKED,
-    REFUSED_UNUSABLE_REPORT,
-    alias_model_id,
-    assert_namespace_matches,
-    planned_subscription_bindings,
+from litellm_route_preflight import (  # noqa: E402 -- re-exported for callers.
+    REFUSED_NO_RECEIPT,
+    REFUSED_STALE_GENERATION,
 )
 
 LITELLM_DIR = Path("~/.local/share/litellm").expanduser()
@@ -43,150 +39,33 @@ PROJECTION_FILE = LITELLM_DIR / "free-route-config.json"
 KEY_FILE = LITELLM_DIR / "clients" / "opencode.key"
 CONFIG_FILE = LITELLM_DIR / "config.yaml"
 
-REFUSED_NO_RECEIPT = "refused-no-loaded-generation-receipt"
-REFUSED_STALE_GENERATION = "refused-stale-loaded-generation"
-REFUSED_FOREIGN_GENERATION = "refused-loaded-generation-port-mismatch"
-
 
 def _fail(reason):
     print(reason)
     return 1
 
 
-def _load_plan():
-    """Return ``((routes, aliases, planned_ids), None)`` or ``(None, reason)``."""
+def _read_gateway_key():
+    """Return ``(key, None)`` or ``(None, reason)`` for this client's key file."""
     try:
-        raw = PROJECTION_FILE.read_bytes()
-        projection = json.loads(raw)
-    except FileNotFoundError:
-        return None, (
-            "no emitted route projection; LiteLLM has not generated a config yet "
-            "— run 'make deploy'"
-        )
-    except (OSError, ValueError) as error:
-        return None, f"route projection is unreadable ({error})"
-    if not isinstance(projection, dict):
-        return None, "invalid route projection"
-    routes = projection.get("routes")
-    if not isinstance(routes, list):
-        return None, "route projection has no route list"
-    try:
-        binding = config_binding_digest(routes)
-    except (AttributeError, TypeError, ValueError):
-        return None, "invalid route projection bindings"
-    if binding != projection.get("config_binding_sha256"):
-        return None, "route projection binding digest differs"
-    aliases = [
-        row.get("model_name")
-        for row in routes
-        if isinstance(row, dict) and alias_model_id(row.get("model_name"))
-    ]
-    planned_ids = {alias_model_id(alias) for alias in aliases}
-    return (routes, aliases, planned_ids, hashlib.sha256(raw).hexdigest()), None
-
-
-def _plan_refusal(routes, planned_ids):
-    """Return a reason when the plan is not authorised by the current report."""
-    if (os.environ.get("OPENAI_API_KEY") or "").strip() and planned_ids:
-        return (
-            f"{REFUSED_AMBIGUOUS_CREDENTIALS}: subscription aliases are planned "
-            "while a direct paid OPENAI_API_KEY is set — unset the key or "
-            "disable the OAuth gate"
-        )
-    if not planned_ids:
-        return None
-    if oauth_cache_expiry("chatgpt", os.environ) is None:
-        # Generation would not emit these routes without a live token, so a
-        # plan that still names them is stale authorisation.
-        return (
-            f"{REFUSED_EXPIRED_AUTH}: chatgpt OAuth cache is absent or expired "
-            "while subscription aliases are planned — run "
-            "scripts/litellm-oauth.py --provider chatgpt"
-        )
-    # A projection that outlives the authorisation it was built from must not
-    # authorise a client.
-    state, verified = chatgpt_verified_openai_models_report(os.environ)
-    if state != CHATGPT_REPORT_OK:
-        return (
-            f"{REFUSED_UNUSABLE_REPORT}: verified-model report is {state} "
-            "while subscription aliases are planned"
-        )
-    revoked = sorted(planned_ids - set(verified))
-    if revoked:
-        return f"{REFUSED_REVOKED}:{','.join(revoked[:3])}"
-    newer = sorted(set(verified) - planned_ids)
-    if newer:
-        print(
-            "warning: report verifies ids absent from the projection "
-            f"({','.join(newer[:3])}); run 'make deploy' to regenerate"
-        )
-    wires_ok, wires_reason = planned_subscription_bindings(routes)
-    return None if wires_ok else wires_reason
-
-
-def _served_refusal(aliases, base_url):
-    """Return a reason when the gateway does not advertise the plan."""
-    try:
-        api_key = KEY_FILE.read_text(encoding="utf-8").strip()
+        return KEY_FILE.read_text(encoding="utf-8").strip(), None
     except OSError as error:
-        return f"cannot read gateway client key ({error})"
-    if not api_key:
-        return "gateway client key is empty"
-    from model_catalogues import get_models  # noqa: E402 -- scripts/lib bootstrap.
-
-    matches, matches_reason = assert_namespace_matches(
-        aliases, get_models(f"{base_url}/models", api_key)
-    )
-    return None if matches else matches_reason
+        return None, f"cannot read gateway client key ({error})"
 
 
 def _run_generation_check(port, projection_digest):
-    python = CONFIG_FILE.parent / "venv/bin/python"
-    helper = Path(LIB_DIR) / "litellm_generation.py"
-    try:
-        result = subprocess.run(  # nosec B603 - fixed managed checker, no shell.
-            [
-                str(python),
-                "-I",
-                str(helper),
-                "check",
-                str(CONFIG_FILE.parent),
-                str(port),
-                projection_digest,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return REFUSED_NO_RECEIPT
-    if result.returncode == 0:
-        return None
-    reason = result.stdout.strip()
-    if reason in {
-        REFUSED_NO_RECEIPT,
-        REFUSED_STALE_GENERATION,
-        REFUSED_FOREIGN_GENERATION,
-        "refused-loaded-generation-projection-mismatch",
-        "refused-loaded-generation-process-mismatch",
-    }:
-        return reason
-    return REFUSED_NO_RECEIPT
+    return preflight.run_generation_check(CONFIG_FILE.parent, port, projection_digest)
 
 
 def _receipt_refusal(port, projection_digest, platform_name=None):
     """Unsupported, unreadable or unverified launch evidence is UNKNOWN."""
-    platform_name = platform_name or sys.platform
-    if platform_name not in {"darwin", "linux"}:
-        return f"{REFUSED_NO_RECEIPT}: unmanaged platform; generation UNKNOWN"
-    reason = _run_generation_check(port, projection_digest)
-    if reason:
-        return (
-            f"{reason}: managed launch generation is unknown or stale — "
-            "run 'make deploy' to install the launcher, then 'make litellm-restart'"
-        )
-    return None
+    return preflight.receipt_refusal(
+        port,
+        projection_digest,
+        platform_name,
+        state_dir=CONFIG_FILE.parent,
+        run_check=_run_generation_check,
+    )
 
 
 def _deep_probe(alias, base_url, api_key, timeout=20):
@@ -224,27 +103,29 @@ def main(argv=None):
         help="also send one real inference request per planned alias (never used by deploy)",
     )
     args = parser.parse_args(argv)
-    base_url = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
+    port = os.environ.get("LITELLM_PORT", "4000")
+    base_url = f"http://127.0.0.1:{port}/v1"
 
-    plan, reason = _load_plan()
+    plan, reason = preflight.load_plan(PROJECTION_FILE)
     if plan is None:
         return _fail(reason)
-    routes, aliases, planned_ids, projection_digest = plan
 
-    if not get_litellm_oauth_gate(os.environ):
-        # The subscription lane is not in use; a direct route is legitimate.
-        return 0
-
-    port = os.environ.get("LITELLM_PORT", "4000")
-    refusal = (
-        _plan_refusal(routes, planned_ids)
-        or _receipt_refusal(port, projection_digest)
-        or _served_refusal(aliases, base_url)
-        or _receipt_refusal(port, projection_digest)
+    authorization = preflight.authorize_plan(
+        plan,
+        environ=os.environ,
+        port=port,
+        base_url=base_url,
+        key_reader=_read_gateway_key,
+        platform_name=sys.platform,
+        state_dir=CONFIG_FILE.parent,
+        run_check=_run_generation_check,
+        oauth_expiry=oauth_cache_expiry,
+        report=chatgpt_verified_openai_models_report,
+        gate=get_litellm_oauth_gate,
     )
-    if refusal:
-        return _fail(refusal)
-    if args.deep:
+    if not authorization.permitted:
+        return _fail(authorization.reason)
+    if args.deep and authorization.state == preflight.AUTHORIZED:
         # On demand only: one real inference request per planned alias. Never
         # reached by deploy, so no deploy-time latency or spend. See #361.
         try:
@@ -253,7 +134,7 @@ def main(argv=None):
             return _fail("refused-deep-probe-key-unavailable")
         if not api_key:
             return _fail("refused-deep-probe-key-unavailable")
-        for alias in sorted(set(aliases)):
+        for alias in sorted(set(plan.aliases)):
             if not _deep_probe(alias, base_url, api_key):
                 return _fail(f"refused-deep-probe-failed:{alias}")
     return 0

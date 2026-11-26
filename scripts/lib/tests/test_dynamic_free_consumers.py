@@ -14,6 +14,7 @@ sys.path.insert(0, str(LIB))
 from free_preset_runtime import prepare_dynamic_free_registry  # noqa: E402
 from free_route_manifest import build_manifest  # noqa: E402
 from free_preset_runtime import load_gateway_free_evidence  # noqa: E402
+from gateway_authority import install_gateway_authority  # noqa: E402
 import opencode_host  # noqa: E402 -- shared emitter-host seam
 
 NOW = datetime(2026, 10, 30, tzinfo=timezone.utc)
@@ -252,6 +253,9 @@ def test_pi_gateway_dynamic_alias_is_preserved_end_to_end(
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent))
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    # The synthetic catalogue advertises no subscription alias, so the planned
+    # projection has none and the gateway authorisation is current.
+    install_gateway_authority(home, monkeypatch, planned=set())
     monkeypatch.setattr(
         configure_pi,
         "litellm_cloud_aliases",
@@ -450,6 +454,9 @@ def test_opencode_main_resolves_dynamic_preset_and_materializes_provider(
         monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
         monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
         monkeypatch.setenv("LITELLM_ROOT", str(tmp_path / "litellm"))
+        # A current generation that plans no subscription alias: this test
+        # covers dynamic preset materialisation, not gateway authorisation.
+        install_gateway_authority(home, monkeypatch, planned=set())
 
     configure_opencode.main.__wrapped__()
 
