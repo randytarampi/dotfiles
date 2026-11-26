@@ -1293,3 +1293,92 @@ def test_pi_orchestration_refuses_linked_backup(tmp_path, monkeypatch):
         module.orchestrate_mcp_config(args)
     assert adapter.read_bytes() == before
     assert unrelated.read_bytes() == b"unrelated"
+
+
+@pytest.mark.parametrize("fail_at", [1, 2])
+def test_mcp_fsync_failure_preserves_recoverable_bytes(tmp_path, monkeypatch, fail_at):
+    module = load_script()
+    path = tmp_path.resolve() / "client.json"
+    backup = path.with_suffix(".json.bak")
+    path.write_bytes(b"original")
+    backup.write_bytes(b"previous backup")
+    expected = module._mcp_file_stat(path)
+    real_fsync = module.os.fsync
+    calls = 0
+
+    def fail_selected_fsync(fd):
+        nonlocal calls
+        calls += 1
+        if calls == fail_at:
+            raise OSError("injected fsync failure")
+        real_fsync(fd)
+
+    monkeypatch.setattr(module.os, "fsync", fail_selected_fsync)
+    with pytest.raises(OSError, match="backup failed|injected fsync failure"):
+        module._write_mcp_destination(path, b"updated", expected=expected, backup=True)
+    assert calls == fail_at
+    assert path.read_bytes() == b"original"
+    assert backup.read_bytes() == (b"previous backup" if fail_at == 1 else b"original")
+    assert sorted(p.name for p in path.parent.iterdir()) == [
+        "client.json",
+        "client.json.bak",
+    ]
+
+
+def test_mcp_snapshot_refuses_intervening_writer(tmp_path, monkeypatch):
+    module = load_script()
+    path = tmp_path.resolve() / "client.json"
+    path.write_bytes(b"original")
+    expected = module._mcp_file_stat(path)
+    real_fsync = module.os.fsync
+
+    def intervening_write(fd):
+        real_fsync(fd)
+        path.write_bytes(b"independent newer content")
+
+    monkeypatch.setattr(module.os, "fsync", intervening_write)
+    with pytest.raises(ValueError, match="changed during configuration"):
+        module._write_mcp_destination(path, b"stale output", expected=expected)
+    assert path.read_bytes() == b"independent newer content"
+    assert list(path.parent.iterdir()) == [path]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX ownership and mode semantics")
+def test_mcp_replacement_preserves_mode_and_private_backup(tmp_path):
+    module = load_script()
+    path = tmp_path.resolve() / "client.json"
+    backup = path.with_suffix(".json.bak")
+    path.write_bytes(b"original")
+    path.chmod(0o640)
+    backup.write_bytes(b"previous backup")
+    backup.chmod(0o644)
+    expected = module._mcp_file_stat(path)
+    module._write_mcp_destination(path, b"updated", expected=expected, backup=True)
+    assert path.read_bytes() == b"updated"
+    assert path.stat().st_mode & 0o777 == 0o640
+    assert path.stat().st_uid == expected.st_uid
+    assert backup.read_bytes() == b"original"
+    assert backup.stat().st_mode & 0o077 == 0
+
+
+@pytest.mark.skipif(not hasattr(os, "geteuid"), reason="POSIX ownership check")
+def test_mcp_refuses_foreign_owner_without_backup(tmp_path, monkeypatch):
+    module = load_script()
+    path = tmp_path.resolve() / "client.json"
+    path.write_bytes(b"original")
+    expected = module._mcp_file_stat(path)
+    monkeypatch.setattr(module.os, "geteuid", lambda: expected.st_uid + 1)
+    with pytest.raises(ValueError, match="owned by another user"):
+        module._write_mcp_destination(path, b"updated", expected=expected, backup=False)
+    assert path.read_bytes() == b"original"
+    assert list(path.parent.iterdir()) == [path]
+
+
+def test_mcp_refuses_directory_destination(tmp_path):
+    module = load_script()
+    path = tmp_path.resolve() / "client.json"
+    path.mkdir()
+    with pytest.raises(ValueError, match="non-regular"):
+        module._write_mcp_destination(path, b"updated", expected=None)
+    assert path.is_dir()
+    assert list(path.parent.iterdir()) == [path]
