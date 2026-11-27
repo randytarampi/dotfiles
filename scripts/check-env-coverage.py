@@ -62,6 +62,9 @@ REMOVED_VARS = {
     "DOTFILES_USE_OLLAMA_CLOUD_PROXY",
     "DOTFILES_PASEO_PUBLIC",
     "DOTFILES_OPENWEBUI_PUBLIC",
+    # Retired by #411: the shared DOTFILES_RUN_PACKAGES_SETUP is the sole
+    # package opt-in; a persisted value no longer controls anything.
+    "DOTFILES_RUN_LINUX_PACKAGES_SETUP",
 }
 
 KNOWN_ALIASES = {
