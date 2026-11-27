@@ -734,6 +734,16 @@ def test_junie_entrypoint_materializes_healthy_gateway_alias(
     monkeypatch.setattr(junie, "litellm_catalogue_models", lambda *a, **k: {"zen"})
     monkeypatch.setattr(junie, "parse_local_models", lambda *_: [])
     monkeypatch.setattr(junie, "list_local_ollama_models", lambda: [])
+    # This case covers dynamic-free materialisation, not the gateway
+    # authorisation boundary (#361-B1b, covered by
+    # test_gateway_jetbrains_authorization.py).
+    from litellm_route_preflight import GatewayAuthorization as _GatewayAuthorization
+
+    monkeypatch.setattr(
+        junie,
+        "authorize_gateway_client",
+        lambda *args, **kwargs: _GatewayAuthorization("authorized", "fixture"),
+    )
     monkeypatch.setattr(
         sys,
         "argv",
