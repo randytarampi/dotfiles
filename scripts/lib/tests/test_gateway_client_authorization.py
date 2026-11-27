@@ -75,6 +75,9 @@ def _opencode(monkeypatch, tmp_path, authority, *, dry_run=False):
     )
 
     monkeypatch.setenv("HOME", str(home))
+    # Ambient credentials must not shadow the fixture's own key file.
+    monkeypatch.delenv("LITELLM_OPENCODE_KEY", raising=False)
+    monkeypatch.delenv("LITELLM_PI_KEY", raising=False)
     monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
