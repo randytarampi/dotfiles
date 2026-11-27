@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_JUNIE_CLI_SETUP" | sha256sum }}
+# LiteLLM gate fingerprint: {{ env "DOTFILES_USE_LITELLM_PROXY" | default "0" }}
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
@@ -42,7 +43,7 @@ source "${LIB_DIR}/env.sh"
 load_env || warn "\$HOME/.env not found, skipping env load"
 
 # Gate on DOTFILES_RUN_JUNIE_CLI_SETUP env var (set in ~/.env)
-if [[ "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}" != "1" ]]; then
+if ! dotfiles_env_truthy "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}"; then
   info "DOTFILES_RUN_JUNIE_CLI_SETUP='${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}' — skipping Junie CLI install"
   exit 0
 fi
@@ -125,8 +126,20 @@ fi
 # Configure Junie model profiles from current ollama models + Ollama Cloud
 CONFIGURE_MODELS="{{ .chezmoi.sourceDir }}/scripts/configure-jetbrains-ai.py"
 if [[ -f "$CONFIGURE_MODELS" ]]; then
-  info "Configuring Junie model profiles..."
-  "$CONFIGURE_MODELS"
+  if dotfiles_env_truthy "${DOTFILES_USE_LITELLM_PROXY:-0}"; then
+    # Gateway-only model profiles must not be emitted before the managed
+    # launcher exists: script 15 installs it and writes the launch generation
+    # later in the same apply, and only then can the route preflight attest the
+    # generation. Emit the directories here and let the post-producer stage
+    # (configure-all's Junie refresh, or script 15's own invocation) generate
+    # the profiles once the receipt exists. Deferral is scheduling, not a
+    # passing deploy: if the later stage cannot attest, it exits non-zero.
+    info "Configuring Junie directories; gateway model profiles are deferred to the post-launcher stage"
+    "$CONFIGURE_MODELS" --skip models || die "Junie directory setup failed"
+  else
+    info "Configuring Junie model profiles..."
+    "$CONFIGURE_MODELS"
+  fi
 fi
 
 ok "Junie CLI setup complete."
