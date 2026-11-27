@@ -1127,10 +1127,13 @@ def test_wrapper_propagates_profile_generation_failure_without_success_message(
 ):
     monkeypatch.setattr(CONFIGURE, "load_env", lambda: True)
     monkeypatch.setattr(CONFIGURE, "list_local_ollama_models", lambda: [])
+    # This case covers failure propagation, not the authorisation boundary;
+    # pin direct mode so an ambient proxy gate cannot insert the preflight.
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
     monkeypatch.setattr(
         CONFIGURE.subprocess,
         "run",
-        lambda _command: type("Result", (), {"returncode": 1})(),
+        lambda _command, **_kwargs: type("Result", (), {"returncode": 1})(),
     )
     monkeypatch.setattr(
         sys,

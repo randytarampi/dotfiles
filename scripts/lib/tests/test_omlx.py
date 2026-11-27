@@ -2518,6 +2518,9 @@ def test_jetbrains_omlx_provider_uses_openai_completion_endpoint():
 def test_jetbrains_wrapper_preserves_mixed_provider_metadata(monkeypatch, tmp_path):
     home = tmp_path / "lock-home"
     monkeypatch.setenv("HOME", str(home))
+    # Subject is metadata preservation; an ambient gateway gate must not insert
+    # the authorisation preflight into this path.
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
     wrapper = _load_script("configure_jetbrains_ai", "configure-jetbrains-ai.py")
     generator = _load_script(
         "generate_jetbrains_profiles", "generate-jetbrains-profiles.py"
@@ -2534,7 +2537,7 @@ def test_jetbrains_wrapper_preserves_mixed_provider_metadata(monkeypatch, tmp_pa
     ]
     captured = {}
 
-    def run(command):
+    def run(command, **_kwargs):
         captured["command"] = command
         return type("Result", (), {"returncode": 0})()
 
