@@ -61,6 +61,7 @@ CONFIG_FILE = LITELLM_DIR / "config.yaml"
 CLIENT_KEY_ENVS = {
     "opencode": "LITELLM_OPENCODE_KEY",
     "pi": "LITELLM_PI_KEY",
+    "junie": "LITELLM_JUNIE_KEY",
 }
 
 

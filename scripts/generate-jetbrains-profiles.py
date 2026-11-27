@@ -34,6 +34,9 @@ from provider_endpoints import (  # noqa: E402 -- scripts/lib bootstrap.
 from litellm_aliases import (  # noqa: E402 -- scripts/lib bootstrap.
     LITELLM_ROUTED_PROVIDERS,
 )
+from litellm_route_preflight import (  # noqa: E402 -- scripts/lib bootstrap.
+    authorize_gateway_client,
+)
 from ai_models import (  # noqa: E402 -- scripts/lib bootstrap.
     is_specialized_model_name,
     resolve_model,
@@ -1026,6 +1029,27 @@ def main():
     if use_litellm:
         catalogue = litellm_catalogue_models(providers["litellm"]["baseUrl"], junie_key)
         groups = filter_litellm_groups(groups, catalogue)
+    # A stale, revoked or unattestable subscription generation must not become
+    # new gateway-only JetBrains profiles. Same read-only contract
+    # `configure-all.sh` preflights and the wrapper applies before it starts
+    # this generator, so a direct invocation is never weaker. The credential
+    # passed here is the exact key `build_provider_configs` embeds, and the
+    # advertisement set is the one just read with that key, so no request is
+    # repeated.
+    if litellm_gate:
+        authorization = authorize_gateway_client(
+            "junie", api_key=junie_key, catalogue=catalogue
+        )
+        if not authorization.permitted:
+            logger.critical(
+                "Refusing gateway-only JetBrains profiles (%s): %s "
+                "— repair with 'make litellm-restart' (or 'make deploy' with "
+                "DOTFILES_RUN_LITELLM_SETUP=1), then re-run.",
+                authorization.state,
+                authorization.reason,
+            )
+            raise SystemExit(1)
+        logger.info("Gateway authorisation: %s", authorization.state)
     specs_temperature_identity = {
         f"litellm-{name}": group.get("primaryModel", "")
         for name, group in cfg.get("groups", {}).items()
