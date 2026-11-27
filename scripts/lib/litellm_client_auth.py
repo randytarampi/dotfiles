@@ -9,6 +9,7 @@ import os
 DEFAULT_CLIENT_FILES = {
     "LITELLM_OPENCODE_KEY": "opencode.key",
     "LITELLM_PI_KEY": "pi.key",
+    "LITELLM_JUNIE_KEY": "junie.key",
     "LITELLM_CLAUDE_KEY": "claude.key",
     "LITELLM_COPILOT_CLI_KEY": "copilot-cli.key",
 }

@@ -31,6 +31,10 @@ from cli_helpers import (
 from generation_lock import (
     with_generation_lock,
 )  # noqa: E402  # loader bootstraps scripts/lib.
+from constants import get_litellm_proxy_mode  # noqa: E402 -- scripts/lib bootstrap.
+from litellm_route_preflight import (  # noqa: E402 -- scripts/lib bootstrap.
+    authorize_gateway_client,
+)
 
 
 @with_generation_lock("configure-jetbrains-ai")
@@ -75,6 +79,25 @@ def main():
     if not os.path.isfile(groups_json):
         logger.critical(f"model-groups.json not found at {groups_json}")
         sys.exit(1)
+
+    # A stale, revoked or unattestable subscription generation must not become
+    # new gateway-only JetBrains model profiles. The generator applies the same
+    # read-only contract on a direct invocation; guarding here only adds an
+    # earlier, clearer stop before this wrapper creates directories or starts
+    # that child. `--skip models` asks for no profile output at all, so it stays
+    # outside the guard.
+    if do_models and get_litellm_proxy_mode():
+        authorization = authorize_gateway_client("junie")
+        if not authorization.permitted:
+            logger.critical(
+                "Refusing gateway-only JetBrains model profiles (%s): %s "
+                "— repair with 'make litellm-restart' (or 'make deploy' with "
+                "DOTFILES_RUN_LITELLM_SETUP=1), then re-run.",
+                authorization.state,
+                authorization.reason,
+            )
+            sys.exit(1)
+        logger.info("Gateway authorisation: %s", authorization.state)
 
     if do_dirs:
         logger.info(f"Ensuring AI directories at {project_root}...")

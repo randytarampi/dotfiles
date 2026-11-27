@@ -73,6 +73,16 @@ def harness(tmp_path, monkeypatch):
         "litellm_catalogue_models",
         lambda *_args: set(),
     )
+    # These tests cover profile preservation, not the authorisation boundary
+    # (#361-B1b, exercised by test_gateway_jetbrains_authorization.py). Stub the
+    # decision so each case keeps its own catalogue and generation fixtures.
+    from litellm_route_preflight import GatewayAuthorization
+
+    monkeypatch.setattr(
+        PROFILES,
+        "authorize_gateway_client",
+        lambda *args, **kwargs: GatewayAuthorization("authorized", "fixture"),
+    )
     import model_stamp
 
     monkeypatch.setattr(
