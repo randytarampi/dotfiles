@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_PACKAGES_SETUP" | sha256sum }}
-# env gate fingerprint: {{ env "DOTFILES_RUN_LINUX_PACKAGES_SETUP" | sha256sum }}
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
@@ -85,14 +84,8 @@ fi
 {{- end }}
 
 # --- Brew (macOS / Linux) ---
-# macOS keeps the DOTFILES_RUN_PACKAGES_SETUP lane. Linux Homebrew work is
-# additionally opted into through the Linux-only cohort gate, so a Linux host
-# never runs a Homebrew operation without that explicit consent.
-if [[ "$(uname -s)" == "Linux" ]] && [[ "${DOTFILES_RUN_LINUX_PACKAGES_SETUP:-0}" != "1" ]]; then
-  info "DOTFILES_RUN_LINUX_PACKAGES_SETUP='${DOTFILES_RUN_LINUX_PACKAGES_SETUP:-0}' — skipping Linux package cohort"
-fi
-if [[ "$(uname -s)" == "Darwin" ]] ||
-  { [[ "$(uname -s)" == "Linux" ]] && [[ "${DOTFILES_RUN_LINUX_PACKAGES_SETUP:-0}" == "1" ]]; }; then
+# The global package gate above authorizes both OS-specific package lanes.
+if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
   # One ordered selected-manifest set. The Linux preflight, the tap-trust
   # step and the actual bundles all consume this exact list, so a category
   # cannot be selected for one consumer and missed by another. The npm

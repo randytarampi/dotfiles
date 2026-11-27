@@ -210,14 +210,12 @@ def _sandbox(tmp_path, categories):
         "DOTFILES_RUN_PACKAGES_SETUP": "1",
     }
     (tmp_path / "home").mkdir()
+    env.pop("DOTFILES_BREWFILE_IGNORE", None)
     return script, calls, out, env
 
 
 def test_linux_refusal_and_gate_off_make_no_package_calls(tmp_path):
     script, calls, out, env = _sandbox(tmp_path, {"dev": True})
-    # Linux Homebrew work now requires the Linux cohort gate; enable it so the
-    # audit (not the gate) is what refuses the dev selection.
-    env["DOTFILES_RUN_LINUX_PACKAGES_SETUP"] = "1"
     refused = subprocess.run(
         ["bash", str(script)], capture_output=True, text=True, timeout=120, env=env
     )
@@ -239,7 +237,6 @@ def test_linux_refusal_and_gate_off_make_no_package_calls(tmp_path):
 
 def test_linux_cohort_bundles_once_without_eula_or_ignored_names(tmp_path):
     script, calls, out, env = _sandbox(tmp_path, {})
-    env["DOTFILES_RUN_LINUX_PACKAGES_SETUP"] = "1"
     env["DOTFILES_BREWFILE_IGNORE"] = "jq,ripgrep"
     result = subprocess.run(
         ["bash", str(script)], capture_output=True, text=True, timeout=120, env=env

@@ -37,3 +37,7 @@ A zero-blocker result has `packages_l1: not_qualified` and `operational_verified
 3. Only then mark L1 packages as qualified for that OS/CPU/manifest combination and decide whether issue #272 can close. Real package installation is neither part of L0 CI nor this initial static-gate PR.
 
 **Rollback:** revert this focused PR to remove early static refusal. That restores the old, unqualified Linux package behaviour; it is not a substitute for a proper Linux manifest. No host operation or active category selection is changed by reading this document.
+
+## Linux cohort and shared opt-in (27 November 2026)
+
+With `DOTFILES_RUN_PACKAGES_SETUP=1`, Linux uses the current bounded base cohort (`chezmoi`, `jq`, `ripgrep`), derived from the existing manifest. There is no additional Linux package gate. A persisted `DOTFILES_RUN_LINUX_PACKAGES_SETUP` from #406 no longer controls anything; remove it manually if desired. Set the global gate to 0 to skip packages. The default dev selection and other unsupported explicitly selected categories still fail before Homebrew mutation; select the base-only category configuration for this first cohort. Exact ignores still apply. The full base manifest, broader categories, actual L1 first/second installs and architecture support remain unqualified (#272-B3). No automatic edit of a user's environment file or categories.
