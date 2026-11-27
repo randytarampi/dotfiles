@@ -23,7 +23,7 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # and its config path) when the router retired; no other assignment line
 # changed, added or reordered.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "219420c907d23955428264a24d6fc7a2fc452be8976431ccc922c4b4428648d0"
+    "98b338b0e8a54ba60993bfffdd4404699266a058184b9304dbb73090c930cfb5"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
