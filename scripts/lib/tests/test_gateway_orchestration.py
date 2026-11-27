@@ -30,6 +30,12 @@ def _sandbox(tmp_path, platform):
 info() { :; }; ok() { :; }; warn() { :; }
 die() { printf '%s\\n' "$*" >&2; exit 1; }
 record() { printf '%s\\n' "$1" >> "$TRACE"; }
+dotfiles_env_truthy() {
+  case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+    1 | true | yes | on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 """
     _write(lib / "common.sh", common)
     _write(

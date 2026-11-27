@@ -109,6 +109,16 @@ die() {
   exit 1
 }
 
+# dotfiles_env_truthy <value> — accept the same spellings as the Python gates
+# (1/true/yes/on), so a shell branch and its Python consumer cannot disagree.
+# Uses tr rather than ${value,,} for bash 3.2 parity.
+dotfiles_env_truthy() {
+  case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+  1 | true | yes | on) return 0 ;;
+  *) return 1 ;;
+  esac
+}
+
 # run_or_skip <command> <success_msg> <skip_msg>
 run_or_skip() {
   local cmd="$1"

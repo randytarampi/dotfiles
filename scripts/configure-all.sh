@@ -412,19 +412,19 @@ fi
 # service step must not skip the proof that the clients it would write are
 # safe. This is read-only: it never generates, reloads or restarts.
 _authorising_gateway_client() {
-  if ! step_skipped junie && [[ "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}" == "1" ]]; then
+  if ! step_skipped junie && dotfiles_env_truthy "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}"; then
     return 0
   fi
-  if ! step_skipped opencode && [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" == "1" ]]; then
+  if ! step_skipped opencode && dotfiles_env_truthy "${DOTFILES_RUN_OPENCODE_SETUP:-0}"; then
     return 0
   fi
-  if ! step_skipped pi && [[ "${DOTFILES_RUN_PI_SETUP:-0}" == "1" ]]; then
+  if ! step_skipped pi && dotfiles_env_truthy "${DOTFILES_RUN_PI_SETUP:-0}"; then
     return 0
   fi
   return 1
 }
 
-if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" && "$COMMON_DRY_RUN" != "1" ]] &&
+if dotfiles_env_truthy "${DOTFILES_USE_LITELLM_PROXY:-0}" && [[ "$COMMON_DRY_RUN" != "1" ]] &&
   _authorising_gateway_client; then
   if ! route_reason="$(python3 "$SCRIPT_DIR/reconcile-litellm-routes.py" 2>&1)"; then
     die "Gateway route preflight failed ($route_reason); refusing to generate gateway-only client configuration. Repair with 'make deploy' or 'make litellm-restart', and keep DOTFILES_RUN_LITELLM_SETUP=1 so a projection exists, then re-run."
@@ -434,7 +434,7 @@ fi
 # Refresh Junie only after gateway readiness and client-key provisioning.
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Junie model refresh (dry-run mode)"
-elif ! step_skipped junie && [[ "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}" == "1" ]]; then
+elif ! step_skipped junie && dotfiles_env_truthy "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}"; then
   info "Refreshing Junie model profiles (DOTFILES_RUN_JUNIE_CLI_SETUP=1)..."
   run_step "Junie model profiles refreshed" python3 "$SCRIPT_DIR/configure-jetbrains-ai.py" --skip dirs ${JETBRAINS_ARGS[@]+"${JETBRAINS_ARGS[@]}"}
 else
