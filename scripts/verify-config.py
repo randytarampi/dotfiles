@@ -1565,40 +1565,39 @@ def meridian_registration_present(config):
 
 
 def litellm_plist_contract_errors(arguments, litellm_root, expected_port):
-    """Return drift messages for a LiteLLM LaunchAgent's launch contract.
-
-    Two managed contracts exist. The generation launcher (current) hands
-    LiteLLM a private snapshot of ``config.yaml``, so the LaunchAgent names no
-    config path and no worker count; only its state directory and port are
-    asserted. The legacy direct command stays acceptable for a LaunchAgent
-    written by an older deploy, mirroring
-    ``scripts/lib/systemd_managed_unit.sh``. Anything else is drift.
-    """
+    """Match emitted LaunchAgent contracts without interpreting shell code."""
+    root = Path(litellm_root)
     expected_port = str(expected_port)
-    generation_prefix = (
-        f'exec "{litellm_root}/venv/bin/python" -I '
-        f'"{litellm_root}/launch-generation.py" launch "{litellm_root}" '
-    )
-    position = arguments.find(generation_prefix)
-    if position != -1:
-        port = (
-            arguments[position + len(generation_prefix) :].strip().rstrip("'").strip()
-        )
-        if port != expected_port:
-            return ["LiteLLM plist: launch port drift"]
-        return []
-    errors = []
-    if (
-        "--config" not in arguments
-        or str(Path(litellm_root) / "config.yaml") not in arguments
+    mismatch = ["LiteLLM plist: launch contract mismatch"]
+    if not re.fullmatch(r"[0-9]{1,5}", expected_port) or not (
+        1 <= int(expected_port) <= 65535
     ):
-        errors.append("LiteLLM plist: config path missing")
-    if "--host 127.0.0.1" not in arguments or "--num_workers 1" not in arguments:
-        errors.append("LiteLLM plist: launch contract mismatch")
-    port_match = re.search(r'--port "?([^"\s]+)"?', arguments)
-    if not port_match or port_match.group(1) != expected_port:
-        errors.append("LiteLLM plist: launch port drift")
-    return errors
+        return ["LiteLLM plist: launch port drift"]
+    # The emitter uses double quotes inside an outer single-quoted shell
+    # argument. Refuse paths that would change those shell semantics.
+    if not root.is_absolute() or any(c in str(root) for c in "'\"$\x60\\\r\n"):
+        return mismatch
+    home = root.parents[2]
+    wrapper = (
+        f'exec /usr/bin/env -i HOME="{home}" '
+        f'PATH="/usr/bin:/bin:{root}/venv/bin" '
+        "/bin/bash --noprofile --norc -c '"
+        f'set -a && source "{root}/service.env" && set +a && '
+    )
+    generation = (
+        f'exec "{root}/venv/bin/python" -I "{root}/launch-generation.py" '
+        f'launch "{root}" {expected_port}'
+    )
+    legacy = (
+        f'exec "{root}/venv/bin/litellm" --config "{root}/config.yaml" '
+        f'--host 127.0.0.1 --port "{expected_port}" --num_workers 1'
+    )
+    if any(
+        arguments == ["/bin/bash", "-c", wrapper + command + "'"]
+        for command in (generation, legacy)
+    ):
+        return []
+    return mismatch
 
 
 def main():
@@ -2475,19 +2474,9 @@ def main():
                 exit_code = 1
             try:
                 plist = plistlib.loads(plist_text.encode())
-                arguments = " ".join(
-                    str(item) for item in plist.get("ProgramArguments", [])
-                )
-                match = re.search(r"env -i (.*?) /bin/bash", arguments)
-                if not match or {
-                    token.split("=", 1)[0]
-                    for token in shlex.split(match.group(1))
-                    if "=" in token
-                } != {"HOME", "PATH"}:
-                    print(
-                        "  \u2717 LiteLLM plist: wrapper environment allowlist mismatch"
-                    )
-                    exit_code = 1
+                if not isinstance(plist, dict):
+                    raise ValueError("expected a LaunchAgent property-list dictionary")
+                arguments = plist.get("ProgramArguments")
                 for message in litellm_plist_contract_errors(
                     arguments, litellm_root, expected_litellm_port
                 ):
