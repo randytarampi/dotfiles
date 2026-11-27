@@ -1625,3 +1625,75 @@ def test_main_fails_when_caddy_binary_missing(tmp_path, monkeypatch, capsys):
     assert "Caddyfile validation unavailable: caddy executable not found" in (
         capsys.readouterr().out
     )
+
+
+def _litellm_plist_arguments(root, command):
+    """Wrap a managed launch command the way the LaunchAgent plist does."""
+    return (
+        'exec /usr/bin/env -i HOME="/home/tester" '
+        'PATH="/usr/bin:/bin:/home/tester/.local/share/litellm/venv/bin" '
+        f'/bin/bash --noprofile --norc -c \'set -a && source "{root}/service.env" '
+        f"&& set +a && {command}'"
+    )
+
+
+def test_litellm_plist_accepts_the_generation_launcher():
+    root = Path("/home/tester/.local/share/litellm")
+    arguments = _litellm_plist_arguments(
+        root,
+        f'exec "{root}/venv/bin/python" -I "{root}/launch-generation.py" '
+        f'launch "{root}" 4000',
+    )
+
+    assert VERIFY_CONFIG.litellm_plist_contract_errors(arguments, root, "4000") == []
+
+
+def test_litellm_plist_rejects_generation_launcher_port_drift():
+    root = Path("/home/tester/.local/share/litellm")
+    arguments = _litellm_plist_arguments(
+        root,
+        f'exec "{root}/venv/bin/python" -I "{root}/launch-generation.py" '
+        f'launch "{root}" 4001',
+    )
+
+    assert VERIFY_CONFIG.litellm_plist_contract_errors(arguments, root, "4000") == [
+        "LiteLLM plist: launch port drift"
+    ]
+
+
+def test_litellm_plist_rejects_a_generation_launcher_with_a_trailing_token():
+    root = Path("/home/tester/.local/share/litellm")
+    arguments = _litellm_plist_arguments(
+        root,
+        f'exec "{root}/venv/bin/python" -I "{root}/launch-generation.py" '
+        f'launch "{root}" 4000 --num_workers 1',
+    )
+
+    assert VERIFY_CONFIG.litellm_plist_contract_errors(arguments, root, "4000") == [
+        "LiteLLM plist: launch port drift"
+    ]
+
+
+def test_litellm_plist_still_accepts_the_legacy_direct_contract():
+    root = Path("/home/tester/.local/share/litellm")
+    arguments = _litellm_plist_arguments(
+        root,
+        f'exec "{root}/venv/bin/litellm" --config "{root}/config.yaml" '
+        "--host 127.0.0.1 --port 4000 --num_workers 1",
+    )
+
+    assert VERIFY_CONFIG.litellm_plist_contract_errors(arguments, root, "4000") == []
+
+
+def test_litellm_plist_reports_legacy_direct_contract_drift():
+    root = Path("/home/tester/.local/share/litellm")
+    arguments = _litellm_plist_arguments(
+        root,
+        f'exec "{root}/venv/bin/litellm" --host 127.0.0.1 --port 4001',
+    )
+
+    assert VERIFY_CONFIG.litellm_plist_contract_errors(arguments, root, "4000") == [
+        "LiteLLM plist: config path missing",
+        "LiteLLM plist: launch contract mismatch",
+        "LiteLLM plist: launch port drift",
+    ]

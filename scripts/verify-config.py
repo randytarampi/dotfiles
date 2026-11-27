@@ -1564,6 +1564,43 @@ def meridian_registration_present(config):
     )
 
 
+def litellm_plist_contract_errors(arguments, litellm_root, expected_port):
+    """Return drift messages for a LiteLLM LaunchAgent's launch contract.
+
+    Two managed contracts exist. The generation launcher (current) hands
+    LiteLLM a private snapshot of ``config.yaml``, so the LaunchAgent names no
+    config path and no worker count; only its state directory and port are
+    asserted. The legacy direct command stays acceptable for a LaunchAgent
+    written by an older deploy, mirroring
+    ``scripts/lib/systemd_managed_unit.sh``. Anything else is drift.
+    """
+    expected_port = str(expected_port)
+    generation_prefix = (
+        f'exec "{litellm_root}/venv/bin/python" -I '
+        f'"{litellm_root}/launch-generation.py" launch "{litellm_root}" '
+    )
+    position = arguments.find(generation_prefix)
+    if position != -1:
+        port = (
+            arguments[position + len(generation_prefix) :].strip().rstrip("'").strip()
+        )
+        if port != expected_port:
+            return ["LiteLLM plist: launch port drift"]
+        return []
+    errors = []
+    if (
+        "--config" not in arguments
+        or str(Path(litellm_root) / "config.yaml") not in arguments
+    ):
+        errors.append("LiteLLM plist: config path missing")
+    if "--host 127.0.0.1" not in arguments or "--num_workers 1" not in arguments:
+        errors.append("LiteLLM plist: launch contract mismatch")
+    port_match = re.search(r'--port "?([^"\s]+)"?', arguments)
+    if not port_match or port_match.group(1) != expected_port:
+        errors.append("LiteLLM plist: launch port drift")
+    return errors
+
+
 def main():
     """Print configuration health checks and exit with status 1 on errors."""
     exit_code = 0
@@ -2451,21 +2488,10 @@ def main():
                         "  \u2717 LiteLLM plist: wrapper environment allowlist mismatch"
                     )
                     exit_code = 1
-                if (
-                    "--config" not in arguments
-                    or str(litellm_root / "config.yaml") not in arguments
+                for message in litellm_plist_contract_errors(
+                    arguments, litellm_root, expected_litellm_port
                 ):
-                    print("  \u2717 LiteLLM plist: config path missing")
-                    exit_code = 1
-                if (
-                    "--host 127.0.0.1" not in arguments
-                    or "--num_workers 1" not in arguments
-                ):
-                    print("  \u2717 LiteLLM plist: launch contract mismatch")
-                    exit_code = 1
-                port_match = re.search(r'--port "?([^"\s]+)"?', arguments)
-                if not port_match or port_match.group(1) != expected_litellm_port:
-                    print("  \u2717 LiteLLM plist: launch port drift")
+                    print(f"  \u2717 {message}")
                     exit_code = 1
             except (OSError, plistlib.InvalidFileException, ValueError):
                 print("  \u2717 LiteLLM plist: invalid property list")
