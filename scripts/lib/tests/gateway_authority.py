@@ -105,6 +105,11 @@ def install_gateway_authority(
         oauth_file.unlink(missing_ok=True)
     else:
         oauth_dir.mkdir(parents=True, exist_ok=True)
+        # Synthetic credentials in a disposable HOME. The field names and the
+        # non-empty token values are dictated by `oauth_cache_expiry`, which
+        # rejects a cache without them, so this write is the only way to
+        # exercise the real reader; nothing here can authenticate anywhere.
+        # codeql[py/clear-text-storage-sensitive-data]
         oauth_file.write_text(
             json.dumps(
                 {
