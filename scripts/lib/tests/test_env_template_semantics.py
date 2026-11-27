@@ -22,8 +22,10 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # 2026-11-19: removed the two commented Mozart entries (the router setup gate
 # and its config path) when the router retired; no other assignment line
 # changed, added or reordered.
+# 2026-11-27: retire the redundant Linux package sub-gate; the environment
+# template is byte-identical to the pre-#406 version at 440e04d9.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "98b338b0e8a54ba60993bfffdd4404699266a058184b9304dbb73090c930cfb5"
+    "219420c907d23955428264a24d6fc7a2fc452be8976431ccc922c4b4428648d0"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 

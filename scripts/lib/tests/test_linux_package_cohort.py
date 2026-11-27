@@ -1,4 +1,4 @@
-"""Opt-in Linux package cohort: gate off, explicit positive, fail-closed selection.
+"""Linux package cohort: shared gate, platform selection, fail-closed audit.
 
 chezmoi renders for the host OS only, so the template is rendered on the host
 and the Linux/Darwin branch is chosen through a stubbed ``uname``. Homebrew,
@@ -120,6 +120,7 @@ def _sandbox(tmp_path, categories, *, linux=True, extra_env=None):
         "FAKE_PREFIX": str(prefix),
         "DOTFILES_RUN_PACKAGES_SETUP": "1",
     }
+    env.pop("DOTFILES_BREWFILE_IGNORE", None)
     env.pop("DOTFILES_RUN_LINUX_PACKAGES_SETUP", None)
     env.update(extra_env or {})
     return script, calls, out, env
@@ -162,30 +163,23 @@ def _force_missing_brew(script):
 
 
 def test_gate_off_performs_zero_homebrew_operations(tmp_path):
-    absent = tmp_path / "absent"
-    absent.mkdir()
-    script, calls, out, env = _sandbox(absent, {})
-    result = _run(script, env)
-    assert result.returncode == 0, result.stderr
-    assert "skipping Linux package cohort" in result.stdout
-    assert _brew_calls(calls) == []
-    assert not any(out.iterdir())
-
-    # An explicit zero is as inert as an absent value.
-    explicit = tmp_path / "explicit-zero"
-    explicit.mkdir()
-    script, calls, out, env = _sandbox(
-        explicit, {}, extra_env={"DOTFILES_RUN_LINUX_PACKAGES_SETUP": "0"}
-    )
-    result = _run(script, env)
-    assert result.returncode == 0, result.stderr
-    assert _brew_calls(calls) == []
+    for name, value in (("absent", None), ("explicit-zero", "0")):
+        case = tmp_path / name
+        case.mkdir()
+        script, calls, out, env = _sandbox(case, {})
+        if value is None:
+            env.pop("DOTFILES_RUN_PACKAGES_SETUP")
+        else:
+            env["DOTFILES_RUN_PACKAGES_SETUP"] = value
+        result = _run(script, env)
+        assert result.returncode == 0, result.stderr
+        assert "skipping package installs" in result.stdout
+        assert _brew_calls(calls) == []
+        assert not any(out.iterdir())
 
 
-def test_explicit_positive_installs_only_the_cohort(tmp_path):
-    script, calls, out, env = _sandbox(
-        tmp_path, {}, extra_env={"DOTFILES_RUN_LINUX_PACKAGES_SETUP": "1"}
-    )
+def test_global_gate_installs_only_the_linux_cohort(tmp_path):
+    script, calls, out, env = _sandbox(tmp_path, {})
     result = _run(script, env)
     assert result.returncode == 0, result.stderr
     invocations = _brew_calls(calls)
@@ -197,10 +191,19 @@ def test_explicit_positive_installs_only_the_cohort(tmp_path):
     assert "HOMEBREW_ACCEPT_EULA" not in env
 
 
-def test_dev_selection_fails_before_any_homebrew_operation(tmp_path):
+def test_retired_linux_gate_does_not_disable_global_opt_in(tmp_path):
     script, calls, out, env = _sandbox(
-        tmp_path, {"dev": True}, extra_env={"DOTFILES_RUN_LINUX_PACKAGES_SETUP": "1"}
+        tmp_path, {}, extra_env={"DOTFILES_RUN_LINUX_PACKAGES_SETUP": "0"}
     )
+    result = _run(script, env)
+    assert result.returncode == 0, result.stderr
+    assert _bundled_lines(out) == COHORT_LINES
+    invocations = _brew_calls(calls)
+    assert len([line for line in invocations if line.startswith("brew bundle")]) == 1
+
+
+def test_dev_selection_fails_before_any_homebrew_operation(tmp_path):
+    script, calls, out, env = _sandbox(tmp_path, {"dev": True})
     result = _run(script, env)
     assert result.returncode == 1
     assert "blockers" in result.stdout
@@ -210,11 +213,7 @@ def test_dev_selection_fails_before_any_homebrew_operation(tmp_path):
 
 def test_audit_clean_broader_selection_is_refused_not_narrowed(tmp_path):
     """`utilities` has no casks, so only the cohort compatibility check can stop it."""
-    script, calls, out, env = _sandbox(
-        tmp_path,
-        {"utilities": True},
-        extra_env={"DOTFILES_RUN_LINUX_PACKAGES_SETUP": "1"},
-    )
+    script, calls, out, env = _sandbox(tmp_path, {"utilities": True})
     result = _run(script, env)
     assert result.returncode == 1
     assert "accepts only the base Brewfile" in result.stderr
@@ -223,9 +222,7 @@ def test_audit_clean_broader_selection_is_refused_not_narrowed(tmp_path):
 
 
 def test_missing_brew_download_failure_aborts_before_bundle(tmp_path):
-    script, calls, out, env = _sandbox(
-        tmp_path, {}, extra_env={"DOTFILES_RUN_LINUX_PACKAGES_SETUP": "1"}
-    )
+    script, calls, out, env = _sandbox(tmp_path, {})
     _force_missing_brew(script)
     result = _run(script, dict(env, FAKE_CURL_MODE="fail"))
     assert result.returncode == 1
@@ -237,9 +234,7 @@ def test_missing_brew_download_failure_aborts_before_bundle(tmp_path):
 
 
 def test_failed_first_install_aborts_before_bundle(tmp_path):
-    script, calls, out, env = _sandbox(
-        tmp_path, {}, extra_env={"DOTFILES_RUN_LINUX_PACKAGES_SETUP": "1"}
-    )
+    script, calls, out, env = _sandbox(tmp_path, {})
     _force_missing_brew(script)
     result = _run(script, dict(env, FAKE_CURL_MODE="installer-fails"))
     assert result.returncode == 1
@@ -249,9 +244,7 @@ def test_failed_first_install_aborts_before_bundle(tmp_path):
 
 
 def test_failed_first_bundle_is_not_retried(tmp_path):
-    script, calls, out, env = _sandbox(
-        tmp_path, {}, extra_env={"DOTFILES_RUN_LINUX_PACKAGES_SETUP": "1"}
-    )
+    script, calls, out, env = _sandbox(tmp_path, {})
     result = _run(script, dict(env, FAKE_BREW_BUNDLE_EXIT="4"))
     assert result.returncode != 0
     invocations = _brew_calls(calls)
@@ -260,9 +253,7 @@ def test_failed_first_bundle_is_not_retried(tmp_path):
 
 
 def test_repeat_run_has_no_drift(tmp_path):
-    script, calls, out, env = _sandbox(
-        tmp_path, {}, extra_env={"DOTFILES_RUN_LINUX_PACKAGES_SETUP": "1"}
-    )
+    script, calls, out, env = _sandbox(tmp_path, {})
     first = _run(script, env)
     assert first.returncode == 0, first.stderr
     first_lines = _bundled_lines(out)
@@ -276,11 +267,11 @@ def test_repeat_run_has_no_drift(tmp_path):
     assert len([line for line in invocations if line.startswith("brew bundle")]) == 2
 
 
-def test_macos_parity_is_unaffected_by_the_linux_gate(tmp_path):
+def test_macos_parity_is_unaffected_by_retired_linux_gate(tmp_path):
     markers = []
     for name, extra in (
         ("plain", {}),
-        ("linux-gate-on", {"DOTFILES_RUN_LINUX_PACKAGES_SETUP": "1"}),
+        ("old-linux-gate", {"DOTFILES_RUN_LINUX_PACKAGES_SETUP": "0"}),
     ):
         case = tmp_path / name
         case.mkdir()
@@ -306,7 +297,7 @@ def test_macos_parity_is_unaffected_by_the_linux_gate(tmp_path):
     second_bundle = markers[0].index("bundle:Brewfile.dev")
     assert "npm" in markers[0][first_bundle:second_bundle]
     assert "npm" in markers[0][second_bundle:]
-    # Enabling the Linux-only gate must not change macOS behaviour.
+    # A retired Linux-only setting must not change macOS behaviour.
     assert markers[0] == markers[1]
 
 
@@ -315,7 +306,8 @@ def test_gate_is_wired_documented_and_keeps_one_selection():
     assert source.count("selected_brewfiles=(") == 1
     assert source.count("linux_cohort_names=") == 1
     assert "chezmoi jq ripgrep" in source
-    assert '{{ env "DOTFILES_RUN_LINUX_PACKAGES_SETUP" | sha256sum }}' in source
-    assert "DOTFILES_RUN_LINUX_PACKAGES_SETUP:-0" in source
+    assert '{{ env "DOTFILES_RUN_PACKAGES_SETUP" | sha256sum }}' in source
+    assert "DOTFILES_RUN_LINUX_PACKAGES_SETUP" not in source
     documented = ENV_EXAMPLE.read_text(encoding="utf-8")
-    assert "DOTFILES_RUN_LINUX_PACKAGES_SETUP='0'" in documented
+    assert "DOTFILES_RUN_LINUX_PACKAGES_SETUP" not in documented
+    assert "DOTFILES_RUN_PACKAGES_SETUP='0'" in documented
