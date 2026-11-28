@@ -140,3 +140,14 @@ Reconciliation: opencode (litellm/ollama-cloud/deepseek-v4.1-flash) and ChatGPT 
 - Integrated post-merge baseline [`cbc4a02ac50b`](https://github.com/randytarampi/dotfiles/commit/cbc4a02ac50bb96efbd90e760e5e3ac7b3843e2e): [CI 45738540251](https://github.com/randytarampi/dotfiles/actions/runs/45738540251) and [CodeQL 45738540145](https://github.com/randytarampi/dotfiles/actions/runs/45738540145) PASS. Owner authorized narrow API/CI-led verification for #398/#399 only; canonical local make verify and live service acceptance NOT RUN. No independent approval claimed.
 
 Reconciliation: ChatGPT (GPT-6.2), 26 November 2026. Preserve implementation/review provenance in each linked PR; this record is not a new host receipt.
+
+### 2026-11-28 credential rotation completed (P0)
+
+Two credentials were printed into a session transcript during the 27 November diagnosis. No repository file, commit, workflow or artifact contained either value.
+
+- **LiteLLM `LITELLM_OPENCODE_KEY`** (alias `opencode`, all models, no budget or rate limits): replacement generated through the proxy admin API with the same scope, written atomically to `service.env` and `clients/opencode.key` (mode `0600`), verified `200` on `/v1/models`, then the old key was deleted and verified `401`. Because key aliases are unique, the replacement carries `opencode-2026-11-28`; the retired alias is free. The pre-rotation backup (old `service.env` plus `opencode.key`) was deleted after verification.
+- **GitHub classic PAT (`GH_TOKEN`)**: rotated by the owner in the account settings; `gh auth status` reports the new token for the same account and the same scope set. The pre-existing `read:org` scope warning is unchanged and unrelated to the rotation. No template re-render was required: `~/.gitconfig`, `~/.yarnrc.yml`, `~/.yarnrc` and `~/.config/gh/config.yml` were hash-identical to their rendered output, so those consumers do not embed the literal.
+- **Verification on the rotated state:** new gateway key `200`, retired key `401`, GitHub API authenticated, and `make verify` exits `0` on the deployed tree with only the documented pre-existing warnings.
+- **Residual:** session transcripts still contain the retired strings. Both credentials are revoked, so the strings are inert; transcript deletion is a local data-hygiene choice, not a security requirement. No secret was written to the repository, and the rotation receipt intentionally records no values.
+
+Reconciliation: opencode (litellm/ollama-cloud/deepseek-v4.1-flash), 28 November 2026; owner performed the GitHub token rotation.
